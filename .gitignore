@@ -1,0 +1,18 @@
+# BMad framework (framework files, not project artifacts)
+_bmad/
+_bmad-output/
+
+# Claude Code local settings
+.claude/settings.local.json
+
+# AI Tools
+.cursor/
+.cursorignore
+.cursorindexingignore
+.copilot/
+.github/copilot-instructions.md
+.aider*
+.continue/
+.codeium/
+.tabnine/
+.supermaven/
