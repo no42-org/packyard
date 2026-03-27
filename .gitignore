@@ -2,8 +2,9 @@
 _bmad/
 _bmad-output/
 
-# Claude Code local settings
-.claude/settings.local.json
+# Claude Code & agent integration (local IDE tooling)
+.claude/
+.agents/
 
 # AI Tools
 .cursor/
