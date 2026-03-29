@@ -1,0 +1,17 @@
+http:
+  routers:
+    gpg-public:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/gpg/`)"
+      service: packyard-static-svc
+      tls:
+        certResolver: letsencrypt
+      # No middlewares — Category ② public-unauthenticated (architecture routing taxonomy)
+      # forwardAuth is NOT attached here — adding it would break FR5 (public GPG key download)
+
+  services:
+    packyard-static-svc:
+      loadBalancer:
+        servers:
+          - url: "http://static:80"
