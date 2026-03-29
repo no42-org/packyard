@@ -19,6 +19,19 @@ while IFS= read -r line; do
     fi
 done < <(docker compose ps --format json | jq -c 'if type=="array" then .[] else . end')
 
+# GPG endpoint availability check (Story 1.2)
+GPG_DOMAIN="${DOMAIN:-localhost}"
+echo ""
+echo "==> Checking GPG endpoint availability..."
+HTTP_STATUS=$(curl -s -k --max-time 10 --write-out '%{http_code}' --output /dev/null \
+    "https://${GPG_DOMAIN}/gpg/meridian.asc" 2>/dev/null || echo "000")
+if [[ "${HTTP_STATUS}" != "200" ]]; then
+    echo "FAIL: /gpg/meridian.asc returned HTTP ${HTTP_STATUS} (expected 200)"
+    FAILED=1
+else
+    echo "OK:   /gpg/meridian.asc returned HTTP 200"
+fi
+
 if [[ $FAILED -ne 0 ]]; then
     echo ""
     echo "HEALTH CHECK FAILED — one or more services are not healthy"
