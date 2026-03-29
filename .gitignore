@@ -1,10 +1,13 @@
 # BMad framework (framework files, not project artifacts)
 _bmad/
-_bmad-output/
+# _bmad-output/ is intentionally tracked — contains planning and implementation artifacts
 
 # Claude Code & agent integration (local IDE tooling)
 .claude/
 .agents/
+
+# Local secrets — never commit
+.env
 
 # AI Tools
 .cursor/

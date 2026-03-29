@@ -1,0 +1,36 @@
+api:
+  dashboard: false
+
+log:
+  level: INFO
+
+accessLog:
+  fields:
+    names:
+      ClientUsername: drop          # C3 — drop key username from access log records (NFR5)
+    headers:
+      defaultMode: keep
+      names:
+        Authorization: redact       # C3 — mask subscription key value in logs (NFR5)
+
+entryPoints:
+  websecure:
+    address: "0.0.0.0:443"
+  admin:
+    address: "127.0.0.1:8443"
+
+certificatesResolvers:
+  letsencrypt:
+    acme:
+      email: "${ACME_EMAIL}"
+      storage: /certs/acme.json
+      tlsChallenge: {}
+
+providers:
+  file:
+    directory: /etc/traefik/dynamic
+    watch: true
+
+metrics:
+  prometheus:
+    entryPoint: admin
