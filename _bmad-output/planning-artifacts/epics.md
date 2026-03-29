@@ -769,3 +769,6 @@ So that I have a repeatable baseline confirming the platform handles 500 concurr
 **Given** the load test results
 **When** any NFR target is missed
 **Then** the k6 run exits with a non-zero status code (threshold configured in the k6 script options)
+
+## Review Findings
+- [x] [Review][Patch] `scripts/health-check.sh` expects newline-delimited JSON from `docker compose ps`, which may fail if Compose outputs a JSON array. [scripts/health-check.sh:12]

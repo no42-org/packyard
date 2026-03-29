@@ -17,7 +17,7 @@ while IFS= read -r line; do
     else
         echo "OK:   $name ($state)"
     fi
-done < <(docker compose ps --format json)
+done < <(docker compose ps --format json | jq -c 'if type=="array" then .[] else . end')
 
 if [[ $FAILED -ne 0 ]]; then
     echo ""
