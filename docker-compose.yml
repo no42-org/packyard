@@ -1,0 +1,77 @@
+services:
+
+  traefik:
+    image: traefik:v3.3
+    restart: unless-stopped
+    ports:
+      - "443:443"
+      - "127.0.0.1:8443:8443"
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic:/etc/traefik/dynamic:ro
+      - traefik-certs:/certs
+    environment:
+      - ACME_EMAIL=${ACME_EMAIL}
+
+  auth:
+    # STUB — replaced by real Go forwardAuth service in Story 2.1
+    image: busybox:latest
+    command: ["httpd", "-f", "-p", "8080"]
+    restart: unless-stopped
+    volumes:
+      - auth-db:/data/db
+      - auth-backup:/data/backup
+    healthcheck:
+      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      interval: 10s
+      timeout: 3s
+      retries: 3
+      start_period: 5s
+
+  aptly:
+    image: urpylka/aptly:1.6.2
+    restart: unless-stopped
+    volumes:
+      - aptly-data:/opt/aptly
+      - ./aptly/aptly.conf:/etc/aptly.conf:ro
+      - ./aptly/scripts:/scripts:ro
+
+  rpm:
+    build: ./rpm
+    restart: unless-stopped
+    volumes:
+      - rpm-data:/usr/share/nginx/html:ro
+
+  zot:
+    image: ghcr.io/project-zot/zot-linux-amd64:v2.1.2
+    restart: unless-stopped
+    command: serve /etc/zot/config.json
+    volumes:
+      - zot-data:/var/lib/registry
+      - ./zot/config.json:/etc/zot/config.json:ro
+
+  rustfs:
+    image: rustfs/rustfs:latest
+    restart: unless-stopped
+    environment:
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+    env_file: ./rustfs/config.env
+    volumes:
+      - rustfs-data:/data
+    command: ["/data"]
+
+  static:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - ./static:/usr/share/nginx/html:ro
+
+volumes:
+  aptly-data:
+  rpm-data:
+  zot-data:
+  rustfs-data:
+  auth-db:
+  auth-backup:
+  traefik-certs:

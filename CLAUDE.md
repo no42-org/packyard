@@ -55,14 +55,35 @@ TEA and many BMM workflows use a **step-file architecture**: strict sequential s
 
 ## Git Workflow
 
-- **Never push directly to `main`** — always create a feature branch and open a pull request.
+- **Never commit story work directly to `main`** — every completed story must be submitted as a pull request.
+- **One PR per story**: when a story reaches `done` status, create a branch, commit the story's implementation files, and open a PR against `main`.
+- Story branch naming: `feat/story-{epic}-{story}-{slug}` (e.g. `feat/story-1-1-docker-compose-platform-scaffold-with-traefik-tls`)
 - Use **Conventional Commits** for all commit messages:
   - `feat:` — new feature or content
   - `fix:` — bug fix or correction
   - `docs:` — documentation changes
   - `chore:` — maintenance, config, tooling
   - `refactor:` — restructuring without behaviour change
-- Branch naming: `<type>/<short-description>` (e.g. `feat/add-prd-template`, `docs/update-agent-roster`)
+- Non-story branches: `<type>/<short-description>` (e.g. `feat/add-prd-template`, `docs/update-agent-roster`)
+
+## API Error Response Guideline
+
+When implementing API error responses in packyard projects, use the **Code + Message** pattern:
+
+```json
+{
+  "code": "KEY_SCOPE_MISMATCH",
+  "message": "Key 'abc123' is scoped to 'core' but requested path is '/minion/'",
+  "component_requested": "minion",
+  "key_scope": "core"
+}
+```
+
+- `code` — machine-readable constant (SCREAMING_SNAKE_CASE) for programmatic handling
+- `message` — human-readable description with enough context to diagnose without reading logs
+- Additional fields — context-specific key/value pairs that make the error self-contained for support and debugging
+
+Bare `HTTP 401` with no body is acceptable for package manager serving endpoints (RPM/DEB/OCI) since `dnf`/`apt`/`docker` do not parse response bodies on auth failure. The structured error schema applies to the admin API only.
 
 ## Configuration Files
 
