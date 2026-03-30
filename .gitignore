@@ -1,3 +1,6 @@
+# IntelliJ
+.idea/
+
 # BMad framework (framework files, not project artifacts)
 _bmad/
 # _bmad-output/ is intentionally tracked — contains planning and implementation artifacts
