@@ -3,7 +3,7 @@
 
 # BMad framework (framework files, not project artifacts)
 _bmad/
-# _bmad-output/ is intentionally tracked — contains planning and implementation artifacts
+_bmad-output/
 
 # Claude Code & agent integration (local IDE tooling)
 .claude/
