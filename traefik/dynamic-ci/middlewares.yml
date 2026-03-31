@@ -1,0 +1,17 @@
+http:
+  middlewares:
+    packyard-auth:
+      forwardAuth:
+        address: "http://auth:8080/auth"
+        authRequestHeaders:
+          - "Authorization"
+        trustForwardHeader: false
+        # authResponseHeaders omitted — auth service returns no headers to pass downstream
+        # fail-closed: Traefik returns 503 if auth service is unreachable (NFR11)
+
+    packyard-strip-oci:
+      stripPrefix:
+        prefixes:
+          - "/oci"
+        # Strips /oci before forwarding to Zot — must be applied AFTER packyard-auth
+        # so forwardAuth sees full /oci/v2/... path for component scope enforcement

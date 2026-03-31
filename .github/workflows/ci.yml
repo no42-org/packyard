@@ -1,0 +1,35 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+
+  test-auth:
+    name: Auth unit tests
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-go@v5
+        with:
+          go-version-file: auth/go.mod
+          cache-dependency-path: auth/go.sum
+
+      - name: Run tests
+        working-directory: auth
+        run: go test ./...
+
+  build-images:
+    name: Build Docker images
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build auth image
+        run: docker build ./auth
+
+      - name: Build rpm image
+        run: docker build ./rpm

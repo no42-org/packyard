@@ -1,0 +1,60 @@
+http:
+  routers:
+    # Category ② — public-unauthenticated (no forwardAuth)
+    gpg-public:
+      entryPoints:
+        - web
+      rule: "PathPrefix(`/gpg/`)"
+      service: packyard-static-svc
+      # No middlewares — Category ② public-unauthenticated (architecture routing taxonomy)
+      # No tls: — CI uses plaintext HTTP
+
+    # Category ① — public-authenticated (forwardAuth required)
+    rpm-authenticated:
+      entryPoints:
+        - web
+      rule: "PathPrefix(`/rpm/`)"
+      middlewares:
+        - packyard-auth
+      service: packyard-rpm-svc
+      # No tls: — CI uses plaintext HTTP
+
+    deb-authenticated:
+      entryPoints:
+        - web
+      rule: "PathPrefix(`/deb/`)"
+      middlewares:
+        - packyard-auth
+      service: packyard-deb-svc
+      # No tls: — CI uses plaintext HTTP
+
+    oci-authenticated:
+      entryPoints:
+        - web
+      rule: "PathPrefix(`/oci/`)"
+      middlewares:
+        - packyard-auth       # MUST be first — forwardAuth sees full /oci/v2/... for scope check
+        - packyard-strip-oci  # MUST be second — strips /oci before Zot receives request
+      service: packyard-zot-svc
+      # No tls: — CI uses plaintext HTTP
+
+  services:
+    packyard-static-svc:
+      loadBalancer:
+        servers:
+          - url: "http://static:80"
+
+    packyard-rpm-svc:
+      loadBalancer:
+        servers:
+          - url: "http://rpm:80"
+
+    packyard-deb-svc:
+      loadBalancer:
+        servers:
+          - url: "http://deb:80"
+
+    packyard-zot-svc:
+      loadBalancer:
+        servers:
+          - url: "http://zot:5000"
