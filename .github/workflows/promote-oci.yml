@@ -23,7 +23,7 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install crane
         run: go install github.com/google/go-containerregistry/cmd/crane@v0.20.2
