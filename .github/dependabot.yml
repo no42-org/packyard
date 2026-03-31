@@ -1,0 +1,38 @@
+version: 2
+
+updates:
+
+  # Go modules — auth service
+  - package-ecosystem: gomod
+    directory: /auth
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - go
+
+  # GitHub Actions — workflow action versions
+  - package-ecosystem: github-actions
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - github-actions
+
+  # Docker base images — auth and rpm Dockerfiles
+  - package-ecosystem: docker
+    directory: /auth
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - docker
+
+  - package-ecosystem: docker
+    directory: /rpm
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - docker
