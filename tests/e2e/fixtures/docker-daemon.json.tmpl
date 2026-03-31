@@ -1,0 +1,7 @@
+{
+  "_comment": "Docker daemon config template for packyard OCI registry authentication.",
+  "_note": "Preferred approach: use 'docker login' rather than baking credentials here.",
+  "_usage": "docker login {{REGISTRY_HOST}}/oci --username subscriber --password-stdin",
+  "_example": "echo $VALID_KEY | docker login pkg.mdn.opennms.com/oci --username subscriber --password-stdin",
+  "insecure-registries": []
+}

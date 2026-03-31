@@ -1,0 +1,156 @@
+name: Promote OCI
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: "Meridian component (core|minion|sentinel)"
+        required: true
+      year:
+        description: "Meridian year (e.g. 2025)"
+        required: true
+
+env:
+  AWS_DEFAULT_REGION: us-east-1
+  RUSTFS_ENDPOINT: http://localhost:9000
+  ZOT_REGISTRY: localhost:5000
+
+concurrency:
+  group: oci-promote-${{ inputs.component }}-${{ inputs.year }}
+  cancel-in-progress: false
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install crane
+        run: go install github.com/google/go-containerregistry/cmd/crane@v0.20.2
+
+      - uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.4.1'
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Open tunnels (RustFS + Zot)
+        run: |
+          ssh -fN -L 9000:localhost:9000 deploy@${{ secrets.HOST }}
+          timeout 15 bash -c 'until nc -z localhost 9000 2>/dev/null; do sleep 1; done'
+          ssh -fN -L 5000:localhost:5000 deploy@${{ secrets.HOST }}
+          timeout 15 bash -c 'until nc -z localhost 5000 2>/dev/null; do sleep 1; done'
+
+      - name: Download OCI archives from RustFS
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+          RUSTFS_ACCESS_KEY: ${{ secrets.RUSTFS_ACCESS_KEY }}
+          RUSTFS_SECRET_KEY: ${{ secrets.RUSTFS_SECRET_KEY }}
+        run: |
+          mkdir -p ./staging/x86_64 ./staging/arm64
+          for arch in x86_64 arm64; do
+            AWS_ACCESS_KEY_ID="${RUSTFS_ACCESS_KEY}" \
+            AWS_SECRET_ACCESS_KEY="${RUSTFS_SECRET_KEY}" \
+              aws s3 sync \
+                "s3://staging/${COMPONENT}/${YEAR}/oci/${arch}/" \
+                "./staging/${arch}/" \
+                --endpoint-url "$RUSTFS_ENDPOINT"
+          done
+
+      - name: Verify checksums
+        run: |
+          for arch in x86_64 arm64; do
+            # Ensure every archive has a paired .sha256
+            for tar in ./staging/${arch}/*.tar; do
+              [ -f "$tar" ] || { echo "No .tar files found in staging/${arch}/"; exit 1; }
+              [ -f "${tar}.sha256" ] || { echo "MISSING CHECKSUM: ${tar}.sha256 not found"; exit 1; }
+            done
+            # Verify each checksum
+            for sha in ./staging/${arch}/*.sha256; do
+              [ -f "$sha" ] || { echo "No .sha256 files found in staging/${arch}/"; exit 1; }
+              expected=$(cat "$sha")
+              file="${sha%.sha256}"
+              [ -f "$file" ] || { echo "MISSING: $file referenced by $sha"; exit 1; }
+              actual=$(sha256sum "$file" | awk '{print $1}')
+              if [ "$expected" != "$actual" ]; then
+                echo "CHECKSUM MISMATCH: $file"
+                exit 1
+              fi
+              echo "OK: $file"
+            done
+          done
+
+      - name: Push images to Zot
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+        run: |
+          IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
+          for arch in x86_64 arm64; do
+            tarcount=$(ls ./staging/${arch}/*.tar 2>/dev/null | wc -l || echo 0)
+            [ "$tarcount" -eq 1 ] || { echo "Expected exactly 1 .tar for ${arch}, found ${tarcount}"; exit 1; }
+            tarfile=$(ls ./staging/${arch}/*.tar)
+            crane push "$tarfile" "${IMAGE_BASE}:${YEAR}-${arch}" --insecure
+            echo "Pushed: ${IMAGE_BASE}:${YEAR}-${arch}"
+          done
+
+      - name: Create multi-arch image index
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+        run: |
+          IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
+          crane index append \
+            --tag "${IMAGE_BASE}:${YEAR}" \
+            --manifest "${IMAGE_BASE}:${YEAR}-x86_64" \
+            --manifest "${IMAGE_BASE}:${YEAR}-arm64" \
+            --insecure
+          echo "Index created: ${IMAGE_BASE}:${YEAR}"
+
+      - name: Sign images with cosign (ephemeral)
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
+          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
+        run: |
+          IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
+          for tag in "${YEAR}-x86_64" "${YEAR}-arm64" "${YEAR}"; do
+            cosign sign \
+              --key env://COSIGN_PRIVATE_KEY \
+              --allow-insecure-registry \
+              --tlog-upload=false \
+              --yes \
+              "${IMAGE_BASE}:${tag}"
+            echo "Signed: ${IMAGE_BASE}:${tag}"
+          done
+
+      - name: Verify cosign signature (sanity check)
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+        run: |
+          grep -q 'BEGIN PUBLIC KEY' ./static/gpg/cosign.pub \
+            || { echo "ERROR: cosign.pub is still a placeholder — replace with real key before promoting"; exit 1; }
+          IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
+          cosign verify \
+            --key ./static/gpg/cosign.pub \
+            --allow-insecure-registry \
+            --insecure-ignore-tlog \
+            "${IMAGE_BASE}:${YEAR}" \
+            && echo "SIGNATURE VERIFIED" \
+            || { echo "SIGNATURE VERIFICATION FAILED"; exit 1; }
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_ed25519
+          rm -f /tmp/cosign.key
+          pkill -f 'ssh -fN -L 9000' || true
+          pkill -f 'ssh -fN -L 5000' || true

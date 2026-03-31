@@ -1,0 +1,149 @@
+name: Promote DEB
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: "Meridian component (core|minion|sentinel)"
+        required: true
+      year:
+        description: "Meridian year (e.g. 2025)"
+        required: true
+      distro:
+        description: "Debian distro (bookworm|trixie|jammy|noble)"
+        required: true
+
+env:
+  AWS_DEFAULT_REGION: us-east-1
+  RUSTFS_ENDPOINT: http://localhost:9000
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Open RustFS tunnel
+        run: |
+          ssh -fN -L 9000:localhost:9000 deploy@${{ secrets.HOST }}
+          timeout 15 bash -c 'until nc -z localhost 9000 2>/dev/null; do sleep 1; done'
+
+      - name: Download DEBs from RustFS staging
+        run: |
+          mkdir -p ./staging
+          AWS_ACCESS_KEY_ID=${{ secrets.RUSTFS_ACCESS_KEY }} \
+          AWS_SECRET_ACCESS_KEY=${{ secrets.RUSTFS_SECRET_KEY }} \
+            aws s3 sync \
+              "s3://staging/${{ inputs.component }}/${{ inputs.year }}/deb/${{ inputs.distro }}-amd64/" \
+              ./staging/ \
+              --endpoint-url "$RUSTFS_ENDPOINT"
+
+      - name: Verify checksums
+        run: |
+          cd ./staging
+          # Ensure every DEB has a paired .sha256
+          for deb in *.deb; do
+            [ -f "$deb" ] || { echo "No DEB files found in staging/"; exit 1; }
+            [ -f "${deb}.sha256" ] || { echo "MISSING CHECKSUM: ${deb}.sha256 not found"; exit 1; }
+          done
+          # Verify each checksum
+          for sha in *.sha256; do
+            [ -f "$sha" ] || { echo "No .sha256 files found"; exit 1; }
+            expected=$(cat "$sha")
+            file="${sha%.sha256}"
+            [ -f "$file" ] || { echo "MISSING: $file referenced by $sha"; exit 1; }
+            actual=$(sha256sum "$file" | awk '{print $1}')
+            if [ "$expected" != "$actual" ]; then
+              echo "CHECKSUM MISMATCH: $file"
+              exit 1
+            fi
+            echo "OK: $file"
+          done
+
+      - name: Import GPG key (ephemeral) and sign DEBs
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+        run: |
+          echo "${GPG_PRIVATE_KEY}" | gpg --batch --import
+          gpg --list-secret-keys "${GPG_KEY_ID}"
+          for deb in ./staging/*.deb; do
+            [ -f "$deb" ] || { echo "No DEB files found in staging/"; exit 1; }
+            dpkg-sig --sign builder -k "${GPG_KEY_ID}" "$deb"
+            echo "Signed: $(basename "$deb")"
+          done
+
+      - name: Upload signed DEBs to host and copy into aptly container
+        run: |
+          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage"
+          scp ./staging/*.deb deploy@${{ secrets.HOST }}:/tmp/deb-stage/
+          ssh deploy@${{ secrets.HOST }} "
+            APTLY_ID=\$(docker compose -f /opt/packyard/docker-compose.yml ps -q aptly)
+            docker cp /tmp/deb-stage/ \"\${APTLY_ID}:/tmp/\"
+          "
+
+      - name: Create Aptly snapshot on host
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+          DISTRO: ${{ inputs.distro }}
+        run: |
+          SNAPSHOT_NAME=$(ssh deploy@${{ secrets.HOST }} \
+            "docker compose -f /opt/packyard/docker-compose.yml exec -T \
+              -e COMPONENT='${COMPONENT}' -e YEAR='${YEAR}' -e DISTRO='${DISTRO}' \
+              -e DEB_STAGE_DIR=/tmp/deb-stage \
+              aptly /scripts/create-snapshot.sh '${COMPONENT}' '${YEAR}' '${DISTRO}'")
+          [ -n "${SNAPSHOT_NAME}" ] || { echo "ERROR: snapshot name is empty"; exit 1; }
+          echo "SNAPSHOT_NAME=${SNAPSHOT_NAME}" >> "$GITHUB_ENV"
+          echo "Created snapshot: ${SNAPSHOT_NAME}"
+
+      - name: Publish Aptly snapshot on host
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+          DISTRO: ${{ inputs.distro }}
+        run: |
+          ssh deploy@${{ secrets.HOST }} \
+            "docker compose -f /opt/packyard/docker-compose.yml exec -T aptly \
+              /scripts/publish-snapshot.sh \
+              '${SNAPSHOT_NAME}' '${COMPONENT}' '${YEAR}' '${DISTRO}'"
+
+      - name: Smoke test — verify InRelease published to filesystem
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+          DISTRO: ${{ inputs.distro }}
+        run: |
+          ssh deploy@${{ secrets.HOST }} "
+            docker compose -f /opt/packyard/docker-compose.yml exec -T aptly \
+              test -f '/opt/aptly/public/${COMPONENT}/${YEAR}/dists/${DISTRO}/InRelease' \
+              && echo 'SMOKE TEST PASS' \
+              || { echo 'SMOKE TEST FAIL'; exit 1; }
+          "
+
+      - name: Prune old snapshots
+        env:
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+        run: |
+          ssh deploy@${{ secrets.HOST }} \
+            "docker compose -f /opt/packyard/docker-compose.yml exec -T aptly \
+              /scripts/prune-snapshots.sh '${COMPONENT}' '${YEAR}'"
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_ed25519
+          ssh deploy@${{ secrets.HOST }} "
+            rm -rf /tmp/deb-stage
+            docker compose -f /opt/packyard/docker-compose.yml exec -T aptly \
+              rm -rf /tmp/deb-stage 2>/dev/null || true
+          " 2>/dev/null || true
+          pkill -f 'ssh -fN -L 9000' || true

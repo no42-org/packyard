@@ -1,5 +1,6 @@
 http:
   routers:
+    # Category ② — public-unauthenticated (no forwardAuth)
     gpg-public:
       entryPoints:
         - websecure
@@ -10,8 +11,55 @@ http:
       # No middlewares — Category ② public-unauthenticated (architecture routing taxonomy)
       # forwardAuth is NOT attached here — adding it would break FR5 (public GPG key download)
 
+    # Category ① — public-authenticated (forwardAuth required)
+    rpm-authenticated:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/rpm/`)"
+      middlewares:
+        - packyard-auth
+      service: packyard-rpm-svc
+      tls:
+        certResolver: letsencrypt
+
+    deb-authenticated:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/deb/`)"
+      middlewares:
+        - packyard-auth
+      service: packyard-deb-svc
+      tls:
+        certResolver: letsencrypt
+
+    oci-authenticated:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/oci/`)"
+      middlewares:
+        - packyard-auth       # MUST be first — forwardAuth sees full /oci/v2/... for scope check
+        - packyard-strip-oci  # MUST be second — strips /oci before Zot receives request
+      service: packyard-zot-svc
+      tls:
+        certResolver: letsencrypt
+
   services:
     packyard-static-svc:
       loadBalancer:
         servers:
           - url: "http://static:80"
+
+    packyard-rpm-svc:
+      loadBalancer:
+        servers:
+          - url: "http://rpm:80"
+
+    packyard-deb-svc:
+      loadBalancer:
+        servers:
+          - url: "http://deb:80"
+
+    packyard-zot-svc:
+      loadBalancer:
+        servers:
+          - url: "http://zot:5000"
