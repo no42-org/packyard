@@ -1,0 +1,19 @@
+# PLACEHOLDER: Replace with the real Meridian cosign public key (PEM format).
+#
+# To generate a cosign keypair:
+#   cosign generate-key-pair
+#   This produces:
+#     cosign.key  — private key (store as GHA secret COSIGN_PRIVATE_KEY)
+#     cosign.pub  — public key  (replace this file and commit)
+#
+# This file is served at https://pkg.mdn.opennms.com/gpg/cosign.pub
+# (no authentication — public-unauthenticated route via Traefik /gpg/ prefix)
+#
+# Subscribers use it for offline verification:
+#   cosign verify \
+#     --key /etc/meridian/cosign.pub \
+#     --insecure-ignore-tlog \
+#     pkg.mdn.opennms.com/oci/meridian-core:2025
+#
+# DO NOT commit the private key (cosign.key). Store it exclusively as the
+# GHA secret COSIGN_PRIVATE_KEY.

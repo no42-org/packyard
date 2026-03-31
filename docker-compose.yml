@@ -12,21 +12,26 @@ services:
       - traefik-certs:/certs
     environment:
       - ACME_EMAIL=${ACME_EMAIL}
+    networks:
+      - proxy
 
   auth:
-    # STUB — replaced by real Go forwardAuth service in Story 2.1
-    image: busybox:latest
-    command: ["httpd", "-f", "-p", "8080"]
+    build: ./auth
     restart: unless-stopped
+    expose:
+      - "9090"  # Prometheus metrics — internal Docker network only, not published to host
     volumes:
       - auth-db:/data/db
       - auth-backup:/data/backup
     healthcheck:
-      test: ["CMD", "nc", "-z", "localhost", "8080"]
+      test: ["CMD", "/auth", "-health-check"]
       interval: 10s
       timeout: 3s
       retries: 3
       start_period: 5s
+    networks:
+      - proxy    # receives forwardAuth calls from Traefik; admin API routed via Traefik admin entrypoint
+      - backend  # promotion pipeline access (Epic 4); placed here now to complete isolation topology
 
   aptly:
     image: urpylka/aptly:1.6.2
@@ -35,24 +40,43 @@ services:
       - aptly-data:/opt/aptly
       - ./aptly/aptly.conf:/etc/aptly.conf:ro
       - ./aptly/scripts:/scripts:ro
+    networks:
+      - backend  # promotion-only; not Traefik-proxied for subscribers
+
+  deb:
+    image: nginx:alpine
+    restart: unless-stopped
+    volumes:
+      - aptly-data:/opt/aptly/public:ro
+      - ./deb/nginx.conf:/etc/nginx/nginx.conf:ro
+    networks:
+      - proxy
 
   rpm:
     build: ./rpm
     restart: unless-stopped
     volumes:
-      - rpm-data:/usr/share/nginx/html:ro
+      - rpm-data:/usr/share/nginx/html  # rw — init script creates directory tree on first start
+    networks:
+      - proxy
 
   zot:
     image: ghcr.io/project-zot/zot-linux-amd64:v2.1.2
     restart: unless-stopped
     command: serve /etc/zot/config.json
+    ports:
+      - "127.0.0.1:5000:5000"  # loopback-only — GHA workflows access via SSH tunnel (Story 4.4)
     volumes:
       - zot-data:/var/lib/registry
       - ./zot/config.json:/etc/zot/config.json:ro
+    networks:
+      - proxy
 
   rustfs:
     image: rustfs/rustfs:latest
     restart: unless-stopped
+    ports:
+      - "127.0.0.1:9000:9000"  # loopback-only — GHA workflows access via SSH tunnel (Story 4.1)
     environment:
       - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
       - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
@@ -60,12 +84,61 @@ services:
     volumes:
       - rustfs-data:/data
     command: ["/data"]
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://127.0.0.1:9000/health"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+      start_period: 15s
+    networks:
+      - backend  # promotion-only; not Traefik-proxied for subscribers
+
+  rustfs-init:
+    image: minio/mc:latest
+    depends_on:
+      rustfs:
+        condition: service_healthy
+    restart: "no"
+    environment:
+      - RUSTFS_ACCESS_KEY=${RUSTFS_ACCESS_KEY}
+      - RUSTFS_SECRET_KEY=${RUSTFS_SECRET_KEY}
+    entrypoint: >
+      /bin/sh -c "
+        mc alias set packyard http://rustfs:9000 $$RUSTFS_ACCESS_KEY $$RUSTFS_SECRET_KEY &&
+        mc mb --ignore-existing packyard/staging &&
+        echo 'Staging bucket ready'
+      "
+    networks:
+      - backend
+
+  backup:
+    image: keinos/sqlite3:latest
+    restart: unless-stopped
+    volumes:
+      - auth-db:/data/db:ro
+      - auth-backup:/backup
+      - ./scripts/backup-keystore.sh:/scripts/backup-keystore.sh:ro
+    entrypoint: ["/bin/sh", "-c", "while true; do /scripts/backup-keystore.sh; sleep 86400; done"]
+    networks:
+      - backend
 
   static:
     image: nginx:alpine
     restart: unless-stopped
     volumes:
       - ./static:/usr/share/nginx/html:ro
+    networks:
+      - proxy
+
+networks:
+  proxy:
+    # Traefik + package-serving backends + auth (for forwardAuth).
+    # Services on this network are reachable by Traefik for proxying.
+    # rustfs and aptly are intentionally excluded — they are promotion-only (Epic 4).
+  backend:
+    # Promotion pipeline and key store infrastructure.
+    # auth is on both proxy and backend to receive forwardAuth calls AND manage keys.
+    # Not routed by Traefik for subscriber requests.
 
 volumes:
   aptly-data:

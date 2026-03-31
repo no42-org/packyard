@@ -1,0 +1,129 @@
+name: Promote RPM
+
+on:
+  workflow_dispatch:
+    inputs:
+      component:
+        description: "Meridian component (core|minion|sentinel)"
+        required: true
+      year:
+        description: "Meridian year (e.g. 2025)"
+        required: true
+      os:
+        description: "OS target (el8-x86_64|el9-x86_64|el10-x86_64|centos10-x86_64)"
+        required: true
+
+concurrency:
+  group: rpm-publish-${{ inputs.component }}-${{ inputs.os }}
+  cancel-in-progress: false
+
+env:
+  AWS_DEFAULT_REGION: us-east-1
+  RUSTFS_ENDPOINT: http://localhost:9000
+
+jobs:
+  promote:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          ssh-keyscan -H "${{ secrets.HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Open RustFS tunnel
+        run: |
+          ssh -fN -L 9000:localhost:9000 deploy@${{ secrets.HOST }}
+          # P4: wait until tunnel listener is ready before proceeding
+          timeout 15 bash -c 'until nc -z localhost 9000 2>/dev/null; do sleep 1; done'
+
+      - name: Download from RustFS staging
+        run: |
+          mkdir -p ./staging
+          AWS_ACCESS_KEY_ID=${{ secrets.RUSTFS_ACCESS_KEY }} \
+          AWS_SECRET_ACCESS_KEY=${{ secrets.RUSTFS_SECRET_KEY }} \
+            aws s3 sync \
+              "s3://staging/${{ inputs.component }}/${{ inputs.year }}/rpm/${{ inputs.os }}/" \
+              ./staging/ \
+              --endpoint-url "$RUSTFS_ENDPOINT"
+
+      - name: Verify checksums
+        run: |
+          cd ./staging
+          # P6: every .rpm must have a paired .sha256 — catch unpaired RPMs before signing
+          for rpm in *.rpm; do
+            [ -f "$rpm" ] || { echo "No RPM files found in staging/"; exit 1; }
+            [ -f "${rpm}.sha256" ] || { echo "MISSING CHECKSUM: ${rpm}.sha256 not found"; exit 1; }
+          done
+          # Verify each checksum
+          for sha in *.sha256; do
+            [ -f "$sha" ] || { echo "No .sha256 files found"; exit 1; }
+            expected=$(cat "$sha")
+            file="${sha%.sha256}"
+            [ -f "$file" ] || { echo "MISSING: $file referenced by $sha"; exit 1; }
+            actual=$(sha256sum "$file" | awk '{print $1}')
+            if [ "$expected" != "$actual" ]; then
+              echo "CHECKSUM MISMATCH: $file"
+              exit 1
+            fi
+            echo "OK: $file"
+          done
+
+      - name: Import GPG key (ephemeral)
+        run: |
+          echo "${{ secrets.GPG_PRIVATE_KEY }}" | gpg --batch --import
+          gpg --list-secret-keys "${{ secrets.GPG_KEY_ID }}"
+
+      - name: Sign RPMs
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          # P2: pre-cache passphrase in gpg-agent via loopback pinentry, then sign with rpmsign
+          # Avoids __gpg_check_password_cmd true (which bypasses passphrase verification entirely)
+          echo "${GPG_PASSPHRASE}" | gpg --batch --yes \
+            --pinentry-mode loopback \
+            --passphrase-fd 0 \
+            -u "${GPG_KEY_ID}" \
+            --sign --output /dev/null - < /dev/null 2>/dev/null || true
+          for rpm in ./staging/*.rpm; do
+            [ -f "$rpm" ] || { echo "No RPM files found in staging/"; exit 1; }
+            rpmsign --addsign \
+              --define "_gpg_name ${GPG_KEY_ID}" \
+              "$rpm"
+            echo "Signed: $(basename "$rpm")"
+          done
+
+      - name: Create staging directory on host
+        run: ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/rpm-stage && mkdir -p /tmp/rpm-stage"
+
+      - name: Upload signed RPMs to host
+        run: scp ./staging/*.rpm deploy@${{ secrets.HOST }}:/tmp/rpm-stage/
+
+      - name: Publish to host
+        env:
+          # P1: route inputs through env vars to avoid GHA text interpolation into remote shell
+          COMPONENT: ${{ inputs.component }}
+          YEAR: ${{ inputs.year }}
+          OS: ${{ inputs.os }}
+        run: |
+          ssh deploy@${{ secrets.HOST }} "
+            set -euo pipefail
+            for f in /tmp/rpm-stage/*.rpm; do
+              /opt/packyard/rpm/scripts/add-package.sh \"\$f\" \
+                '${COMPONENT}' '${YEAR}' '${OS}'
+            done
+          "
+
+      - name: Cleanup
+        if: always()
+        run: |
+          # P3: remove SSH private key from disk
+          rm -f ~/.ssh/id_ed25519
+          # P5: remove staged RPMs from host (handles failure mid-loop)
+          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/rpm-stage" 2>/dev/null || true
+          # Close SSH tunnel
+          pkill -f 'ssh -fN -L 9000' || true
