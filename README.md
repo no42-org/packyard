@@ -28,7 +28,7 @@ Promotion pipeline (GitHub Actions):
 
 | Service | Image | Role |
 |---------|-------|------|
-| `traefik` | `traefik:v3.3` | TLS, routing, forwardAuth middleware |
+| `traefik` | `traefik:3.6.12` | TLS, routing, forwardAuth middleware |
 | `auth` | built from `./auth` | Subscription key validation, admin API, Prometheus metrics |
 | `rpm` | built from `./rpm` | nginx serving signed RPM repos |
 | `deb` | `nginx:alpine` | nginx serving Aptly-published DEB repos |
