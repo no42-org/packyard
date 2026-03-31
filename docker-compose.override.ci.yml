@@ -1,0 +1,25 @@
+# docker-compose.override.ci.yml — CI-only overrides (Option A)
+#
+# Swaps Traefik to plaintext HTTP (no TLS/ACME) and publishes auth ports
+# to the host so the CI workflow can seed keys and read metrics.
+#
+# Usage:
+#   docker compose -f docker-compose.yml -f docker-compose.override.ci.yml up -d
+#
+# The base docker-compose.yml port mapping for Traefik (443) is merged in by
+# Compose but harmless — Traefik only listens on the entryPoints defined in
+# traefik.ci.yml (web:80 and admin:8443).
+
+services:
+
+  traefik:
+    ports:
+      - "80:80"
+    volumes:
+      - ./traefik/traefik.ci.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic-ci:/etc/traefik/dynamic-ci:ro
+
+  auth:
+    ports:
+      - "127.0.0.1:8080:8080"   # admin API — key seeding from CI runner
+      - "127.0.0.1:9090:9090"   # Prometheus metrics — observability.sh AC1

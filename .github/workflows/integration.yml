@@ -1,0 +1,71 @@
+name: Integration
+
+on:
+  workflow_dispatch:
+
+jobs:
+
+  integration:
+    name: Full stack + observability
+    runs-on: ubuntu-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Create .env
+        run: |
+          cat > .env <<'EOF'
+          ACME_EMAIL=ci@example.com
+          RUSTFS_ACCESS_KEY=ci-access-key
+          RUSTFS_SECRET_KEY=ci-secret-key-value
+          EOF
+
+      - name: Start stack (CI override — HTTP, no TLS)
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.ci.yml \
+            up -d
+
+      - name: Wait for auth to be healthy
+        run: |
+          echo "Waiting for auth service..."
+          timeout 60 bash -c \
+            'until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done'
+          echo "Auth is healthy."
+
+      - name: Seed CI subscription key
+        run: |
+          RESPONSE=$(curl -sf http://localhost:8080/api/v1/keys \
+            -H 'Content-Type: application/json' \
+            -d '{"component":"core","label":"ci-integration-test"}')
+          echo "Create key response: ${RESPONSE}"
+          KEY_ID=$(echo "${RESPONSE}" | jq -r '.id')
+          if [ -z "${KEY_ID}" ] || [ "${KEY_ID}" = "null" ]; then
+            echo "ERROR: failed to extract key ID from response" >&2
+            exit 1
+          fi
+          echo "VALID_KEY=${KEY_ID}" >> "${GITHUB_ENV}"
+          echo "Seeded subscription key: ${KEY_ID}"
+
+      - name: Run observability tests (AC1–AC4)
+        env:
+          BASE_URL: http://localhost
+          METRICS_URL: http://localhost:9090/metrics
+        run: bash tests/e2e/observability.sh
+
+      - name: Dump service logs on failure
+        if: failure()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.ci.yml \
+            logs --no-color
+
+      - name: Tear down stack
+        if: always()
+        run: |
+          docker compose \
+            -f docker-compose.yml \
+            -f docker-compose.override.ci.yml \
+            down -v
