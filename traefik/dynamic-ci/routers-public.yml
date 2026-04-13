@@ -42,17 +42,17 @@ http:
     packyard-static-svc:
       loadBalancer:
         servers:
-          - url: "http://static:80"
+          - url: "http://static:8080"
 
     packyard-rpm-svc:
       loadBalancer:
         servers:
-          - url: "http://rpm:80"
+          - url: "http://rpm:8080"
 
     packyard-deb-svc:
       loadBalancer:
         servers:
-          - url: "http://deb:80"
+          - url: "http://deb:8080"
 
     packyard-zot-svc:
       loadBalancer:

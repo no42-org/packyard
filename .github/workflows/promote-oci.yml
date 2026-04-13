@@ -23,14 +23,23 @@ jobs:
   promote:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Install crane
-        run: go install github.com/google/go-containerregistry/cmd/crane@v0.20.2
+        env:
+          CRANE_VERSION: v0.20.2
+          CRANE_SHA256: c14340087103ba9dadf61d45acd20675490fd0ccbd56ac7901fc1b502137f44b
+        run: |
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            -o /tmp/crane.tar.gz
+          echo "${CRANE_SHA256}  /tmp/crane.tar.gz" | sha256sum --check --strict
+          tar -xzf /tmp/crane.tar.gz -C /tmp crane
+          sudo mv /tmp/crane /usr/local/bin/crane
+          crane version
 
-      - uses: sigstore/cosign-installer@v3
+      - uses: sigstore/cosign-installer@cad07c2e89fa2edd6e2d7bab4c1aa38e53f76003  # v4.1.1
         with:
-          cosign-release: 'v2.4.1'
+          cosign-release: 'v3.0.6'
 
       - name: Set up SSH
         run: |
@@ -136,11 +145,11 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           YEAR: ${{ inputs.year }}
         run: |
-          grep -q 'BEGIN PUBLIC KEY' ./static/gpg/cosign.pub \
+          grep -q 'BEGIN PUBLIC KEY' ./static/content/gpg/cosign.pub \
             || { echo "ERROR: cosign.pub is still a placeholder — replace with real key before promoting"; exit 1; }
           IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
           cosign verify \
-            --key ./static/gpg/cosign.pub \
+            --key ./static/content/gpg/cosign.pub \
             --allow-insecure-registry \
             --insecure-ignore-tlog \
             "${IMAGE_BASE}:${YEAR}" \
