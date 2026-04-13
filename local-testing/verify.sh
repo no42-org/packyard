@@ -17,7 +17,7 @@ pass() { echo "[PASS] $1"; PASS=$((PASS+1)); }
 fail() { echo "[FAIL] $1"; FAIL=$((FAIL+1)); }
 info() { echo "       $1"; }
 
-COMPOSE="docker compose -f docker-compose.yml -f docker-compose.override.ci.yml"
+COMPOSE="docker compose -f compose.yml -f compose.override.ci.yml"
 
 echo "=== Packyard local dev verification ==="
 echo ""

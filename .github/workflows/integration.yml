@@ -24,8 +24,8 @@ jobs:
       - name: Start stack (CI override — HTTP, no TLS)
         run: |
           docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.ci.yml \
+            -f compose.yml \
+            -f compose.override.ci.yml \
             up -d
 
       - name: Wait for Traefik to be ready
@@ -66,14 +66,14 @@ jobs:
         if: failure()
         run: |
           docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.ci.yml \
+            -f compose.yml \
+            -f compose.override.ci.yml \
             logs --no-color
 
       - name: Tear down stack
         if: always()
         run: |
           docker compose \
-            -f docker-compose.yml \
-            -f docker-compose.override.ci.yml \
+            -f compose.yml \
+            -f compose.override.ci.yml \
             down -v

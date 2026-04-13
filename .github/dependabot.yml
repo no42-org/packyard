@@ -20,7 +20,8 @@ updates:
       - dependencies
       - github-actions
 
-  # Docker base images — root docker-compose.yml and service Dockerfiles
+  # Docker base images — service Dockerfiles only
+  # Note: images declared in compose.yml are not scanned by Dependabot's docker ecosystem
   - package-ecosystem: docker
     directory: /
     schedule:

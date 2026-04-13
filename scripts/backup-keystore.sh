@@ -1,4 +1,4 @@
-#!/usr/bin/env bash
+#!/bin/sh
 # backup-keystore.sh — SQLite online backup for the packyard auth keystore (Story 5.4)
 #
 # USAGE (inside the backup container):
@@ -15,7 +15,7 @@
 # does not require an EXCLUSIVE lock — safe to run while auth is active.
 #
 # Backups older than 7 days are pruned after a successful backup.
-set -euo pipefail
+set -eu
 
 DB_PATH="${DB_PATH:-/data/db/auth.db}"
 BACKUP_DIR="${BACKUP_DIR:-/backup}"
@@ -43,12 +43,13 @@ ROW_COUNT="$(sqlite3 "${BACKUP_FILE}" "SELECT count(*) FROM subscription_key")"
 echo "[backup] Integrity check: subscription_key row count = ${ROW_COUNT}"
 
 # Prune backups older than 7 days.
+# POSIX for-loop: filenames are timestamp-based (no spaces), so word-splitting is safe.
 PRUNED=0
-while IFS= read -r -d '' OLD_FILE; do
+for OLD_FILE in $(find "${BACKUP_DIR}" -name 'auth-*.db' -mtime +7 2>/dev/null || true); do
   echo "[backup] Pruning: ${OLD_FILE}"
   rm -f "${OLD_FILE}"
   PRUNED=$((PRUNED + 1))
-done < <(find "${BACKUP_DIR}" -name 'auth-*.db' -mtime +7 -print0 2>/dev/null || true)
+done
 
 echo "[backup] Pruned ${PRUNED} old backup(s)."
 echo "[backup] Done: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
