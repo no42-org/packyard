@@ -1,47 +1,46 @@
 http:
   routers:
+    # Dev override: PathPrefix-only rules — no Host() check.
+    # Services are reachable by IP or localhost without DNS or a Host header.
+    # TLS uses Traefik's self-signed fallback (LE cannot issue for localhost/IP).
+    # Use curl -k or add Traefik's dev cert to your trust store.
+
     # Category ② — public-unauthenticated (no forwardAuth)
     gpg-public:
       entryPoints:
         - websecure
-      rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/gpg/`)'
+      rule: "PathPrefix(`/gpg/`)"
       service: packyard-static-svc
-      tls:
-        certResolver: letsencrypt
-      # No middlewares — Category ② public-unauthenticated (architecture routing taxonomy)
-      # forwardAuth is NOT attached here — adding it would break FR5 (public GPG key download)
+      tls: {}
 
     # Category ① — public-authenticated (forwardAuth required)
     rpm-authenticated:
       entryPoints:
         - websecure
-      rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/rpm/`)'
+      rule: "PathPrefix(`/rpm/`)"
       middlewares:
         - packyard-auth
       service: packyard-rpm-svc
-      tls:
-        certResolver: letsencrypt
+      tls: {}
 
     deb-authenticated:
       entryPoints:
         - websecure
-      rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/deb/`)'
+      rule: "PathPrefix(`/deb/`)"
       middlewares:
         - packyard-auth
       service: packyard-deb-svc
-      tls:
-        certResolver: letsencrypt
+      tls: {}
 
     oci-authenticated:
       entryPoints:
         - websecure
-      rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/oci/`)'
+      rule: "PathPrefix(`/oci/`)"
       middlewares:
         - packyard-auth       # MUST be first — forwardAuth sees full /oci/v2/... for scope check
         - packyard-strip-oci  # MUST be second — strips /oci before Zot receives request
       service: packyard-zot-svc
-      tls:
-        certResolver: letsencrypt
+      tls: {}
 
   services:
     packyard-static-svc:

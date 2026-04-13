@@ -22,7 +22,10 @@ entryPoints:
 certificatesResolvers:
   letsencrypt:
     acme:
-      email: "${ACME_EMAIL}"
+      # email is set via TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL in compose.yml.
+      # Static config does not expand ${VAR}; the TRAEFIK_ env var prefix is the correct mechanism.
+      # Expected format: a valid RFC 5321 address, e.g. hostmaster@example.com
+      # To inspect the active value: docker exec <traefik-container> env | grep ACME_EMAIL
       storage: /certs/acme.json
       tlsChallenge: {}
 

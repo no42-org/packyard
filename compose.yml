@@ -20,7 +20,10 @@ services:
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
       - traefik-certs:/certs
     environment:
-      - ACME_EMAIL=${ACME_EMAIL}
+      # Static config (traefik.yml) does not expand ${VAR}; use the TRAEFIK_ env var prefix instead.
+      - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL:?ACME_EMAIL must be set in .env}
+      # Passed into file-provider Go templates via {{ env "PKG_DOMAIN" }} in dynamic/*.yml
+      - PKG_DOMAIN=${PKG_DOMAIN:?PKG_DOMAIN must be set in .env}
     networks:
       - proxy
 
@@ -74,8 +77,10 @@ services:
       - no-new-privileges:true
     read_only: true
     tmpfs:
-      - /run                    # nginx PID and lock files
-      - /var/cache/nginx        # client/proxy/fastcgi temp dirs
+      # uid=/gid= tmpfs options require Docker Engine >= 20.10; silently ignored on older engines
+      # and Podman rootless, which would reproduce the EACCES failure at nginx startup.
+      - /run:uid=101,gid=101                    # nginx PID and lock files
+      - /var/cache/nginx:uid=101,gid=101        # client/proxy/fastcgi temp dirs
     volumes:
       - aptly-data:/opt/aptly/public:ro
       - ./deb/nginx.conf:/etc/nginx/nginx.conf:ro
@@ -91,8 +96,8 @@ services:
       - no-new-privileges:true
     read_only: true
     tmpfs:
-      - /run                    # nginx PID and lock files
-      - /var/cache/nginx        # client/proxy/fastcgi temp dirs
+      - /run:uid=101,gid=101                    # nginx PID and lock files
+      - /var/cache/nginx:uid=101,gid=101        # client/proxy/fastcgi temp dirs
     volumes:
       - rpm-data:/usr/share/nginx/html  # rw — init script creates directory tree on first start
     networks:
@@ -193,8 +198,8 @@ services:
       - no-new-privileges:true
     read_only: true
     tmpfs:
-      - /run                    # nginx PID and lock files
-      - /var/cache/nginx        # client/proxy/fastcgi temp dirs
+      - /run:uid=101,gid=101                    # nginx PID and lock files
+      - /var/cache/nginx:uid=101,gid=101        # client/proxy/fastcgi temp dirs
     volumes:
       - ./static/content:/usr/share/nginx/html:ro
       - ./static/config/nginx.conf:/etc/nginx/nginx.conf:ro
