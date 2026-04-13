@@ -28,8 +28,8 @@ jobs:
       - name: Extract backup version from Dockerfile
         id: version
         run: |
-          VERSION=$(grep -m1 '^ARG BACKUP_VERSION=' backup/Dockerfile | cut -d= -f2 | tr -d '"')
-          echo "backup_version=${VERSION}" >> "${GITHUB_OUTPUT}"
+          SQLITE_VERSION=$(grep -m1 '^ARG SQLITE_VERSION=' backup/Dockerfile | cut -d= -f2 | tr -d '"')
+          echo "backup_version=${SQLITE_VERSION%-r*}" >> "${GITHUB_OUTPUT}"
 
       - name: Set up QEMU (cross-platform builds)
         uses: docker/setup-qemu-action@ce360397dd3f832beb865e1373c09c0e9f86d70a  # v4.0.0
@@ -51,8 +51,6 @@ jobs:
           file: backup/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: true
-          build-args: |
-            BACKUP_VERSION=${{ steps.version.outputs.backup_version }}
           tags: |
             ${{ env.IMAGE }}:${{ steps.version.outputs.backup_version }}
             ${{ env.IMAGE }}:latest
