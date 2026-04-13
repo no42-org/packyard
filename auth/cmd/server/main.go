@@ -79,7 +79,7 @@ func main() {
 		}
 	}()
 
-	logger.Info("starting packyard-auth", slog.String("addr", ":8080"), slog.String("db", dbPath))
+	logger.Info("starting packyard-auth", slog.String("version", version), slog.String("addr", ":8080"), slog.String("db", dbPath))
 	if err := http.ListenAndServe(":8080", r); err != nil {
 		logger.Error("server error", slog.String("error", err.Error()))
 		os.Exit(1)
