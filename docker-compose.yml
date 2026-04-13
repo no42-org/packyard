@@ -111,6 +111,9 @@ services:
   backup:
     image: keinos/sqlite3:latest
     restart: unless-stopped
+    depends_on:
+      auth:
+        condition: service_healthy
     volumes:
       - auth-db:/data/db:ro
       - auth-backup:/backup

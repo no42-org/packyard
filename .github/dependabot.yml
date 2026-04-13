@@ -20,7 +20,15 @@ updates:
       - dependencies
       - github-actions
 
-  # Docker base images — auth and rpm Dockerfiles
+  # Docker base images — root docker-compose.yml and service Dockerfiles
+  - package-ecosystem: docker
+    directory: /
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - docker
+
   - package-ecosystem: docker
     directory: /auth
     schedule:
