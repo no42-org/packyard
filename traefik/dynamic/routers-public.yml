@@ -4,7 +4,7 @@ http:
     gpg-public:
       entryPoints:
         - websecure
-      rule: "PathPrefix(`/gpg/`)"
+      rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/gpg/`)'
       service: packyard-static-svc
       tls:
         certResolver: letsencrypt
@@ -15,7 +15,7 @@ http:
     rpm-authenticated:
       entryPoints:
         - websecure
-      rule: "PathPrefix(`/rpm/`)"
+      rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/rpm/`)'
       middlewares:
         - packyard-auth
       service: packyard-rpm-svc
@@ -25,7 +25,7 @@ http:
     deb-authenticated:
       entryPoints:
         - websecure
-      rule: "PathPrefix(`/deb/`)"
+      rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/deb/`)'
       middlewares:
         - packyard-auth
       service: packyard-deb-svc
@@ -35,7 +35,7 @@ http:
     oci-authenticated:
       entryPoints:
         - websecure
-      rule: "PathPrefix(`/oci/`)"
+      rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/oci/`)'
       middlewares:
         - packyard-auth       # MUST be first — forwardAuth sees full /oci/v2/... for scope check
         - packyard-strip-oci  # MUST be second — strips /oci before Zot receives request
