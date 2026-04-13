@@ -109,7 +109,7 @@ services:
       - backend
 
   backup:
-    image: keinos/sqlite3:latest
+    image: ghcr.io/no42-org/packyard-backup:1.0.0
     restart: unless-stopped
     depends_on:
       auth:
@@ -117,7 +117,6 @@ services:
     volumes:
       - auth-db:/data/db:ro
       - auth-backup:/backup
-      - ./scripts/backup-keystore.sh:/scripts/backup-keystore.sh:ro
     entrypoint: ["/bin/sh", "-c", "while true; do /scripts/backup-keystore.sh; sleep 86400; done"]
     networks:
       - backend
