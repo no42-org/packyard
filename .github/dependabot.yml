@@ -45,3 +45,11 @@ updates:
     labels:
       - dependencies
       - docker
+
+  - package-ecosystem: docker
+    directory: /backup
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - docker
