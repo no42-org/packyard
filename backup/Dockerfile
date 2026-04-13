@@ -1,7 +1,8 @@
 FROM alpine:3.21
-ARG BACKUP_VERSION=1.0.0
+ARG SQLITE_VERSION=3.48.0-r4
+ARG BACKUP_VERSION=3.48.0
 
-RUN apk add --no-cache sqlite
+RUN apk add --no-cache sqlite=${SQLITE_VERSION}
 
 COPY scripts/backup-keystore.sh /scripts/backup-keystore.sh
 RUN chmod +x /scripts/backup-keystore.sh

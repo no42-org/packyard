@@ -109,7 +109,7 @@ services:
       - backend
 
   backup:
-    image: ghcr.io/no42-org/packyard-backup:1.0.0
+    image: ghcr.io/no42-org/packyard-backup:3.48.0
     restart: unless-stopped
     depends_on:
       auth:
