@@ -42,14 +42,6 @@ echo "[backup] Backup written."
 ROW_COUNT="$(sqlite3 "${BACKUP_FILE}" "SELECT count(*) FROM subscription_key")"
 echo "[backup] Integrity check: subscription_key row count = ${ROW_COUNT}"
 
-# Prune backups older than 7 days.
-# POSIX for-loop: filenames are timestamp-based (no spaces), so word-splitting is safe.
-PRUNED=0
-for OLD_FILE in $(find "${BACKUP_DIR}" -name 'auth-*.db' -mtime +7 2>/dev/null || true); do
-  echo "[backup] Pruning: ${OLD_FILE}"
-  rm -f "${OLD_FILE}"
-  PRUNED=$((PRUNED + 1))
-done
-
-echo "[backup] Pruned ${PRUNED} old backup(s)."
+# Prune backups older than 7 days using find -exec (single traversal, no word splitting).
+find "${BACKUP_DIR}" -name 'auth-*.db' -mtime +7 -print -exec rm -f {} +
 echo "[backup] Done: $(date -u +%Y-%m-%dT%H:%M:%SZ)"
