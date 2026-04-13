@@ -1,12 +1,12 @@
-# docker-compose.override.ci.yml — CI-only overrides (Option A)
+# compose.override.ci.yml — CI-only overrides (Option A)
 #
 # Swaps Traefik to plaintext HTTP (no TLS/ACME) and publishes auth ports
 # to the host so the CI workflow can seed keys and read metrics.
 #
 # Usage:
-#   docker compose -f docker-compose.yml -f docker-compose.override.ci.yml up -d
+#   docker compose -f compose.yml -f compose.override.ci.yml up -d
 #
-# The base docker-compose.yml port mapping for Traefik (443) is merged in by
+# The base compose.yml port mapping for Traefik (443) is merged in by
 # Compose but harmless — Traefik only listens on the entryPoints defined in
 # traefik.ci.yml (web:80 and admin:8443).
 

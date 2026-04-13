@@ -71,14 +71,14 @@ EOF
 
 **x86-64:**
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.override.ci.yml up -d
+docker compose -f compose.yml -f compose.override.ci.yml up -d
 ```
 
 **Apple Silicon (arm64):** add the local override to swap zot to its arm64 image:
 ```bash
-docker compose -f docker-compose.yml \
-               -f docker-compose.override.ci.yml \
-               -f docker-compose.override.local.yml \
+docker compose -f compose.yml \
+               -f compose.override.ci.yml \
+               -f compose.override.arm64.yml \
                up -d
 ```
 
@@ -134,12 +134,12 @@ curl -s http://localhost:9090/metrics | grep packyard_auth
 ### 5. Tear down
 
 ```bash
-docker compose -f docker-compose.yml -f docker-compose.override.ci.yml down -v
+docker compose -f compose.yml -f compose.override.ci.yml down -v
 ```
 
 > **Note:** The local stack runs HTTP only — no TLS, no ACME. Port 80 serves public and authenticated routes; the admin API is on `localhost:8080`. Promotion workflows (RPM/DEB/OCI signing) require a running production host with SSH access.
 >
-> **Apple Silicon (arm64):** `zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `docker-compose.override.local.yml` to swap it to the `arm64` variant. `aptly` is published as a multi-arch image (`ghcr.io/no42-org/packyard-aptly`) and selects the correct binary automatically.
+> **Apple Silicon (arm64):** `zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `compose.override.arm64.yml` to swap it to the `arm64` variant. `aptly` is published as a multi-arch image (`ghcr.io/no42-org/packyard-aptly`) and selects the correct binary automatically.
 
 ### Automated verification
 

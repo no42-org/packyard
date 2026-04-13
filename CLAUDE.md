@@ -53,6 +53,12 @@ The framework lives under `_bmad/` and is organized into six modules:
 
 TEA and many BMM workflows use a **step-file architecture**: strict sequential step files prevent AI improvisation. When executing a workflow, follow the numbered steps in order without skipping. Each skill directory contains a `SKILL.md` defining the entry point, modes (Create / Edit / Validate), and execution rules.
 
+## Docker Compose
+
+Always use `compose.yml` as the filename, not `docker-compose.yml`. Docker Compose v2 searches for `compose.yml` first — it is the current convention.
+
+Override files follow the same pattern: `compose.override.ci.yml`, `compose.override.arm64.yml`.
+
 ## Git Workflow
 
 - **Never commit story work directly to `main`** — every completed story must be submitted as a pull request.
