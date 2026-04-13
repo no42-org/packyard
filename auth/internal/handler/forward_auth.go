@@ -87,11 +87,8 @@ func extractComponent(path string) (string, bool) {
 	}
 	switch parts[0] {
 	case "rpm":
-		// /rpm/{os-arch}/{component}/{year}/...
-		if len(parts) < 3 {
-			return "", false
-		}
-		return parts[2], true
+		// /rpm/{component}/{year}/{os-arch}/...
+		return parts[1], true
 	case "deb":
 		// /deb/{component}/{year}/...
 		return parts[1], true

@@ -87,7 +87,7 @@ func TestForwardAuth_ValidKey(t *testing.T) {
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", basicAuthHeader(validKey))
-	req.Header.Set("X-Forwarded-Uri", "/rpm/el9-x86_64/core/2025/")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -107,7 +107,7 @@ func TestForwardAuth_ScopeMismatch(t *testing.T) {
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", basicAuthHeader(validKey))
-	req.Header.Set("X-Forwarded-Uri", "/rpm/el9-x86_64/core/2025/meridian-core-2025.rpm")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/meridian-core-2025.rpm")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -127,7 +127,7 @@ func TestForwardAuth_RevokedKey(t *testing.T) {
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", basicAuthHeader(validKey))
-	req.Header.Set("X-Forwarded-Uri", "/rpm/el9-x86_64/core/2025/")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -144,7 +144,7 @@ func TestForwardAuth_NotFound(t *testing.T) {
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", basicAuthHeader(validKey))
-	req.Header.Set("X-Forwarded-Uri", "/rpm/el9-x86_64/core/2025/")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -161,7 +161,7 @@ func TestForwardAuth_MissingAuthHeader(t *testing.T) {
 		},
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
-	req.Header.Set("X-Forwarded-Uri", "/rpm/el9-x86_64/core/2025/")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -180,7 +180,7 @@ func TestForwardAuth_WrongKeyLength(t *testing.T) {
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", basicAuthHeader(shortKey))
-	req.Header.Set("X-Forwarded-Uri", "/rpm/el9-x86_64/core/2025/")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -199,7 +199,7 @@ func TestForwardAuth_MalformedAuthHeader(t *testing.T) {
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", "Bearer sometoken")
-	req.Header.Set("X-Forwarded-Uri", "/rpm/el9-x86_64/core/2025/")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -237,7 +237,7 @@ func TestForwardAuth_StoreError(t *testing.T) {
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", basicAuthHeader(validKey))
-	req.Header.Set("X-Forwarded-Uri", "/rpm/el9-x86_64/core/2025/")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
