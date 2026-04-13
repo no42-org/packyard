@@ -139,7 +139,7 @@ docker compose -f docker-compose.yml -f docker-compose.override.ci.yml down -v
 
 > **Note:** The local stack runs HTTP only — no TLS, no ACME. Port 80 serves public and authenticated routes; the admin API is on `localhost:8080`. Promotion workflows (RPM/DEB/OCI signing) require a running production host with SSH access.
 >
-> **Apple Silicon (arm64):** `zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `docker-compose.override.local.yml` to swap it to the `arm64` variant. `aptly` is now built locally from `./aptly/Dockerfile` and selects the correct binary automatically.
+> **Apple Silicon (arm64):** `zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `docker-compose.override.local.yml` to swap it to the `arm64` variant. `aptly` is published as a multi-arch image (`ghcr.io/no42-org/packyard-aptly`) and selects the correct binary automatically.
 
 ### Automated verification
 
