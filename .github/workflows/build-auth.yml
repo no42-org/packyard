@@ -26,13 +26,14 @@ jobs:
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
-      - name: Determine image version from git tag
+      - name: Determine image version
         id: version
         run: |
           if [[ "${GITHUB_REF}" == refs/tags/* ]]; then
             echo "auth_version=${GITHUB_REF_NAME#v}" >> "${GITHUB_OUTPUT}"
           else
-            echo "auth_version=latest" >> "${GITHUB_OUTPUT}"
+            auth_version=$(grep -oP '(?<=const version = ")[^"]+' auth/cmd/server/version.go)
+            echo "auth_version=${auth_version}" >> "${GITHUB_OUTPUT}"
           fi
 
       - name: Set up QEMU (cross-platform builds)
