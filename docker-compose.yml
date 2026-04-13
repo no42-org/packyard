@@ -34,7 +34,7 @@ services:
       - backend  # promotion pipeline access (Epic 4); placed here now to complete isolation topology
 
   aptly:
-    image: urpylka/aptly:1.6.2
+    image: ghcr.io/no42-org/packyard-aptly:1.6.2
     restart: unless-stopped
     volumes:
       - aptly-data:/opt/aptly
