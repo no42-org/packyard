@@ -136,11 +136,11 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           YEAR: ${{ inputs.year }}
         run: |
-          grep -q 'BEGIN PUBLIC KEY' ./static/gpg/cosign.pub \
+          grep -q 'BEGIN PUBLIC KEY' ./static/content/gpg/cosign.pub \
             || { echo "ERROR: cosign.pub is still a placeholder — replace with real key before promoting"; exit 1; }
           IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
           cosign verify \
-            --key ./static/gpg/cosign.pub \
+            --key ./static/content/gpg/cosign.pub \
             --allow-insecure-registry \
             --insecure-ignore-tlog \
             "${IMAGE_BASE}:${YEAR}" \

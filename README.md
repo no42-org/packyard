@@ -179,16 +179,16 @@ RUSTFS_SECRET_KEY=your-secret-key
 
 **GPG key (RPM + DEB signing):**
 ```bash
-# Export your Meridian signing key and place it in static/gpg/
-gpg --armor --export your-signing-key@example.com > static/gpg/meridian.asc
+# Export your Meridian signing key and place it in static/content/gpg/
+gpg --armor --export your-signing-key@example.com > static/content/gpg/meridian.asc
 ```
 
 **cosign key pair (OCI image signing):**
 ```bash
 cosign generate-key-pair
-# cosign.pub → static/gpg/cosign.pub  (committed, served publicly)
+# cosign.pub → static/content/gpg/cosign.pub  (committed, served publicly)
 # cosign.key → GHA secret COSIGN_PRIVATE_KEY (never committed)
-cp cosign.pub static/gpg/cosign.pub
+cp cosign.pub static/content/gpg/cosign.pub
 ```
 
 > The private GPG key and `cosign.key` must also be stored as GitHub Actions secrets for the promotion pipeline.
