@@ -1,0 +1,64 @@
+http:
+  routers:
+    # Dev override: PathPrefix-only rules — no Host() check.
+    # Services are reachable by IP or localhost without DNS or a Host header.
+    # TLS uses Traefik's self-signed fallback (LE cannot issue for localhost/IP).
+    # Use curl -k or add Traefik's dev cert to your trust store.
+
+    # Category ② — public-unauthenticated (no forwardAuth)
+    gpg-public:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/gpg/`)"
+      service: packyard-static-svc
+      tls: {}
+
+    # Category ① — public-authenticated (forwardAuth required)
+    rpm-authenticated:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/rpm/`)"
+      middlewares:
+        - packyard-auth
+      service: packyard-rpm-svc
+      tls: {}
+
+    deb-authenticated:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/deb/`)"
+      middlewares:
+        - packyard-auth
+      service: packyard-deb-svc
+      tls: {}
+
+    oci-authenticated:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/oci/`)"
+      middlewares:
+        - packyard-auth       # MUST be first — forwardAuth sees full /oci/v2/... for scope check
+        - packyard-strip-oci  # MUST be second — strips /oci before Zot receives request
+      service: packyard-zot-svc
+      tls: {}
+
+  services:
+    packyard-static-svc:
+      loadBalancer:
+        servers:
+          - url: "http://static:8080"
+
+    packyard-rpm-svc:
+      loadBalancer:
+        servers:
+          - url: "http://rpm:8080"
+
+    packyard-deb-svc:
+      loadBalancer:
+        servers:
+          - url: "http://deb:8080"
+
+    packyard-zot-svc:
+      loadBalancer:
+        servers:
+          - url: "http://zot:5000"

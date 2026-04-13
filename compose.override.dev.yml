@@ -1,0 +1,21 @@
+# Development override — PathPrefix-only Traefik routing.
+#
+# Usage:
+#   docker compose -f compose.yml -f compose.override.dev.yml up -d
+#
+# This replaces the production dynamic config with PathPrefix-only rules so all
+# package endpoints are reachable by IP or localhost without a Host header or
+# DNS entry. TLS uses Traefik's self-signed fallback — use curl -k in dev.
+#
+# .env still requires ACME_EMAIL and PKG_DOMAIN (the :? guards in compose.yml
+# are evaluated before the override is applied). Dummy values are fine:
+#
+#   ACME_EMAIL=dev@localhost
+#   PKG_DOMAIN=localhost
+
+services:
+  traefik:
+    volumes:
+      - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
+      - ./traefik/dynamic-dev:/etc/traefik/dynamic:ro
+      - traefik-certs:/certs
