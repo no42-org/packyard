@@ -8,9 +8,10 @@ jobs:
   integration:
     name: Full stack + observability
     runs-on: ubuntu-latest
+    timeout-minutes: 20
 
     steps:
-      - uses: actions/checkout@v6
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Create .env
         run: |
@@ -26,6 +27,13 @@ jobs:
             -f docker-compose.yml \
             -f docker-compose.override.ci.yml \
             up -d
+
+      - name: Wait for Traefik to be ready
+        run: |
+          echo "Waiting for Traefik..."
+          timeout 30 bash -c \
+            'until curl -s -o /dev/null -w "%{http_code}" http://localhost/gpg/meridian.asc | grep -qE "^(200|404)$"; do sleep 1; done'
+          echo "Traefik is ready."
 
       - name: Wait for auth to be healthy
         run: |
