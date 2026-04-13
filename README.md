@@ -69,8 +69,17 @@ EOF
 
 ### 2. Start the stack
 
+**x86-64:**
 ```bash
 docker compose -f docker-compose.yml -f docker-compose.override.ci.yml up -d
+```
+
+**Apple Silicon (arm64):** add the local override to swap zot to its arm64 image:
+```bash
+docker compose -f docker-compose.yml \
+               -f docker-compose.override.ci.yml \
+               -f docker-compose.override.local.yml \
+               up -d
 ```
 
 Wait for services to be ready:
@@ -130,7 +139,7 @@ docker compose -f docker-compose.yml -f docker-compose.override.ci.yml down -v
 
 > **Note:** The local stack runs HTTP only — no TLS, no ACME. Port 80 serves public and authenticated routes; the admin API is on `localhost:8080`. Promotion workflows (RPM/DEB/OCI signing) require a running production host with SSH access.
 >
-> **Apple Silicon (arm64):** `aptly` (`urpylka/aptly:1.6.2`) and `zot` (`zot-linux-amd64`) ship x86-only binaries and will crash-loop on arm64 hosts. RPM serving and auth work correctly; DEB and OCI routes will return 502 until arm64-compatible images are substituted.
+> **Apple Silicon (arm64):** `zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `docker-compose.override.local.yml` to swap it to the `arm64` variant. `aptly` is now built locally from `./aptly/Dockerfile` and selects the correct binary automatically.
 
 ### Automated verification
 

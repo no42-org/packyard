@@ -1,0 +1,14 @@
+# docker-compose.override.local.yml — Apple Silicon (arm64) overrides
+#
+# Swaps zot to the arm64 image variant.
+# The aptly service is already arch-aware (built from ./aptly/Dockerfile).
+#
+# Usage:
+#   docker compose -f docker-compose.yml \
+#                  -f docker-compose.override.ci.yml \
+#                  -f docker-compose.override.local.yml \
+#                  up -d
+
+services:
+  zot:
+    image: ghcr.io/project-zot/zot-linux-arm64:v2.1.2
