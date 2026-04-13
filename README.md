@@ -193,7 +193,36 @@ cp cosign.pub static/content/gpg/cosign.pub
 
 > The private GPG key and `cosign.key` must also be stored as GitHub Actions secrets for the promotion pipeline.
 
-### 3. Start the stack
+### 3. Configure GitHub Actions secrets
+
+The promotion workflows require the following repository secrets (**Settings → Secrets and variables → Actions**):
+
+| Secret | Description |
+|--------|-------------|
+| `SSH_PRIVATE_KEY` | Private key for the `deploy` user on the production host |
+| `SSH_KNOWN_HOST` | Pre-verified host fingerprint — see below |
+| `HOST` | Hostname or IP of the production server |
+| `RUSTFS_ACCESS_KEY` | RustFS S3 access key (same as `.env`) |
+| `RUSTFS_SECRET_KEY` | RustFS S3 secret key (same as `.env`) |
+| `GPG_PRIVATE_KEY` | ASCII-armored GPG private key for RPM/DEB signing |
+| `GPG_KEY_ID` | Key ID or fingerprint (e.g. `ops@example.com`) |
+| `GPG_PASSPHRASE` | Passphrase protecting the GPG private key |
+| `COSIGN_PRIVATE_KEY` | cosign private key (`cosign.key` contents) |
+| `COSIGN_PASSWORD` | Passphrase protecting the cosign private key |
+
+**Obtaining `SSH_KNOWN_HOST`:**
+
+Run the following once from a trusted network connection to your production host:
+
+```bash
+ssh-keyscan -H pkg.example.com
+```
+
+Copy the output line (e.g. `|1|...|... ssh-ed25519 AAAA...`) and store it as the `SSH_KNOWN_HOST` secret. This pre-pins the server's public key so promotion workflows reject any host that presents a different key — preventing MITM attacks during artifact signing.
+
+> Do not use `-H` output from an untrusted network. Verify the fingerprint matches your host's actual key (`ssh-keygen -lf /etc/ssh/ssh_host_ed25519_key.pub` on the server) before adding it as a secret.
+
+### 4. Start the stack
 
 ```bash
 docker compose up -d
@@ -206,7 +235,7 @@ docker compose ps
 
 Traefik will automatically obtain a Let's Encrypt TLS certificate on first start. This requires port 443 to be reachable from the internet.
 
-### 4. Create your first subscription key
+### 5. Create your first subscription key
 
 Use the admin API (available on the loopback admin entrypoint at port 8443, routed via Traefik):
 
