@@ -33,7 +33,7 @@ Promotion pipeline (GitHub Actions):
 | `rpm` | built from `./rpm` | nginx serving signed RPM repos |
 | `deb` | `nginx:alpine` | nginx serving Aptly-published DEB repos |
 | `zot` | `ghcr.io/project-zot/zot-linux-amd64:v2.1.2` | OCI registry with cosign signatures |
-| `aptly` | `urpylka/aptly:1.6.2` | DEB repo management and signing |
+| `aptly` | `ghcr.io/no42-org/packyard-aptly:1.6.2` (built from `./aptly`) | DEB repo management and signing (multi-arch: amd64 + arm64) |
 | `rustfs` | `rustfs/rustfs:latest` | S3-compatible staging storage for promotion pipeline |
 | `static` | `nginx:alpine` | Public GPG/cosign key hosting |
 | `backup` | `keinos/sqlite3:latest` | Daily SQLite backup of the key store |
