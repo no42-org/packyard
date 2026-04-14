@@ -37,6 +37,8 @@ ssh -L 9000:localhost:9000 deploy@pkg.example.org -N &
 
 Set credentials and call `stage-artifact.sh` for each artifact. The script uploads the file and a paired `.sha256` checksum:
 
+Component names must match those defined in `config/packyard.yml`. The examples below assume the default three-component setup — adjust as needed.
+
 ```bash
 export RUSTFS_ENDPOINT=http://localhost:9000
 export RUSTFS_ACCESS_KEY=<key>
