@@ -88,7 +88,7 @@ curl -s http://localhost:9090/metrics | grep packyard_auth
 ## 5. Run the verification suite
 
 ```bash
-bash local-testing/verify.sh
+bash verify.sh
 ```
 
 Expected output: all tests passed, 0 failed.
@@ -96,7 +96,7 @@ Expected output: all tests passed, 0 failed.
 The script also supports running against a remote production deployment:
 
 ```bash
-bash local-testing/verify.sh --base-url https://pkg.example.org --test-key <key>
+bash verify.sh --base-url https://pkg.example.org --test-key <key>
 ```
 
 ## 6. Tear down
