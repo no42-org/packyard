@@ -53,3 +53,12 @@ updates:
     labels:
       - dependencies
       - docker
+
+  # Python — MkDocs docs dependencies
+  - package-ecosystem: pip
+    directory: /docs
+    schedule:
+      interval: weekly
+    labels:
+      - dependencies
+      - python
