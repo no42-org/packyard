@@ -1,4 +1,4 @@
-module github.com/opennms/packyard-auth
+module github.com/no42-org/packyard-auth
 
 go 1.26.2
 

@@ -8,8 +8,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/opennms/packyard-auth/internal/metrics"
-	"github.com/opennms/packyard-auth/internal/store"
+	"github.com/no42-org/packyard-auth/internal/metrics"
+	"github.com/no42-org/packyard-auth/internal/store"
 )
 
 // ForwardAuthHandler validates subscriber credentials for Traefik forwardAuth.
@@ -70,13 +70,13 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	w.WriteHeader(http.StatusOK)
 }
 
-// extractComponent parses the Meridian component name from an X-Forwarded-Uri path.
+// extractComponent parses the LTS component name from an X-Forwarded-Uri path.
 //
 // Supported formats:
 //
 //	/rpm/{os-arch}/{component}/{year}/...   → component at index 2
 //	/deb/{component}/{year}/...             → component at index 1
-//	/oci/v2/meridian-{component}/...        → strip "meridian-" prefix from index 2
+//	/oci/v2/lts-{component}/...             → strip "lts-" prefix from index 2
 //
 // Returns ("", false) if the path is unrecognised or too short.
 func extractComponent(path string) (string, bool) {
@@ -93,11 +93,11 @@ func extractComponent(path string) (string, bool) {
 		// /deb/{component}/{year}/...
 		return parts[1], true
 	case "oci":
-		// /oci/v2/meridian-{component}/...
+		// /oci/v2/lts-{component}/...
 		if len(parts) < 3 {
 			return "", false
 		}
-		after, found := strings.CutPrefix(parts[2], "meridian-")
+		after, found := strings.CutPrefix(parts[2], "lts-")
 		if !found {
 			return "", false
 		}

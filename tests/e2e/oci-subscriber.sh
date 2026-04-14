@@ -7,25 +7,25 @@
 #   setup instructions.
 #
 # REQUIRED ENV VARS:
-#   BASE_URL   — packyard base URL (e.g. https://pkg.mdn.opennms.com)
+#   BASE_URL   — packyard base URL (e.g. https://pkg.example.org)
 #   VALID_KEY  — a valid active subscription key in the auth database
 #
 # OPTIONAL ENV VARS:
-#   COMPONENT  — Meridian component (default: core)
-#   YEAR       — Meridian year (default: 2025)
+#   COMPONENT  — LTS component (default: core)
+#   YEAR       — LTS year (default: 2025)
 #
 # USAGE:
-#   BASE_URL=https://pkg.mdn.opennms.com VALID_KEY=abc123 bash tests/e2e/oci-subscriber.sh
+#   BASE_URL=https://pkg.example.org VALID_KEY=abc123 bash tests/e2e/oci-subscriber.sh
 set -euo pipefail
 
-BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.mdn.opennms.com)}"
+BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.example.org)}"
 VALID_KEY="${VALID_KEY:?VALID_KEY is required (a valid subscription key)}"
 COMPONENT="${COMPONENT:-core}"
 YEAR="${YEAR:-2025}"
 
 # Strip scheme — docker/crane use bare registry references
 REGISTRY="${BASE_URL#https://}"
-IMAGE="${REGISTRY}/oci/meridian-${COMPONENT}:${YEAR}"
+IMAGE="${REGISTRY}/oci/lts-${COMPONENT}:${YEAR}"
 
 COSIGN_PUB="$(mktemp --suffix=.pub)"
 FAILED=0
@@ -112,7 +112,7 @@ fi
 # AC3b — curl exact HTTP 401 for invalid key
 HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
   -u "subscriber:invalidkey9999" \
-  "${BASE_URL}/oci/v2/meridian-${COMPONENT}/manifests/${YEAR}" || true)
+  "${BASE_URL}/oci/v2/lts-${COMPONENT}/manifests/${YEAR}" || true)
 if [ "${HTTP_STATUS}" = "401" ]; then
   pass "AC3b — invalid key correctly returns HTTP 401 on OCI manifest endpoint"
 else

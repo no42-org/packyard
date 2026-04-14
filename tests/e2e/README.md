@@ -28,7 +28,7 @@ sqlite3 /path/to/auth-db/auth.db \
 
 Or use the admin API if available:
 ```bash
-curl -X POST https://pkg.mdn.opennms.com/api/v1/keys \
+curl -X POST https://pkg.example.org/api/v1/keys \
   -H 'Content-Type: application/json' \
   -d '{"component": "core", "label": "e2e-test"}'
 ```
@@ -42,11 +42,11 @@ At least one signed package per format under test must exist in the serving tree
 # Option A: Use the promotion workflow (recommended)
 # 1. Upload a test RPM to RustFS staging:
 RUSTFS_ACCESS_KEY=... RUSTFS_SECRET_KEY=... \
-  bash scripts/stage-artifact.sh /path/to/meridian-core.rpm core rpm 2025 el9-x86_64
+  bash scripts/stage-artifact.sh /path/to/lts-core.rpm core rpm 2025 el9-x86_64
 # 2. Trigger the promote-rpm GHA workflow for component=core, year=2025, os=el9-x86_64
 
 # Option B: Manual (for local dev only)
-docker compose exec rpm cp /path/to/meridian-core.rpm /usr/share/nginx/html/core/2025/el9-x86_64/
+docker compose exec rpm cp /path/to/lts-core.rpm /usr/share/nginx/html/core/2025/el9-x86_64/
 docker compose exec rpm createrepo_c --update /usr/share/nginx/html/core/2025/el9-x86_64/
 ```
 
@@ -55,7 +55,7 @@ docker compose exec rpm createrepo_c --update /usr/share/nginx/html/core/2025/el
 # Option A: Use the promotion workflow (recommended)
 # 1. Upload a test DEB to RustFS staging:
 RUSTFS_ACCESS_KEY=... RUSTFS_SECRET_KEY=... \
-  bash scripts/stage-artifact.sh /path/to/meridian-core_2025.1.0_amd64.deb core deb 2025 bookworm
+  bash scripts/stage-artifact.sh /path/to/lts-core_2025.1.0_amd64.deb core deb 2025 bookworm
 # 2. Trigger the promote-deb GHA workflow for component=core, year=2025, distro=bookworm
 
 # Option B: Manual (for local dev only — requires aptly container access)
@@ -71,8 +71,8 @@ docker compose exec aptly /scripts/publish-snapshot.sh core 2025 bookworm
 
 # Option B: Manual (for local dev only — requires SSH tunnel to Zot on port 5000)
 ssh -fN -L 5000:localhost:5000 deploy@HOST
-crane push /tmp/test-amd64.tar localhost:5000/meridian-core:2025-x86_64 --insecure
-crane push /tmp/test-arm64.tar localhost:5000/meridian-core:2025-arm64 --insecure
+crane push /tmp/test-amd64.tar localhost:5000/lts-core:2025-x86_64 --insecure
+crane push /tmp/test-arm64.tar localhost:5000/lts-core:2025-arm64 --insecure
 ```
 
 ---
@@ -81,18 +81,18 @@ crane push /tmp/test-arm64.tar localhost:5000/meridian-core:2025-arm64 --insecur
 
 | Variable   | Required | Description                                              |
 |------------|----------|----------------------------------------------------------|
-| `BASE_URL` | Yes      | Packyard base URL (e.g. `https://pkg.mdn.opennms.com`)  |
+| `BASE_URL` | Yes      | Packyard base URL (e.g. `https://pkg.example.org`)  |
 | `VALID_KEY`| Yes      | A valid active subscription key in the auth database     |
 
 ## Optional Environment Variables (per test)
 
 | Variable    | Default       | Description                        |
 |-------------|---------------|------------------------------------|
-| `COMPONENT` | `core`        | Meridian component                 |
-| `YEAR`      | `2025`        | Meridian release year              |
+| `COMPONENT` | `core`        | LTS component                 |
+| `YEAR`      | `2025`        | LTS release year              |
 | `OS_ARCH`   | `el9-x86_64`  | RPM OS/arch path segment           |
 | `DISTRO`    | `bookworm`    | DEB distro name                    |
-| `PACKAGE`   | `meridian-core` | Package name to install          |
+| `PACKAGE`   | `lts-core` | Package name to install          |
 
 ---
 
@@ -103,7 +103,7 @@ crane push /tmp/test-arm64.tar localhost:5000/meridian-core:2025-arm64 --insecur
 **Prerequisites:** `dnf`, `rpm`, `python3` installed on the test host (requires RHEL/Rocky/CentOS or a compatible container).
 
 ```bash
-BASE_URL=https://pkg.mdn.opennms.com \
+BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 bash tests/e2e/rpm-subscriber.sh
 ```
@@ -113,37 +113,37 @@ bash tests/e2e/rpm-subscriber.sh
 **Prerequisites:** `apt-get`, `dpkg`, `python3`, `curl`, `gpg` installed (requires Debian/Ubuntu host or container).
 
 ```bash
-BASE_URL=https://pkg.mdn.opennms.com \
+BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 bash tests/e2e/deb-subscriber.sh
 ```
 
 Optional overrides:
 ```bash
-BASE_URL=https://pkg.mdn.opennms.com \
+BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 COMPONENT=core \
 YEAR=2025 \
 DISTRO=bookworm \
-PACKAGE=meridian-core \
+PACKAGE=lts-core \
 bash tests/e2e/deb-subscriber.sh
 ```
 
-**Note on GPG:** The script uses `[signed-by=...]` in the sources.list (modern approach — does not use deprecated `apt-key add`). The Meridian GPG key is fetched from `${BASE_URL}/gpg/meridian.asc` and dearmored to a temp file at runtime.
+**Note on GPG:** The script uses `[signed-by=...]` in the sources.list (modern approach — does not use deprecated `apt-key add`). The LTS GPG key is fetched from `${BASE_URL}/gpg/lts.asc` and dearmored to a temp file at runtime.
 
 ### OCI subscriber test (Story 5.3)
 
 **Prerequisites:** `docker`, `crane`, `cosign`, `curl`, `jq` installed.
 
 ```bash
-BASE_URL=https://pkg.mdn.opennms.com \
+BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 bash tests/e2e/oci-subscriber.sh
 ```
 
 Optional overrides:
 ```bash
-BASE_URL=https://pkg.mdn.opennms.com \
+BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 COMPONENT=core \
 YEAR=2025 \
@@ -159,14 +159,14 @@ bash tests/e2e/oci-subscriber.sh
 **Prerequisites:** `curl`, `docker`, `jq` installed. The auth service metrics endpoint must be reachable at `http://localhost:9090/metrics` (or override via `METRICS_URL`).
 
 ```bash
-BASE_URL=https://pkg.mdn.opennms.com \
+BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 bash tests/e2e/observability.sh
 ```
 
 Optional overrides:
 ```bash
-BASE_URL=https://pkg.mdn.opennms.com \
+BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 METRICS_URL=http://auth:9090/metrics \
 bash tests/e2e/observability.sh
@@ -197,6 +197,6 @@ These tests are integration tests, not unit tests. They require:
 
 | File | Purpose |
 |------|---------|
-| `fixtures/meridian-test.repo.tmpl` | RPM `.repo` file template; `{{BASE_URL}}`, `{{COMPONENT}}`, `{{YEAR}}`, `{{OS_ARCH}}` substituted at runtime |
-| `fixtures/meridian-test.list.tmpl` | DEB `sources.list` template; `{{KEY}}`, `{{BASE_URL_HOST}}`, `{{COMPONENT}}`, `{{YEAR}}`, `{{DISTRO}}` substituted at runtime |
+| `fixtures/lts-test.repo.tmpl` | RPM `.repo` file template; `{{BASE_URL}}`, `{{COMPONENT}}`, `{{YEAR}}`, `{{OS_ARCH}}` substituted at runtime |
+| `fixtures/lts-test.list.tmpl` | DEB `sources.list` template; `{{KEY}}`, `{{BASE_URL_HOST}}`, `{{COMPONENT}}`, `{{YEAR}}`, `{{DISTRO}}` substituted at runtime |
 | `fixtures/docker-daemon.json.tmpl` | Docker auth template; documents `docker login` as the recommended credential approach for OCI pull |

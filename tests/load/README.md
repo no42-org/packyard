@@ -16,7 +16,7 @@ k6-based performance validation against a live packyard stack, targeting the NFR
 
 2. **A valid subscription key**
    ```bash
-   curl -X POST https://pkg.mdn.opennms.com/api/v1/keys \
+   curl -X POST https://pkg.example.org/api/v1/keys \
      -H 'Content-Type: application/json' \
      -d '{"component": "core", "label": "load-test"}'
    ```
@@ -35,7 +35,7 @@ k6-based performance validation against a live packyard stack, targeting the NFR
 
 | Variable   | Required | Description                                              |
 |------------|----------|----------------------------------------------------------|
-| `BASE_URL` | Yes      | Packyard base URL (e.g. `https://pkg.mdn.opennms.com`)  |
+| `BASE_URL` | Yes      | Packyard base URL (e.g. `https://pkg.example.org`)  |
 | `KEY`      | Yes      | A valid active subscription key in the auth database     |
 
 ## Optional Environment Variables
@@ -44,10 +44,10 @@ k6-based performance validation against a live packyard stack, targeting the NFR
 |-----------------|---------------------------|---------------------------------------------------------------|
 | `VUS`           | `50`                      | Virtual users for the baseline scenario                       |
 | `DOWNLOAD_VUS`  | `min(5, VUS/10)`          | Virtual users for the download scenario (capped to avoid bandwidth saturation) |
-| `COMPONENT`     | `core`                    | Meridian component                                            |
-| `YEAR`          | `2025`                    | Meridian release year                                         |
+| `COMPONENT`     | `core`                    | LTS component                                            |
+| `YEAR`          | `2025`                    | LTS release year                                         |
 | `OS_ARCH`       | `el9-x86_64`              | RPM OS/arch path segment                                      |
-| `RPM_FILE`      | `meridian-core.rpm`       | RPM filename for download scenario — **must be set to an existing versioned filename** |
+| `RPM_FILE`      | `lts-core.rpm`       | RPM filename for download scenario — **must be set to an existing versioned filename** |
 
 ---
 
@@ -57,7 +57,7 @@ k6-based performance validation against a live packyard stack, targeting the NFR
 
 ```bash
 k6 run \
-  --env BASE_URL=https://pkg.mdn.opennms.com \
+  --env BASE_URL=https://pkg.example.org \
   --env KEY=your-subscription-key \
   tests/load/packyard-load-test.js
 ```
@@ -69,7 +69,7 @@ Runs for 60 seconds at 50 concurrent virtual users.
 ```bash
 k6 run \
   --env VUS=500 \
-  --env BASE_URL=https://pkg.mdn.opennms.com \
+  --env BASE_URL=https://pkg.example.org \
   --env KEY=your-subscription-key \
   tests/load/packyard-load-test.js
 ```
@@ -82,20 +82,20 @@ To override the download VU count:
 
 ```bash
 k6 run \
-  --env BASE_URL=https://pkg.mdn.opennms.com \
+  --env BASE_URL=https://pkg.example.org \
   --env KEY=your-subscription-key \
-  --env RPM_FILE=meridian-core-2025.1.0.x86_64.rpm \
+  --env RPM_FILE=lts-core-2025.1.0.x86_64.rpm \
   --env DOWNLOAD_VUS=3 \
   tests/load/packyard-load-test.js
 ```
 
-**Note:** `RPM_FILE` must be set to an existing versioned filename in the repo (e.g. `meridian-core-2025.1.0.x86_64.rpm`). The default `meridian-core.rpm` is a placeholder — a 404 will fail the download checks.
+**Note:** `RPM_FILE` must be set to an existing versioned filename in the repo (e.g. `lts-core-2025.1.0.x86_64.rpm`). The default `lts-core.rpm` is a placeholder — a 404 will fail the download checks.
 
 ### Save results for CI artifact storage
 
 ```bash
 k6 run \
-  --env BASE_URL=https://pkg.mdn.opennms.com \
+  --env BASE_URL=https://pkg.example.org \
   --env KEY=your-subscription-key \
   --summary-export=tests/load/results.json \
   tests/load/packyard-load-test.js

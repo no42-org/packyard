@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/opennms/packyard-auth/internal/store"
+	"github.com/no42-org/packyard-auth/internal/store"
 )
 
 // mockStore is a test double for store.KeyStore used in handler tests.
@@ -107,7 +107,7 @@ func TestForwardAuth_ScopeMismatch(t *testing.T) {
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", basicAuthHeader(validKey))
-	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/meridian-core-2025.rpm")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/lts-core-2025.rpm")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
@@ -216,7 +216,7 @@ func TestForwardAuth_UnrecognisedForwardedUri(t *testing.T) {
 			return &store.Key{ID: value, Component: "core", Active: true}, nil
 		},
 	})
-	cases := []string{"", "/", "/gpg/meridian.asc", "/unknown/path"}
+	cases := []string{"", "/", "/gpg/lts.asc", "/unknown/path"}
 	for _, uri := range cases {
 		req := httptest.NewRequest("GET", "/auth", nil)
 		req.Header.Set("Authorization", basicAuthHeader(validKey))

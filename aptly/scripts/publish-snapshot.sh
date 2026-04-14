@@ -4,7 +4,7 @@
 # Example: publish-snapshot.sh core-2025-20260329T120000Z core 2025 bookworm
 #
 # Publish path: :{component}/{year}
-# Maps to subscriber URL: https://pkg.mdn.opennms.com/deb/{component}/{year}/
+# Maps to subscriber URL: https://pkg.example.org/deb/{component}/{year}/
 # Aptly's publish switch is atomic — subscribers always see a consistent state.
 set -euo pipefail
 

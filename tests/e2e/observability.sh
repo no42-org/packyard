@@ -6,20 +6,20 @@
 #   The auth service must have processed at least one request before running AC2.
 #
 # REQUIRED ENV VARS:
-#   BASE_URL   — packyard base URL (e.g. https://pkg.mdn.opennms.com)
+#   BASE_URL   — packyard base URL (e.g. https://pkg.example.org)
 #   VALID_KEY  — a valid active subscription key in the auth database
 #
 # OPTIONAL ENV VARS:
 #   METRICS_URL — auth metrics endpoint (default: http://localhost:9090/metrics)
 #                 Override if running from outside the Docker network.
-#   COMPONENT   — Meridian component (default: core)
-#   YEAR        — Meridian year (default: 2025)
+#   COMPONENT   — LTS component (default: core)
+#   YEAR        — LTS year (default: 2025)
 #
 # USAGE:
-#   BASE_URL=https://pkg.mdn.opennms.com VALID_KEY=abc123 bash tests/e2e/observability.sh
+#   BASE_URL=https://pkg.example.org VALID_KEY=abc123 bash tests/e2e/observability.sh
 set -euo pipefail
 
-BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.mdn.opennms.com)}"
+BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.example.org)}"
 VALID_KEY="${VALID_KEY:?VALID_KEY is required (a valid subscription key)}"
 METRICS_URL="${METRICS_URL:-http://localhost:9090/metrics}"
 COMPONENT="${COMPONENT:-core}"

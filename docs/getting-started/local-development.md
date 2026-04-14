@@ -38,7 +38,7 @@ Wait for services to be ready:
 
 ```bash
 # Traefik (routing)
-until curl -sf -o /dev/null http://localhost/gpg/meridian.asc; do sleep 1; done
+until curl -sf -o /dev/null http://localhost/gpg/lts.asc; do sleep 1; done
 echo "Traefik ready"
 
 # Auth service
@@ -74,7 +74,7 @@ Use the key `id` as the HTTP Basic password with username `subscriber`:
 KEY=abc123...
 
 # GPG key (unauthenticated)
-curl http://localhost/gpg/meridian.asc
+curl http://localhost/gpg/lts.asc
 
 # RPM repo metadata (authenticated)
 curl -u subscriber:${KEY} http://localhost/rpm/core/2025/el9-x86_64/repodata/repomd.xml

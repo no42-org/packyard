@@ -34,6 +34,6 @@ curl -s http://localhost:9090/metrics
 
 | Check | Method | Target |
 |-------|--------|--------|
-| Endpoint availability | HTTP GET `https://pkg.example.org/gpg/meridian.asc` | 99.9% monthly |
+| Endpoint availability | HTTP GET `https://pkg.example.org/gpg/lts.asc` | 99.9% monthly |
 | TLS cert expiry | Alert at ≤ 30 days remaining | — |
 | Auth service health | Traefik forwardAuth health check | Fail-closed |

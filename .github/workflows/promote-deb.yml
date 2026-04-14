@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: "Meridian component (core|minion|sentinel)"
+        description: "LTS component (core|minion|sentinel)"
         required: true
       year:
-        description: "Meridian year (e.g. 2025)"
+        description: "LTS year (e.g. 2025)"
         required: true
       distro:
         description: "Debian distro (bookworm|trixie|jammy|noble)"
@@ -29,8 +29,8 @@ jobs:
 
       - name: Verify GPG key is not a placeholder
         run: |
-          grep -q 'BEGIN PGP PUBLIC KEY BLOCK' ./static/content/gpg/meridian.asc \
-            || { echo "ERROR: meridian.asc is still a placeholder — replace with real GPG key before promoting"; exit 1; }
+          grep -q 'BEGIN PGP PUBLIC KEY BLOCK' ./static/content/gpg/lts.asc \
+            || { echo "ERROR: lts.asc is still a placeholder — replace with real GPG key before promoting"; exit 1; }
 
       - name: Set up SSH
         run: |

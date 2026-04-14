@@ -6,25 +6,25 @@
 #   See tests/e2e/README.md for setup instructions before running.
 #
 # REQUIRED ENV VARS:
-#   BASE_URL   — packyard base URL (e.g. https://pkg.mdn.opennms.com)
+#   BASE_URL   — packyard base URL (e.g. https://pkg.example.org)
 #   VALID_KEY  — a valid active subscription key in the auth database
 #
 # OPTIONAL ENV VARS:
-#   COMPONENT  — Meridian component (default: core)
-#   YEAR       — Meridian year (default: 2025)
+#   COMPONENT  — LTS component (default: core)
+#   YEAR       — LTS year (default: 2025)
 #   OS_ARCH    — RPM OS/arch path segment (default: el9-x86_64)
-#   PACKAGE    — RPM package name to install (default: meridian-core)
+#   PACKAGE    — RPM package name to install (default: lts-core)
 #
 # USAGE:
-#   BASE_URL=https://pkg.mdn.opennms.com VALID_KEY=abc123 bash tests/e2e/rpm-subscriber.sh
+#   BASE_URL=https://pkg.example.org VALID_KEY=abc123 bash tests/e2e/rpm-subscriber.sh
 set -euo pipefail
 
-BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.mdn.opennms.com)}"
+BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.example.org)}"
 VALID_KEY="${VALID_KEY:?VALID_KEY is required (a valid subscription key)}"
 COMPONENT="${COMPONENT:-core}"
 YEAR="${YEAR:-2025}"
 OS_ARCH="${OS_ARCH:-el9-x86_64}"
-PACKAGE="${PACKAGE:-meridian-core}"
+PACKAGE="${PACKAGE:-lts-core}"
 
 TEST_ROOT="$(mktemp -d)"
 REPO_FILE="$(mktemp --suffix=.repo)"
@@ -54,28 +54,28 @@ done
 # ─── Repo files ──────────────────────────────────────────────────────────────
 
 cat > "${REPO_FILE}" <<REPO
-[meridian-test]
-name=Meridian Test Repo
+[lts-test]
+name=LTS Test Repo
 baseurl=${AUTH_URL}/rpm/${COMPONENT}/${YEAR}/${OS_ARCH}/
 enabled=1
 gpgcheck=1
-gpgkey=${BASE_URL}/gpg/meridian.asc
+gpgkey=${BASE_URL}/gpg/lts.asc
 REPO
 
 cat > "${BAD_REPO_FILE}" <<REPO
-[meridian-bad]
-name=Meridian Bad Key Test
+[lts-bad]
+name=LTS Bad Key Test
 baseurl=$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/rpm/${COMPONENT}/${YEAR}/${OS_ARCH}/
 enabled=1
 gpgcheck=1
-gpgkey=${BASE_URL}/gpg/meridian.asc
+gpgkey=${BASE_URL}/gpg/lts.asc
 REPO
 
-# ─── Precondition: import Meridian GPG key into test installroot ─────────────
+# ─── Precondition: import LTS GPG key into test installroot ─────────────
 
 rpm --root "${TEST_ROOT}" --initdb
-rpm --root "${TEST_ROOT}" --import "${BASE_URL}/gpg/meridian.asc"
-echo "Meridian GPG key imported into test installroot."
+rpm --root "${TEST_ROOT}" --import "${BASE_URL}/gpg/lts.asc"
+echo "LTS GPG key imported into test installroot."
 
 # ─── AC1: Happy-path install with GPG verification ───────────────────────────
 
@@ -85,7 +85,7 @@ if dnf install \
     --installroot "${TEST_ROOT}" \
     --config "${REPO_FILE}" \
     --disablerepo='*' \
-    --enablerepo=meridian-test \
+    --enablerepo=lts-test \
     --assumeyes \
     "${PACKAGE}" 2>&1; then
   pass "AC1 — '${PACKAGE}' installed successfully with GPG verification"
@@ -101,7 +101,7 @@ mkdir -p "${DOWNLOAD_DIR}"
 if dnf download \
     --config "${REPO_FILE}" \
     --disablerepo='*' \
-    --enablerepo=meridian-test \
+    --enablerepo=lts-test \
     --destdir "${DOWNLOAD_DIR}" \
     "${PACKAGE}" 2>&1; then
 

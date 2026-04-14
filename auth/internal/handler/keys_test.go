@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/opennms/packyard-auth/internal/store"
+	"github.com/no42-org/packyard-auth/internal/store"
 )
 
 // testKeyID is a valid 64-char hex key ID used across inspect tests.

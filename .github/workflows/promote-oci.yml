@@ -4,10 +4,10 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: "Meridian component (core|minion|sentinel)"
+        description: "LTS component (core|minion|sentinel)"
         required: true
       year:
-        description: "Meridian year (e.g. 2025)"
+        description: "LTS year (e.g. 2025)"
         required: true
 
 env:
@@ -100,7 +100,7 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           YEAR: ${{ inputs.year }}
         run: |
-          IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
+          IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           for arch in x86_64 arm64; do
             tarcount=$(ls ./staging/${arch}/*.tar 2>/dev/null | wc -l || echo 0)
             [ "$tarcount" -eq 1 ] || { echo "Expected exactly 1 .tar for ${arch}, found ${tarcount}"; exit 1; }
@@ -114,7 +114,7 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           YEAR: ${{ inputs.year }}
         run: |
-          IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
+          IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           crane index append \
             --tag "${IMAGE_BASE}:${YEAR}" \
             --manifest "${IMAGE_BASE}:${YEAR}-x86_64" \
@@ -129,7 +129,7 @@ jobs:
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
-          IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
+          IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           for tag in "${YEAR}-x86_64" "${YEAR}-arm64" "${YEAR}"; do
             cosign sign \
               --key env://COSIGN_PRIVATE_KEY \
@@ -147,7 +147,7 @@ jobs:
         run: |
           grep -q 'BEGIN PUBLIC KEY' ./static/content/gpg/cosign.pub \
             || { echo "ERROR: cosign.pub is still a placeholder — replace with real key before promoting"; exit 1; }
-          IMAGE_BASE="${ZOT_REGISTRY}/meridian-${COMPONENT}"
+          IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           cosign verify \
             --key ./static/content/gpg/cosign.pub \
             --allow-insecure-registry \

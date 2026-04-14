@@ -81,7 +81,7 @@ Use a subscription key that was valid at the time of the backup:
 ```bash
 curl -s -o /dev/null -w '%{http_code}' \
   -u "subscriber:${VALID_KEY}" \
-  https://pkg.mdn.opennms.com/rpm/el9-x86_64/core/2025/repodata/repomd.xml
+  https://pkg.example.org/rpm/el9-x86_64/core/2025/repodata/repomd.xml
 # Expected: 200
 ```
 
