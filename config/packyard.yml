@@ -1,0 +1,5 @@
+# Packyard component configuration.
+# Each entry defines an LTS component that subscribers can be scoped to.
+# Add or remove components here and restart the auth service to apply changes.
+components:
+  - name: core

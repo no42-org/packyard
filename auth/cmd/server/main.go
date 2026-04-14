@@ -10,6 +10,7 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
+	"github.com/no42-org/packyard-auth/internal/config"
 	"github.com/no42-org/packyard-auth/internal/handler"
 	"github.com/no42-org/packyard-auth/internal/metrics"
 	"github.com/no42-org/packyard-auth/internal/middleware"
@@ -33,6 +34,18 @@ func main() {
 	}
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
+
+	cfgPath := os.Getenv("CONFIG_PATH")
+	if cfgPath == "" {
+		cfgPath = "/etc/packyard/packyard.yml"
+	}
+	cfg, err := config.Load(cfgPath)
+	if err != nil {
+		logger.Error("failed to load config", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	componentList := cfg.ComponentList()
+	logger.Info("loaded components", slog.String("components", componentList))
 
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
@@ -61,8 +74,10 @@ func main() {
 	r.Get("/auth", forwardAuth.ServeHTTP)
 
 	keys := &handler.KeysHandler{
-		Store:  st,
-		Logger: logger,
+		Store:              st,
+		Logger:             logger,
+		ValidComponents:    cfg.ComponentSet(),
+		ValidComponentList: componentList,
 	}
 	r.Post("/api/v1/keys", keys.Create)
 	r.Get("/api/v1/keys", keys.List)

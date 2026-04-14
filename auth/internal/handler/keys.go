@@ -13,17 +13,12 @@ import (
 	"github.com/no42-org/packyard-auth/internal/store"
 )
 
-// validComponents is the authoritative set of component values accepted by the admin API.
-var validComponents = map[string]bool{
-	"core":     true,
-	"minion":   true,
-	"sentinel": true,
-}
-
 // KeysHandler handles admin API key management endpoints (Epic 3).
 type KeysHandler struct {
-	Store  store.KeyStore
-	Logger *slog.Logger
+	Store               store.KeyStore
+	Logger              *slog.Logger
+	ValidComponents     map[string]bool // set for O(1) membership checks
+	ValidComponentList  string          // pre-formatted for error messages
 }
 
 // createKeyRequest is the JSON body for POST /api/v1/keys.
@@ -107,9 +102,9 @@ func (h *KeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 // List handles GET /api/v1/keys — returns all keys, optionally filtered by ?component=.
 func (h *KeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	component := r.URL.Query().Get("component")
-	if component != "" && !validComponents[component] {
+	if component != "" && !h.ValidComponents[component] {
 		writeError(w, http.StatusBadRequest, "INVALID_COMPONENT",
-			fmt.Sprintf("component %q is not valid; must be one of: core, minion, sentinel", component))
+			fmt.Sprintf("component %q is not valid; must be one of: %s", component, h.ValidComponentList))
 		return
 	}
 
@@ -139,9 +134,9 @@ func (h *KeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !validComponents[req.Component] {
+	if !h.ValidComponents[req.Component] {
 		writeError(w, http.StatusBadRequest, "INVALID_COMPONENT",
-			fmt.Sprintf("component %q is not valid; must be one of: core, minion, sentinel", req.Component))
+			fmt.Sprintf("component %q is not valid; must be one of: %s", req.Component, h.ValidComponentList))
 		return
 	}
 

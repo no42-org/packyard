@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: "LTS component (core|minion|sentinel)"
+        description: "LTS component name (as defined in config/packyard.yml)"
         required: true
       year:
         description: "LTS year (e.g. 2025)"

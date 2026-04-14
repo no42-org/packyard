@@ -13,7 +13,7 @@
 #   s3://{bucket}/{component}/{year}/{format}/{os-arch}/{filename}.sha256
 set -euo pipefail
 
-COMPONENT="${1:?component required (core|minion|sentinel)}"
+COMPONENT="${1:?component required (e.g. core)}"
 YEAR="${2:?year required (e.g. 2025)}"
 FORMAT="${3:?format required (rpm|deb|oci)}"
 OS_ARCH="${4:?os-arch required (e.g. el9-x86_64)}"
@@ -23,12 +23,6 @@ LOCAL_FILE="${5:?local file path required}"
 : "${RUSTFS_ACCESS_KEY:?RUSTFS_ACCESS_KEY must be set}"
 : "${RUSTFS_SECRET_KEY:?RUSTFS_SECRET_KEY must be set}"
 BUCKET="${RUSTFS_BUCKET:-staging}"
-
-# Validate component
-case "${COMPONENT}" in
-  core|minion|sentinel) ;;
-  *) echo "ERROR: component must be one of: core, minion, sentinel (got: ${COMPONENT})"; exit 1 ;;
-esac
 
 # Validate format
 case "${FORMAT}" in

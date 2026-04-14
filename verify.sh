@@ -46,7 +46,7 @@ Options:
   --metrics-url URL     Prometheus metrics URL, local mode only (default: http://localhost:9090)
   --skip-stack          Skip docker compose up (stack already running)
   --test-key KEY        Subscriber key for remote mode (required when --base-url is not localhost)
-  --test-component NAME Component scope of the test key: core|minion|sentinel (default: core)
+  --test-component NAME Component scope of the test key — must match a name in config/packyard.yml (default: core)
   -h, --help            Show this help and exit
 
 Examples:
@@ -106,6 +106,11 @@ wait_for() {
 }
 
 # ── Cross-component for scope mismatch tests ──────────────────────────────────
+# The scope tests below require a CROSS_COMPONENT that differs from TEST_COMPONENT.
+# These defaults cover the standard two-component setup (core + minion).
+# If you are running a non-standard component configuration, override this manually:
+#   CROSS_COMPONENT=<other-component> bash verify.sh ...
+# If only one component is configured, scope mismatch tests will be skipped.
 case "$TEST_COMPONENT" in
   core)   CROSS_COMPONENT="minion" ;;
   minion) CROSS_COMPONENT="core" ;;
@@ -297,7 +302,10 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
   && pass "/rpm/$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → 401" \
   || fail "/rpm/$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → $STATUS (expected 401)"
 
-# Full matrix — local only, requires both CORE_KEY and MINION_KEY
+# Full matrix — local only, requires both CORE_KEY and MINION_KEY.
+# These paths assume core, minion, and sentinel are all in config/packyard.yml.
+# If your deployment uses a different component set, these tests may report false
+# failures — adjust the paths or extend the matrix to match your configuration.
 if [[ "$MODE" == "local" && -n "$MINION_KEY" ]]; then
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
     -u "subscriber:${CORE_KEY}" "$BASE_URL/rpm/sentinel/2025/el9-x86_64/" || true)

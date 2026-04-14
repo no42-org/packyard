@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/no42-org/packyard-auth/internal/config"
 	"github.com/no42-org/packyard-auth/internal/store"
 )
 
@@ -22,7 +23,19 @@ const testKeyID = "aabbccdd" + "aabbccdd" + "aabbccdd" + "aabbccdd" +
 	"aabbccdd" + "aabbccdd" + "aabbccdd" + "aabbccdd"
 
 func newTestKeysHandler(s store.KeyStore) *KeysHandler {
-	return &KeysHandler{Store: s, Logger: slog.Default()}
+	testCfg := &config.Config{
+		Components: []config.ComponentConfig{
+			{Name: "core"},
+			{Name: "minion"},
+			{Name: "sentinel"},
+		},
+	}
+	return &KeysHandler{
+		Store:              s,
+		Logger:             slog.Default(),
+		ValidComponents:    testCfg.ComponentSet(),
+		ValidComponentList: testCfg.ComponentList(),
+	}
 }
 
 // makeKey returns a minimal *store.Key for use in mockStore responses.
