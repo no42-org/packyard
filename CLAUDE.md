@@ -53,6 +53,25 @@ The framework lives under `_bmad/` and is organized into six modules:
 
 TEA and many BMM workflows use a **step-file architecture**: strict sequential step files prevent AI improvisation. When executing a workflow, follow the numbered steps in order without skipping. Each skill directory contains a `SKILL.md` defining the entry point, modes (Create / Edit / Validate), and execution rules.
 
+## Documentation
+
+All user-facing documentation lives in `docs/` and is published via MkDocs + mike to https://no42-org.github.io/packyard/. The GitHub Wiki is retired and must not be used.
+
+Structure:
+
+| Path | Section |
+|------|---------|
+| `docs/index.md` | Home page |
+| `docs/getting-started/` | Quick-start and local development guides |
+| `docs/ops/` | Operational runbooks (production deployment, restore procedures) |
+| `docs/reference/` | Architecture, API, configuration, subscriber usage, promotion pipeline, observability |
+
+When adding or updating documentation:
+- Edit the relevant file under `docs/` — do not create Wiki pages
+- New pages must be added to the `nav:` section in `mkdocs.yml`
+- Run `make docs-serve` locally to preview before committing
+- Docs are published automatically on each GitHub release via `docs.yml`
+
 ## Docker Compose
 
 Always use `compose.yml` as the filename, not `docker-compose.yml`. Docker Compose v2 searches for `compose.yml` first — it is the current convention.
