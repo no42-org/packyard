@@ -4,11 +4,15 @@ This covers cutting a new version of the Packyard infrastructure itself — the 
 
 ## 1. Bump version numbers
 
-Two files must match the intended release tag (without the `v` prefix):
+Three places must match the intended release tag (without the `v` prefix):
 
 ```bash
 sed -i "s/const version = .*/const version = \"1.2.3\"/" auth/cmd/server/version.go
 echo "1.2.3" > rpm/VERSION
+
+sed -i "s|packyard-auth:[^ ]*|packyard-auth:1.2.3|" compose.yml
+sed -i "s|packyard-rpm:[^ ]*|packyard-rpm:1.2.3|" compose.yml
+sed -i "s|packyard-static:[^ ]*|packyard-static:1.2.3|" compose.yml
 ```
 
 Open a PR and merge to `main` before tagging.
@@ -60,7 +64,11 @@ git checkout -b chore/bump-1.2.4-rc
 sed -i "s/const version = .*/const version = \"1.2.4-rc\"/" auth/cmd/server/version.go
 echo "1.2.4-rc" > rpm/VERSION
 
-git add auth/cmd/server/version.go rpm/VERSION
+sed -i "s|packyard-auth:[^ ]*|packyard-auth:1.2.4-rc|" compose.yml
+sed -i "s|packyard-rpm:[^ ]*|packyard-rpm:1.2.4-rc|" compose.yml
+sed -i "s|packyard-static:[^ ]*|packyard-static:1.2.4-rc|" compose.yml
+
+git add auth/cmd/server/version.go rpm/VERSION compose.yml
 git commit -m "chore: bump versions to 1.2.4-rc post v1.2.3 release"
 git push -u origin chore/bump-1.2.4-rc
 gh pr create --title "chore: bump versions to 1.2.4-rc post v1.2.3" --fill
