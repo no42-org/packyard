@@ -9,6 +9,8 @@ _bmad-output/
 .claude/
 .agents/
 
+site/
+
 # Local secrets — never commit
 .env
 
