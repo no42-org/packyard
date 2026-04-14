@@ -8,6 +8,14 @@ _bmad-output/
 # Claude Code & agent integration (local IDE tooling)
 .claude/
 .agents/
+.agent/
+.gemini/
+openspec/
+
+# Scan results and local key material — never commit
+trivy_scan.txt
+cosign.key
+cosign.pub
 
 site/
 .venv/

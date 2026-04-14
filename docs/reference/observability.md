@@ -9,7 +9,7 @@ Metrics are exposed by the auth service at `http://auth:9090/metrics` (Docker-in
 | `packyard_auth_requests_total{status="allowed\|denied\|error"}` | Counter | forwardAuth request outcomes |
 | `packyard_auth_duration_seconds` | Histogram | forwardAuth latency |
 
-Traefik metrics are available at `http://localhost:8443/metrics` (loopback only).
+Traefik metrics are available at `http://localhost:8088/metrics` (loopback only).
 
 ## Accessing metrics locally
 
@@ -18,7 +18,7 @@ Traefik metrics are available at `http://localhost:8443/metrics` (loopback only)
 curl -s http://localhost:9090/metrics | grep packyard_auth
 
 # Traefik metrics (via loopback admin entrypoint)
-curl -s http://localhost:8443/metrics
+curl -s http://localhost:8088/metrics
 ```
 
 ## Accessing metrics in production

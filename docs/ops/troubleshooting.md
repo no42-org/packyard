@@ -78,14 +78,14 @@ If the state is `unhealthy` or `exited`, see [Container unhealthy or crashing](#
 Open an SSH tunnel to the admin API, then look up the key:
 
 ```bash
-ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.org -N &
-curl -s http://127.0.0.1:8443/api/v1/keys | jq '.[] | select(.id == "<KEY>")'
+ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
+curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | select(.id == "<KEY>")'
 ```
 
 If the key is absent, it was created after the last backup and lost during a keystore restore. Re-provision it:
 
 ```bash
-curl -s -X POST http://127.0.0.1:8443/api/v1/keys \
+curl -s -X POST http://127.0.0.1:8088/api/v1/keys \
   -H 'Content-Type: application/json' \
   -d '{"component": "core", "label": "re-provisioned"}'
 ```
@@ -97,7 +97,7 @@ If the key is present but `"active": false`, it has been revoked. Issue a new ke
 Each key is scoped to a single component (`core`, `minion`, or `sentinel`). A `core` key cannot access `/rpm/minion/` — that is the expected behaviour, not a bug. Confirm the subscriber is using a key whose `component` matches the path they are requesting.
 
 ```bash
-curl -s http://127.0.0.1:8443/api/v1/keys | jq '.[] | {id, component, label, active}'
+curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | {id, component, label, active}'
 ```
 
 ---
@@ -126,23 +126,23 @@ Common causes:
 
 ## Admin API unreachable
 
-The admin API listens on `127.0.0.1:8443` (loopback only). It is not reachable from outside the VM without an SSH tunnel.
+The admin API listens on `127.0.0.1:8088` (loopback only). It is not reachable from outside the VM without an SSH tunnel.
 
 **Open the tunnel:**
 
 ```bash
-ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.org -N &
+ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
 ```
 
 **Verify:**
 
 ```bash
-curl -s http://127.0.0.1:8443/api/v1/keys
+curl -s http://127.0.0.1:8088/api/v1/keys
 # Expected: JSON array (empty if no keys)
 # Connection refused → tunnel not open, or auth service down
 ```
 
-Note: port 8443 serves plain HTTP (not HTTPS) — do not use `-k` or `https://`.
+Note: port 8088 serves plain HTTP (not HTTPS) — do not use `-k` or `https://`.
 
 If the admin API returns `404` on port 443 (the public entrypoint), that is correct — the admin route is intentionally not exposed publicly.
 
