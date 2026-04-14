@@ -15,8 +15,9 @@ import (
 // ForwardAuthHandler validates subscriber credentials for Traefik forwardAuth.
 // GET /auth — returns 200 (allow), 401 (deny), or 503 (error/fail-closed).
 type ForwardAuthHandler struct {
-	Store  store.KeyStore
-	Logger *slog.Logger
+	Store           store.KeyStore
+	Logger          *slog.Logger
+	ValidComponents map[string]bool // set for O(1) membership checks; nil treated as deny-all
 }
 
 // ServeHTTP implements http.Handler.
@@ -52,7 +53,7 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	}
 
 	requestedComponent, ok := extractComponent(r.Header.Get("X-Forwarded-Uri"))
-	if !ok || key.Component != requestedComponent {
+	if !ok || !h.ValidComponents[requestedComponent] || key.Component != requestedComponent {
 		metrics.RequestsTotal.WithLabelValues("denied").Inc()
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -74,7 +75,7 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 //
 // Supported formats:
 //
-//	/rpm/{os-arch}/{component}/{year}/...   → component at index 2
+//	/rpm/{component}/{year}/{os-arch}/...   → component at index 1
 //	/deb/{component}/{year}/...             → component at index 1
 //	/oci/v2/lts-{component}/...             → strip "lts-" prefix from index 2
 //

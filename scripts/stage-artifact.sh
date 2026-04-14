@@ -14,9 +14,23 @@
 set -euo pipefail
 
 COMPONENT="${1:?component required (e.g. core)}"
+if ! [[ "$COMPONENT" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: component contains invalid characters (got: ${COMPONENT})"
+  echo "       Allowed: letters, digits, hyphens, underscores"
+  exit 1
+fi
 YEAR="${2:?year required (e.g. 2025)}"
+if ! [[ "$YEAR" =~ ^[0-9]{4}$ ]]; then
+  echo "ERROR: year must be a 4-digit number (got: ${YEAR})"
+  exit 1
+fi
 FORMAT="${3:?format required (rpm|deb|oci)}"
 OS_ARCH="${4:?os-arch required (e.g. el9-x86_64)}"
+if ! [[ "$OS_ARCH" =~ ^[a-zA-Z0-9_-]+$ ]]; then
+  echo "ERROR: os-arch contains invalid characters (got: ${OS_ARCH})"
+  echo "       Allowed: letters, digits, hyphens, underscores"
+  exit 1
+fi
 LOCAL_FILE="${5:?local file path required}"
 
 : "${RUSTFS_ENDPOINT:?RUSTFS_ENDPOINT must be set (e.g. http://localhost:9000 via SSH tunnel)}"

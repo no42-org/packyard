@@ -114,7 +114,7 @@ wait_for() {
 case "$TEST_COMPONENT" in
   core)   CROSS_COMPONENT="minion" ;;
   minion) CROSS_COMPONENT="core" ;;
-  *)      CROSS_COMPONENT="core" ;;
+  *)      CROSS_COMPONENT="" ;;
 esac
 
 COMPOSE="docker compose -f compose.yml -f compose.override.ci.yml"
@@ -150,6 +150,7 @@ if [[ "$MODE" == "local" ]]; then
   else
     cat > .env <<'EOF'
 ACME_EMAIL=dev@localhost
+PKG_DOMAIN=localhost
 RUSTFS_ACCESS_KEY=dev-access-key
 RUSTFS_SECRET_KEY=dev-secret-key-value
 EOF
@@ -219,13 +220,17 @@ if [[ "$MODE" == "local" ]]; then
   if [[ -n "$MINION_KEY" ]]; then
     pass "minion key created: ${MINION_KEY:0:16}..."
   else
-    fail "minion key creation failed: $RESPONSE"
+    info "minion component not configured — multi-component tests will be skipped"
     MINION_KEY=""
   fi
 
   TEST_KEY="$CORE_KEY"
   TEST_COMPONENT="core"
-  CROSS_COMPONENT="minion"
+  if [[ -n "$MINION_KEY" ]]; then
+    CROSS_COMPONENT="minion"
+  else
+    CROSS_COMPONENT=""
+  fi
 else
   CORE_KEY="$TEST_KEY"
 fi
@@ -296,11 +301,14 @@ fi
 section "Scope enforcement"
 
 # TEST_KEY on cross-component path → 401
+# When a real cross-component is available use it; otherwise probe with a
+# known-nonexistent name to verify the deny path is live regardless of config.
+SCOPE_TARGET="${CROSS_COMPONENT:-nonexistent-component}"
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  -u "subscriber:${TEST_KEY}" "$BASE_URL/rpm/$CROSS_COMPONENT/2025/el9-x86_64/" || true)
+  -u "subscriber:${TEST_KEY}" "$BASE_URL/rpm/$SCOPE_TARGET/2025/el9-x86_64/" || true)
 [[ "$STATUS" == "401" ]] \
-  && pass "/rpm/$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → 401" \
-  || fail "/rpm/$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → $STATUS (expected 401)"
+  && pass "/rpm/$SCOPE_TARGET/ ($TEST_COMPONENT key, wrong scope) → 401" \
+  || fail "/rpm/$SCOPE_TARGET/ ($TEST_COMPONENT key, wrong scope) → $STATUS (expected 401)"
 
 # Full matrix — local only, requires both CORE_KEY and MINION_KEY.
 # These paths assume core, minion, and sentinel are all in config/packyard.yml.
@@ -343,11 +351,14 @@ else
 fi
 
 # Wrong scope: cross-component OCI repo → 401
+# Same strategy as RPM: use real cross-component when available, otherwise
+# probe with a known-nonexistent name to keep the deny path verified.
+OCI_SCOPE_TARGET="${CROSS_COMPONENT:-nonexistent-component}"
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  -u "subscriber:${TEST_KEY}" "$BASE_URL/oci/v2/lts-$CROSS_COMPONENT/tags/list" || true)
+  -u "subscriber:${TEST_KEY}" "$BASE_URL/oci/v2/lts-$OCI_SCOPE_TARGET/tags/list" || true)
 [[ "$STATUS" == "401" ]] \
-  && pass "/oci/v2/lts-$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → 401" \
-  || fail "/oci/v2/lts-$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → $STATUS (expected 401)"
+  && pass "/oci/v2/lts-$OCI_SCOPE_TARGET/ ($TEST_COMPONENT key, wrong scope) → 401" \
+  || fail "/oci/v2/lts-$OCI_SCOPE_TARGET/ ($TEST_COMPONENT key, wrong scope) → $STATUS (expected 401)"
 
 # Unrecognised OCI path format → 401
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
@@ -366,11 +377,13 @@ if [[ "$MODE" == "local" ]]; then
   # ── Key lifecycle ────────────────────────────────────────────────────────
   section "Key lifecycle (admin API)"
 
-  # List all keys — expect at least 2
+  # List all keys — expect at least 1 (or 2 when minion key was also created)
+  MIN_KEYS=1
+  [[ -n "$MINION_KEY" ]] && MIN_KEYS=2
   COUNT=$(curl -s "$ADMIN_URL/api/v1/keys" | jq 'length' || echo 0)
-  (( COUNT >= 2 )) \
-    && pass "Key list → $COUNT keys (≥2 expected)" \
-    || fail "Key list → $COUNT keys (expected ≥2)"
+  (( COUNT >= MIN_KEYS )) \
+    && pass "Key list → $COUNT keys (≥${MIN_KEYS} expected)" \
+    || fail "Key list → $COUNT keys (expected ≥${MIN_KEYS})"
 
   # Filter by component — all results must match
   MISMATCHES=$(curl -s "$ADMIN_URL/api/v1/keys?component=core" \

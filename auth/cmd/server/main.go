@@ -44,6 +44,11 @@ func main() {
 		logger.Error("failed to load config", slog.String("error", err.Error()))
 		os.Exit(1)
 	}
+	validComponents := cfg.ComponentSet()
+	if len(validComponents) == 0 {
+		logger.Error("no valid components loaded — refusing to start")
+		os.Exit(1)
+	}
 	componentList := cfg.ComponentList()
 	logger.Info("loaded components", slog.String("components", componentList))
 
@@ -68,15 +73,16 @@ func main() {
 	})
 
 	forwardAuth := &handler.ForwardAuthHandler{
-		Store:  st,
-		Logger: logger,
+		Store:           st,
+		Logger:          logger,
+		ValidComponents: validComponents,
 	}
 	r.Get("/auth", forwardAuth.ServeHTTP)
 
 	keys := &handler.KeysHandler{
 		Store:              st,
 		Logger:             logger,
-		ValidComponents:    cfg.ComponentSet(),
+		ValidComponents:    validComponents,
 		ValidComponentList: componentList,
 	}
 	r.Post("/api/v1/keys", keys.Create)

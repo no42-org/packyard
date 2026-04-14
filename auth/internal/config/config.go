@@ -19,12 +19,12 @@ type Config struct {
 }
 
 // ComponentSet returns the set of valid component names as a map for O(1) lookup.
-// Entries with empty names are silently skipped.
+// Entries with empty or whitespace-only names are silently skipped; names are trimmed.
 func (c *Config) ComponentSet() map[string]bool {
 	set := make(map[string]bool, len(c.Components))
 	for _, comp := range c.Components {
-		if comp.Name != "" {
-			set[comp.Name] = true
+		if name := strings.TrimSpace(comp.Name); name != "" {
+			set[name] = true
 		}
 	}
 	return set
@@ -33,8 +33,8 @@ func (c *Config) ComponentSet() map[string]bool {
 func (c *Config) ComponentNames() []string {
 	names := make([]string, 0, len(c.Components))
 	for _, comp := range c.Components {
-		if comp.Name != "" {
-			names = append(names, comp.Name)
+		if name := strings.TrimSpace(comp.Name); name != "" {
+			names = append(names, name)
 		}
 	}
 	sort.Strings(names)
@@ -57,7 +57,7 @@ func Load(path string) (*Config, error) {
 		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
 	for _, comp := range cfg.Components {
-		if comp.Name != "" {
+		if strings.TrimSpace(comp.Name) != "" {
 			return &cfg, nil
 		}
 	}
