@@ -4,33 +4,12 @@
 
 | Symptom | Likely cause | Jump to |
 |---------|-------------|---------|
-| Stack fails to start with `PKG_DOMAIN must be set` | `DOMAIN` used instead of `PKG_DOMAIN` in `.env` | [Stack won't start](#stack-wont-start) |
 | TLS cert not issuing after first `docker compose up` | DNS not propagated, or port 443 not open | [TLS certificate not issuing](#tls-certificate-not-issuing) |
 | Subscribers getting `401` on a key that should work | Key scope mismatch, revoked key, or auth service down | [Subscribers getting 401](#subscribers-getting-401) |
 | All requests returning `503` | Auth service is down (fail-closed by design) | [All requests returning 503](#all-requests-returning-503) |
 | Admin API returns connection refused / `000` | SSH tunnel not open | [Admin API unreachable](#admin-api-unreachable) |
 | Container shows `unhealthy` or `exited` | Crash loop, disk full, or DB permissions | [Container unhealthy or crashing](#container-unhealthy-or-crashing) |
 | Promotion workflow fails at GPG step | `lts.asc` is still a placeholder, or secrets not set | [Promotion pipeline failures](#promotion-pipeline-failures) |
-
----
-
-## Stack won't start
-
-**Symptom:** `docker compose up` exits immediately with:
-```
-PKG_DOMAIN must be set in .env
-```
-
-**Cause:** The `.env` file uses `DOMAIN=` instead of `PKG_DOMAIN=`.
-
-**Fix:** Rename the variable in `.env`:
-```dotenv
-# wrong
-DOMAIN=pkg.example.org
-
-# correct
-PKG_DOMAIN=pkg.example.org
-```
 
 ---
 
@@ -47,7 +26,7 @@ dig +short pkg.example.org A
 # must return the VM's public IP
 ```
 
-If DNS has not propagated, wait and retry. Do not restart Traefik repeatedly — Let's Encrypt applies [rate limits](https://letsencrypt.org/docs/rate-limits/) (5 duplicate certificate failures per hour, 50 certificates per registered domain per week).
+If DNS has not propagated, wait and retry. Do not restart Traefik repeatedly — Let's Encrypt [rate limits](https://letsencrypt.org/docs/rate-limits/) allow 5 failed validation attempts per domain per hour. Exhausting this limit will block cert issuance for up to an hour.
 
 **Check 2 — Port 443 open**
 
@@ -76,7 +55,7 @@ msg="Certificate obtained successfully" domain=pkg.example.org
 If the `traefik-certs` volume was deleted (e.g. `docker compose down -v`), Traefik will attempt to re-issue. After a successful issuance, the cert is stored in the volume — do not delete it with `-v` unless you intend to re-request.
 
 ```bash
-docker run --rm -v traefik-certs:/certs alpine cat /certs/acme.json | python3 -m json.tool | grep -A2 '"domain"'
+docker run --rm -v traefik-certs:/certs alpine sh -c 'cat /certs/acme.json'
 ```
 
 ---
@@ -125,7 +104,7 @@ curl -s http://127.0.0.1:8443/api/v1/keys | jq '.[] | {id, component, label, act
 
 ## All requests returning 503
 
-The auth service is configured fail-closed (NFR11): if it is unreachable or returns an unexpected error, Traefik returns `503` rather than allowing the request through.
+The auth service is configured fail-closed: if it is unreachable or returns an unexpected error, Traefik returns `503` rather than allowing the request through.
 
 **Diagnose:**
 
@@ -193,8 +172,8 @@ docker compose logs auth | tail -20
 | Log message | Cause | Fix |
 |-------------|-------|-----|
 | `unable to open database file` | `auth-db` volume missing or wrong permissions | `docker compose down && docker compose up -d` |
-| `bind: address already in use` | Port 8080 or 9090 already in use on the host | Identify and stop the conflicting process |
-| `no space left on device` | Disk full | Free space, then restart |
+| `no space left on device` | Disk full | Free space, then `docker compose restart auth` |
+| `exit code 137` | OOM killed | Increase VM RAM |
 
 **Restart a single service without affecting others:**
 
@@ -232,10 +211,12 @@ The promotion workflows SSH into the VM to run `docker exec` commands. If the co
 The promotion workflow downloads a staged artifact from RustFS before signing. If the artifact is not found:
 
 1. Confirm the artifact was staged with the correct `component`, `year`, and `os` values that match the workflow inputs.
-2. List what is actually in staging:
+2. Open an SSH tunnel to RustFS and list the staging bucket:
    ```bash
    ssh -L 9000:localhost:9000 deploy@pkg.example.org -N &
-   RUSTFS_ENDPOINT=http://localhost:9000 \
-     RUSTFS_ACCESS_KEY=<key> RUSTFS_SECRET_KEY=<secret> \
-     bash scripts/stage-artifact.sh --list
+   AWS_ACCESS_KEY_ID=<key> AWS_SECRET_ACCESS_KEY=<secret> \
+     aws s3 ls s3://staging/ \
+     --endpoint-url http://localhost:9000 \
+     --region us-east-1 \
+     --recursive
    ```
