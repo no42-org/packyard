@@ -50,7 +50,7 @@ echo "Auth ready"
 
 ## 3. Create a subscription key
 
-The admin API is exposed directly at `localhost:8080`:
+The admin API is exposed directly at `localhost:8080`. The `component` value must match a name in `config/packyard.yml` — the default ships with `core`:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/keys \

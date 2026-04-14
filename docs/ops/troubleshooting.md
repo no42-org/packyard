@@ -94,7 +94,7 @@ If the key is present but `"active": false`, it has been revoked. Issue a new ke
 
 **Step 3 — Is the key scoped to the right component?**
 
-Each key is scoped to a single component (`core`, `minion`, or `sentinel`). A `core` key cannot access `/rpm/minion/` — that is the expected behaviour, not a bug. Confirm the subscriber is using a key whose `component` matches the path they are requesting.
+Each key is scoped to a single component (as defined in `config/packyard.yml`). A `core` key cannot access `/rpm/minion/` — that is the expected behaviour, not a bug. Confirm the subscriber is using a key whose `component` matches the path they are requesting.
 
 ```bash
 curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | {id, component, label, active}'

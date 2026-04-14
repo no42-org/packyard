@@ -38,7 +38,10 @@ services:
       - /tmp                    # Go runtime scratch
     expose:
       - "9090"  # Prometheus metrics — internal Docker network only, not published to host
+    environment:
+      - CONFIG_PATH=/etc/packyard/packyard.yml
     volumes:
+      - ./config/packyard.yml:/etc/packyard/packyard.yml:ro
       - auth-db:/data/db
       - auth-backup:/data/backup
     healthcheck:

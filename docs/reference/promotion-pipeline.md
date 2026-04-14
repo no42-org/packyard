@@ -10,9 +10,11 @@ Packages are promoted from staging to serving via GitHub Actions:
 
 ## Staging an artifact
 
+The `component` argument must match a name defined in `config/packyard.yml`.
+
 ```bash
 RUSTFS_ACCESS_KEY=... RUSTFS_SECRET_KEY=... \
-  bash scripts/stage-artifact.sh /path/to/artifact.rpm core rpm 2025 el9-x86_64
+  bash scripts/stage-artifact.sh core 2025 rpm el9-x86_64 /path/to/artifact.rpm
 ```
 
 Then trigger the corresponding promotion workflow with `component`, `year`, and `os` inputs via the GitHub Actions UI or CLI:

@@ -22,9 +22,16 @@ The health endpoint `GET /health` returns 200 when the service is up.
 
 ## Components
 
-Valid values for `component`: `core`, `minion`, `sentinel`.
+Valid component names are defined in `config/packyard.yml` and loaded by the auth service at startup. The default configuration ships with a single component (`core`). Operators add components by editing the file and restarting the auth service:
 
-A key scoped to `core` grants access to `/rpm/core/`, `/deb/core/`, and `/oci/` paths for core images. Cross-component access is denied — a `core` key cannot access `/rpm/minion/`.
+```yaml
+# config/packyard.yml
+components:
+  - name: core
+  - name: minion   # add as needed
+```
+
+A key scoped to `core` grants access only to `/rpm/core/`, `/deb/core/`, and `lts-core` OCI paths. Cross-component access is denied — a `core` key cannot access `/rpm/minion/`. The component name in the key must match the path segment exactly.
 
 ## Examples
 
