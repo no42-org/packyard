@@ -22,7 +22,7 @@ while IFS= read -r line; do
 done < <(docker compose ps --format json | jq -c 'if type=="array" then .[] else . end')
 
 # GPG endpoint availability check (Story 1.2)
-GPG_DOMAIN="${DOMAIN:-localhost}"
+GPG_DOMAIN="${PKG_DOMAIN:-localhost}"
 echo ""
 echo "==> Checking GPG endpoint availability..."
 HTTP_STATUS=$(curl -s -k --max-time 10 --write-out '%{http_code}' --output /dev/null \
