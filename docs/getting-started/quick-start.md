@@ -2,6 +2,8 @@
 
 Get a local Packyard stack running and make your first authenticated request in a few minutes.
 
+**Prerequisites:** Docker Compose v2, `curl`, `jq`.
+
 ## 1. Clone and configure
 
 ```bash

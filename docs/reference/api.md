@@ -3,7 +3,7 @@
 The admin API is available at `/api/v1/` via Traefik's loopback admin entrypoint (`:8443`). It is not reachable from the internet — access via SSH tunnel:
 
 ```bash
-ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.com -N &
+ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.org -N &
 ```
 
 ## Endpoints
@@ -18,11 +18,7 @@ ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.com -N &
 | `GET` | `/api/v1/keys/{id}` | Inspect a key |
 | `DELETE` | `/api/v1/keys/{id}` | Revoke a key |
 
-### Health
-
-| Method | Path | Description |
-|--------|------|-------------|
-| `GET` | `/health` | Service health check |
+The health endpoint `GET /health` returns 200 when the service is up.
 
 ## Components
 
@@ -31,6 +27,8 @@ Valid values for `component`: `core`, `minion`, `sentinel`.
 A key scoped to `core` grants access to `/rpm/core/`, `/deb/core/`, and `/oci/` paths for core images. Cross-component access is denied — a `core` key cannot access `/rpm/minion/`.
 
 ## Examples
+
+The following examples assume the SSH tunnel is active (see above).
 
 **Create a key:**
 
