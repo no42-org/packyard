@@ -17,7 +17,7 @@ entryPoints:
   websecure:
     address: "0.0.0.0:443"
   admin:
-    address: "127.0.0.1:8088"
+    address: ":8088"  # bind all interfaces inside container; host-side 127.0.0.1:8088:8088 in compose.yml enforces loopback-only
 
 certificatesResolvers:
   letsencrypt:
