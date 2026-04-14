@@ -33,7 +33,7 @@ The following examples assume the SSH tunnel is active (see above).
 **Create a key:**
 
 ```bash
-curl -s -X POST https://127.0.0.1:8443/api/v1/keys \
+curl -s -X POST http://127.0.0.1:8443/api/v1/keys \
   -H 'Content-Type: application/json' \
   -d '{"component": "core", "label": "Acme Corp"}' | jq .
 ```
@@ -51,13 +51,13 @@ curl -s -X POST https://127.0.0.1:8443/api/v1/keys \
 **List keys:**
 
 ```bash
-curl -s https://127.0.0.1:8443/api/v1/keys | jq .
+curl -s http://127.0.0.1:8443/api/v1/keys | jq .
 ```
 
 **Revoke a key:**
 
 ```bash
-curl -s -X DELETE https://127.0.0.1:8443/api/v1/keys/abc123...
+curl -s -X DELETE http://127.0.0.1:8443/api/v1/keys/abc123...
 ```
 
 ## Error responses
