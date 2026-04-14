@@ -35,8 +35,8 @@ nav:
   - Operations:
     - Production Deployment: ops/production-deployment.md
     - Restore Keystore: ops/restore-keystore.md
-    - Troubleshooting: ops/troubleshooting.md
     - Manual Test Plan: ops/manual-test-plan.md
+    - Troubleshooting: ops/troubleshooting.md
   - Reference:
     - Architecture: reference/architecture.md
     - Subscriber Usage: reference/subscriber-usage.md
