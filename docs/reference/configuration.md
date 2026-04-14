@@ -17,7 +17,7 @@ Packyard is configured via a `.env` file at the repository root. This file is ne
 ```dotenv
 # TLS
 ACME_EMAIL=ops@example.org
-DOMAIN=pkg.example.org
+PKG_DOMAIN=pkg.example.org
 
 # RustFS staging storage (generate with: openssl rand -hex 20)
 RUSTFS_ACCESS_KEY=<generate>

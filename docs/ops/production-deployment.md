@@ -56,11 +56,10 @@ dig +short pkg.example.org CAA
 
 | Source | Protocol/Port | Purpose |
 |--------|---------------|---------|
-| `0.0.0.0/0` | TCP 443 | Package subscribers |
-| `0.0.0.0/0` | TCP 80 | ACME HTTP-01 challenge (initial cert issuance) |
+| `0.0.0.0/0` | TCP 443 | Package subscribers + TLS-ALPN-01 cert issuance |
 | operator CIDR | TCP 22 | SSH for admin API access and port-forwards |
 
-> Port 80 is required for the initial ACME challenge. After cert issuance and auto-renewal is confirmed it can stay open — Traefik only serves `.well-known/acme-challenge` on port 80 and redirects all other HTTP traffic to HTTPS.
+> Traefik uses the **TLS-ALPN-01** challenge for Let's Encrypt — port 443 is the only port required. Port 80 does not need to be open.
 
 ---
 
@@ -71,7 +70,7 @@ dig +short pkg.example.org CAA
 ```dotenv
 # TLS
 ACME_EMAIL=ops@example.org
-DOMAIN=pkg.example.org
+PKG_DOMAIN=pkg.example.org
 
 # RustFS staging storage (generate with: openssl rand -hex 20)
 RUSTFS_ACCESS_KEY=<generate>
@@ -230,7 +229,7 @@ ssh-keyscan pkg.example.org
 
 - [ ] DNS A record for `pkg.example.org` propagated (`dig` confirms VM IP)
 - [ ] DNS CAA record for `pkg.example.org` present
-- [ ] VM firewall: `tcp/443` and `tcp/80` open to internet
+- [ ] VM firewall: `tcp/443` open to internet
 - [ ] Docker + Compose plugin v2 installed on VM
 - [ ] `deploy` user created, added to `docker` group, SSH key authorized (§5)
 - [ ] GPG LTS signing key generated (§4.1); `lts.asc` committed to `static/content/gpg/`
