@@ -9,8 +9,31 @@ on:
 
 jobs:
 
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-latest
+    outputs:
+      auth: ${{ steps.filter.outputs.auth }}
+      rpm:  ${{ steps.filter.outputs.rpm }}
+      docs: ${{ steps.filter.outputs.docs }}
+    steps:
+      - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
+      - uses: dorny/paths-filter@de90cc6fb38fc0963ad72b210f1f284cd68cea36  # v3.0.2
+        id: filter
+        with:
+          filters: |
+            auth:
+              - 'auth/**'
+            rpm:
+              - 'rpm/**'
+            docs:
+              - 'docs/**'
+              - 'mkdocs.yml'
+
   test-auth:
     name: Auth unit tests
+    needs: changes
+    if: needs.changes.outputs.auth == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
@@ -27,6 +50,8 @@ jobs:
 
   build-docs:
     name: Build docs
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 5
     steps:
@@ -43,14 +68,19 @@ jobs:
 
   build-images:
     name: Build Docker images
-    needs: test-auth
+    needs: [changes, test-auth]
+    if: |
+      (needs.changes.outputs.auth == 'true' || needs.changes.outputs.rpm == 'true') &&
+      (needs.test-auth.result == 'success' || needs.test-auth.result == 'skipped')
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
       - uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd  # v6.0.2
 
       - name: Build auth image
+        if: needs.changes.outputs.auth == 'true'
         run: docker build ./auth
 
       - name: Build rpm image
+        if: needs.changes.outputs.rpm == 'true'
         run: docker build ./rpm
