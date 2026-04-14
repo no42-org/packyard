@@ -49,7 +49,7 @@ Requires Docker Compose v2, `curl`, `jq`.
 ```bash
 git clone https://github.com/no42-org/packyard.git
 cd packyard
-bash local-testing/verify.sh
+bash verify.sh
 ```
 
 See [Getting Started](https://no42-org.github.io/packyard/latest/getting-started/quick-start/) for the full walkthrough.

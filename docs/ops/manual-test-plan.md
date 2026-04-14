@@ -450,7 +450,7 @@ docker compose -f compose.yml -f compose.override.ci.yml down
 
 ## What verify.sh Covers vs This Plan
 
-`local-testing/verify.sh` is a fast automated smoke test (12 checks, ~60s). This plan goes deeper:
+`verify.sh` is a fast automated smoke test (12 checks, ~60s). This plan goes deeper:
 
 | Scenario | verify.sh | This plan |
 |----------|-----------|-----------|

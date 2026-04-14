@@ -343,7 +343,7 @@ Run from any machine with network access to the deployment. Requires the subscri
 # Clone the repo locally if needed
 git clone <packyard-repo> packyard && cd packyard
 
-bash local-testing/verify.sh \
+bash verify.sh \
   --base-url https://pkg.example.org \
   --test-key "$KEY" \
   --test-component core

@@ -3,13 +3,13 @@
 #
 # Usage:
 #   Local (full suite, starts stack):
-#     bash local-testing/verify.sh
+#     bash verify.sh
 #
 #   Local (stack already running):
-#     bash local-testing/verify.sh --skip-stack
+#     bash verify.sh --skip-stack
 #
 #   Remote smoke (read-only, no admin API):
-#     bash local-testing/verify.sh \
+#     bash verify.sh \
 #       --base-url https://pkg.example.org \
 #       --test-key "$KEY" \
 #       --test-component core
