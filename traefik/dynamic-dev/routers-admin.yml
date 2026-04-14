@@ -5,7 +5,7 @@ http:
         - admin
       rule: "PathPrefix(`/api/v1/`)"
       service: packyard-auth-admin-svc
-      # No middleware — admin entrypoint is 127.0.0.1:8443 (loopback-only, NFR8, FR34)
+      # No middleware — admin entrypoint is 127.0.0.1:8088 (loopback-only, NFR8, FR34)
       # Operators access via SSH tunnel or jump host; internal trust model
       # No tls: — loopback-only plain HTTP; TLS adds no security on localhost
 

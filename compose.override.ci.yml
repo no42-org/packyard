@@ -8,7 +8,7 @@
 #
 # The base compose.yml port mapping for Traefik (443) is merged in by
 # Compose but harmless — Traefik only listens on the entryPoints defined in
-# traefik.ci.yml (web:80 and admin:8443).
+# traefik.ci.yml (web:80 and admin:8088).
 
 services:
 

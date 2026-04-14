@@ -14,7 +14,7 @@ services:
       - /tmp                    # Go runtime scratch
     ports:
       - "443:443"
-      - "127.0.0.1:8443:8443"
+      - "127.0.0.1:8088:8088"
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro

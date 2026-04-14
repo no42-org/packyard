@@ -35,18 +35,18 @@ else
 fi
 
 # Auth service health check via admin API entrypoint (Story 2.3)
-# Hits GET /api/v1/keys on the admin entrypoint (127.0.0.1:8443) — the only path routed
+# Hits GET /api/v1/keys on the admin entrypoint (127.0.0.1:8088) — the only path routed
 # on that entrypoint. Returns 200 + empty array when auth is up, proving both that the
 # auth service is reachable and that the admin API route is live.
 # Note: /health is NOT routed on the admin entrypoint (only PathPrefix(/api/v1/) is).
 echo ""
-echo "==> Checking auth service (admin API reachable on loopback 8443)..."
+echo "==> Checking auth service (admin API reachable on loopback 8088)..."
 AUTH_STATUS=$(curl -s --max-time 10 --write-out '%{http_code}' --output /dev/null \
-    "http://127.0.0.1:8443/api/v1/keys" 2>/dev/null || echo "000")
+    "http://127.0.0.1:8088/api/v1/keys" 2>/dev/null || echo "000")
 if [[ "${AUTH_STATUS}" == "200" ]]; then
     echo "OK:   auth /api/v1/keys returned HTTP 200 via admin entrypoint"
 else
-    echo "FAIL: auth /api/v1/keys returned HTTP ${AUTH_STATUS} (expected 200 via 127.0.0.1:8443)"
+    echo "FAIL: auth /api/v1/keys returned HTTP ${AUTH_STATUS} (expected 200 via 127.0.0.1:8088)"
     FAILED=1
 fi
 

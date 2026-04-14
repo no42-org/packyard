@@ -14,7 +14,7 @@ Traefik (TLS termination, forwardAuth, routing)
     ├── /deb/   → nginx → Aptly (signed DEB snapshots)
     ├── /oci/   → Zot (OCI registry, cosign signatures)
     ├── /gpg/   → nginx (public keys — unauthenticated)
-    └── /api/   → auth service (admin API, internal :8443)
+    └── /api/   → auth service (admin API, internal :8088)
          │
          └── auth service (forwardAuth + key management)
                   │

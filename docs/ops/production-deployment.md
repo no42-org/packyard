@@ -31,7 +31,7 @@ All records are on the `example.org` zone. Apply these **before** starting the d
 | CAA   | `pkg.example.org`     | `0 issue "letsencrypt.org"`      | 3600  | Restricts TLS cert issuance to Let's Encrypt |
 | CAA   | `pkg.example.org`     | `0 iodef "mailto:ops@example.org"`   | 3600  | CAA violation notification address |
 
-> **No other subdomains are needed.** The admin API is loopback-only (`127.0.0.1:8443`), reached via SSH tunnel. RPM, DEB, OCI, and GPG key endpoints all share `pkg.example.org`.
+> **No other subdomains are needed.** The admin API is loopback-only (`127.0.0.1:8088`), reached via SSH tunnel. RPM, DEB, OCI, and GPG key endpoints all share `pkg.example.org`.
 
 ### DNS propagation check
 
@@ -287,8 +287,8 @@ curl -sI -u subscriber:<CORE_KEY> https://pkg.example.org/rpm/minion/2025/el9-x8
 # Expect: HTTP/2 401
 
 # 5. Admin API reachable only via SSH tunnel
-ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.org -N &
-curl -s http://127.0.0.1:8443/api/v1/keys
+ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
+curl -s http://127.0.0.1:8088/api/v1/keys
 # Expect: JSON array (empty if no keys created yet)
 ```
 
@@ -298,10 +298,10 @@ curl -s http://127.0.0.1:8443/api/v1/keys
 
 ```bash
 # Open SSH tunnel to admin API
-ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.org -N &
+ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
 
 # Create an API key for a subscriber
-curl -s -X POST http://127.0.0.1:8443/api/v1/keys \
+curl -s -X POST http://127.0.0.1:8088/api/v1/keys \
   -H 'Content-Type: application/json' \
   -d '{"component": "core", "label": "Acme Corp — Core"}'
 # Response contains the key value — share only this with the subscriber
