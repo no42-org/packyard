@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # health-check.sh — verify packyard stack is operational
 # Exit 0 on success, non-zero on failure.
-# Extended by later stories (Story 1.2 adds /gpg/meridian.asc check,
+# Extended by later stories (Story 1.2 adds /gpg/lts.asc check,
 # Story 1.3 adds RPM routing and RustFS checks,
 # Story 2.3 adds auth service health check and updates RPM routing assertion).
 set -euo pipefail
@@ -26,12 +26,12 @@ GPG_DOMAIN="${DOMAIN:-localhost}"
 echo ""
 echo "==> Checking GPG endpoint availability..."
 HTTP_STATUS=$(curl -s -k --max-time 10 --write-out '%{http_code}' --output /dev/null \
-    "https://${GPG_DOMAIN}/gpg/meridian.asc" 2>/dev/null || echo "000")
+    "https://${GPG_DOMAIN}/gpg/lts.asc" 2>/dev/null || echo "000")
 if [[ "${HTTP_STATUS}" != "200" ]]; then
-    echo "FAIL: /gpg/meridian.asc returned HTTP ${HTTP_STATUS} (expected 200)"
+    echo "FAIL: /gpg/lts.asc returned HTTP ${HTTP_STATUS} (expected 200)"
     FAILED=1
 else
-    echo "OK:   /gpg/meridian.asc returned HTTP 200"
+    echo "OK:   /gpg/lts.asc returned HTTP 200"
 fi
 
 # Auth service health check via admin API entrypoint (Story 2.3)

@@ -8,22 +8,22 @@
  *   - Stories 5.1–5.3 passing (confirms full delivery chain before load testing)
  *
  * REQUIRED ENV VARS:
- *   BASE_URL  — packyard base URL (e.g. https://pkg.mdn.opennms.com)
+ *   BASE_URL  — packyard base URL (e.g. https://pkg.example.org)
  *   KEY       — a valid active subscription key
  *
  * OPTIONAL ENV VARS:
  *   VUS           — number of virtual users for the baseline scenario (default: 50)
  *   DOWNLOAD_VUS  — VUs for the download scenario (default: min(5, VUS/10), capped to avoid bandwidth saturation)
- *   COMPONENT     — Meridian component (default: core)
- *   YEAR          — Meridian release year (default: 2025)
+ *   COMPONENT     — LTS component (default: core)
+ *   YEAR          — LTS release year (default: 2025)
  *   OS_ARCH       — RPM OS/arch segment (default: el9-x86_64)
- *   RPM_FILE      — RPM filename for download scenario (must be set to an existing RPM; default: meridian-core.rpm)
+ *   RPM_FILE      — RPM filename for download scenario (must be set to an existing RPM; default: lts-core.rpm)
  *
  * USAGE (50 VU baseline + download):
- *   k6 run --env BASE_URL=https://pkg.mdn.opennms.com --env KEY=abc123 tests/load/packyard-load-test.js
+ *   k6 run --env BASE_URL=https://pkg.example.org --env KEY=abc123 tests/load/packyard-load-test.js
  *
  * USAGE (500 VU scale):
- *   k6 run --env VUS=500 --env BASE_URL=https://pkg.mdn.opennms.com --env KEY=abc123 tests/load/packyard-load-test.js
+ *   k6 run --env VUS=500 --env BASE_URL=https://pkg.example.org --env KEY=abc123 tests/load/packyard-load-test.js
  */
 
 import encoding from 'k6/encoding';
@@ -32,13 +32,13 @@ import { check, sleep } from 'k6';
 
 // ─── Configuration ────────────────────────────────────────────────────────────
 
-const BASE_URL  = (__ENV.BASE_URL  || 'https://pkg.mdn.opennms.com').replace(/\/$/, '');
+const BASE_URL  = (__ENV.BASE_URL  || 'https://pkg.example.org').replace(/\/$/, '');
 const KEY       = __ENV.KEY;
 const VUS       = parseInt(__ENV.VUS)  || 50;
 const COMPONENT = __ENV.COMPONENT || 'core';
 const YEAR      = __ENV.YEAR      || '2025';
 const OS_ARCH   = __ENV.OS_ARCH   || 'el9-x86_64';
-const RPM_FILE  = __ENV.RPM_FILE  || 'meridian-core.rpm';
+const RPM_FILE  = __ENV.RPM_FILE  || 'lts-core.rpm';
 
 // Download scenario uses fewer VUs to avoid saturating bandwidth during the latency baseline.
 const DOWNLOAD_VUS = parseInt(__ENV.DOWNLOAD_VUS) || Math.min(5, Math.max(1, Math.floor(VUS / 10)));

@@ -32,7 +32,7 @@ jobs:
         run: |
           echo "Waiting for Traefik..."
           timeout 30 bash -c \
-            'until curl -s -o /dev/null -w "%{http_code}" http://localhost/gpg/meridian.asc | grep -qE "^(200|404)$"; do sleep 1; done'
+            'until curl -s -o /dev/null -w "%{http_code}" http://localhost/gpg/lts.asc | grep -qE "^(200|404)$"; do sleep 1; done'
           echo "Traefik is ready."
 
       - name: Wait for auth to be healthy

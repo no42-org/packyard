@@ -10,10 +10,10 @@ import (
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/opennms/packyard-auth/internal/handler"
-	"github.com/opennms/packyard-auth/internal/metrics"
-	"github.com/opennms/packyard-auth/internal/middleware"
-	"github.com/opennms/packyard-auth/internal/store"
+	"github.com/no42-org/packyard-auth/internal/handler"
+	"github.com/no42-org/packyard-auth/internal/metrics"
+	"github.com/no42-org/packyard-auth/internal/middleware"
+	"github.com/no42-org/packyard-auth/internal/store"
 )
 
 func main() {

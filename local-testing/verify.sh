@@ -136,8 +136,8 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 if [[ "$MODE" == "local" ]]; then
   section "Traefik readiness"
-  if wait_for "$BASE_URL/gpg/meridian.asc" "^(200|404)$" 30 1; then
-    pass "Traefik ready (/gpg/meridian.asc probe)"
+  if wait_for "$BASE_URL/gpg/lts.asc" "^(200|404)$" 30 1; then
+    pass "Traefik ready (/gpg/lts.asc probe)"
   else
     fail "Traefik did not become ready within 30s"
   fi
@@ -200,10 +200,10 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 section "Unauthenticated routes"
 
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/gpg/meridian.asc" || true)
+STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/gpg/lts.asc" || true)
 [[ "$STATUS" == "200" ]] \
-  && pass "/gpg/meridian.asc → 200" \
-  || fail "/gpg/meridian.asc → $STATUS (expected 200)"
+  && pass "/gpg/lts.asc → 200" \
+  || fail "/gpg/lts.asc → $STATUS (expected 200)"
 
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/gpg/cosign.pub" || true)
 [[ "$STATUS" == "200" ]] \
@@ -293,30 +293,30 @@ fi
 # ─────────────────────────────────────────────────────────────────────────────
 section "OCI scope"
 
-# Valid: own meridian-COMPONENT repo
+# Valid: own lts-COMPONENT repo
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  -u "subscriber:${TEST_KEY}" "$BASE_URL/oci/v2/meridian-$TEST_COMPONENT/tags/list" || true)
+  -u "subscriber:${TEST_KEY}" "$BASE_URL/oci/v2/lts-$TEST_COMPONENT/tags/list" || true)
 if [[ "$STATUS" == "200" || "$STATUS" == "404" ]]; then
-  pass "/oci/v2/meridian-$TEST_COMPONENT/ (valid scope) → $STATUS (auth passed)"
+  pass "/oci/v2/lts-$TEST_COMPONENT/ (valid scope) → $STATUS (auth passed)"
 elif [[ "$STATUS" == "401" ]]; then
-  fail "/oci/v2/meridian-$TEST_COMPONENT/ (valid scope) → 401 (auth rejected valid key)"
+  fail "/oci/v2/lts-$TEST_COMPONENT/ (valid scope) → 401 (auth rejected valid key)"
 else
-  info "/oci/v2/meridian-$TEST_COMPONENT/ → $STATUS"
+  info "/oci/v2/lts-$TEST_COMPONENT/ → $STATUS"
 fi
 
 # Wrong scope: cross-component OCI repo → 401
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  -u "subscriber:${TEST_KEY}" "$BASE_URL/oci/v2/meridian-$CROSS_COMPONENT/tags/list" || true)
+  -u "subscriber:${TEST_KEY}" "$BASE_URL/oci/v2/lts-$CROSS_COMPONENT/tags/list" || true)
 [[ "$STATUS" == "401" ]] \
-  && pass "/oci/v2/meridian-$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → 401" \
-  || fail "/oci/v2/meridian-$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → $STATUS (expected 401)"
+  && pass "/oci/v2/lts-$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → 401" \
+  || fail "/oci/v2/lts-$CROSS_COMPONENT/ ($TEST_COMPONENT key, wrong scope) → $STATUS (expected 401)"
 
 # Unrecognised OCI path format → 401
 STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
   -u "subscriber:${TEST_KEY}" "$BASE_URL/oci/v2/someother-repo/tags/list" || true)
 [[ "$STATUS" == "401" ]] \
-  && pass "/oci/v2/someother-repo/ (no meridian- prefix) → 401" \
-  || fail "/oci/v2/someother-repo/ (no meridian- prefix) → $STATUS (expected 401)"
+  && pass "/oci/v2/someother-repo/ (no lts- prefix) → 401" \
+  || fail "/oci/v2/someother-repo/ (no lts- prefix) → $STATUS (expected 401)"
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Local-only tests

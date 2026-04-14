@@ -6,25 +6,25 @@
 #   published in Aptly. See tests/e2e/README.md for setup instructions.
 #
 # REQUIRED ENV VARS:
-#   BASE_URL   — packyard base URL (e.g. https://pkg.mdn.opennms.com)
+#   BASE_URL   — packyard base URL (e.g. https://pkg.example.org)
 #   VALID_KEY  — a valid active subscription key in the auth database
 #
 # OPTIONAL ENV VARS:
-#   COMPONENT  — Meridian component (default: core)
-#   YEAR       — Meridian year (default: 2025)
+#   COMPONENT  — LTS component (default: core)
+#   YEAR       — LTS year (default: 2025)
 #   DISTRO     — DEB distribution codename (default: bookworm)
-#   PACKAGE    — DEB package name to install (default: meridian-core)
+#   PACKAGE    — DEB package name to install (default: lts-core)
 #
 # USAGE:
-#   BASE_URL=https://pkg.mdn.opennms.com VALID_KEY=abc123 bash tests/e2e/deb-subscriber.sh
+#   BASE_URL=https://pkg.example.org VALID_KEY=abc123 bash tests/e2e/deb-subscriber.sh
 set -euo pipefail
 
-BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.mdn.opennms.com)}"
+BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.example.org)}"
 VALID_KEY="${VALID_KEY:?VALID_KEY is required (a valid subscription key)}"
 COMPONENT="${COMPONENT:-core}"
 YEAR="${YEAR:-2025}"
 DISTRO="${DISTRO:-bookworm}"
-PACKAGE="${PACKAGE:-meridian-core}"
+PACKAGE="${PACKAGE:-lts-core}"
 
 APT_CACHE_DIR="$(mktemp -d)"
 SOURCES_FILE="$(mktemp --suffix=.list)"
@@ -50,11 +50,11 @@ for cmd in apt-get dpkg python3 curl gpg; do
     || { echo "ERROR: '$cmd' not found — see tests/e2e/README.md for prerequisites"; exit 1; }
 done
 
-# ─── Precondition: dearmor Meridian GPG key ──────────────────────────────────
+# ─── Precondition: dearmor LTS GPG key ──────────────────────────────────
 
 mkdir -p "${APT_CACHE_DIR}/lists/partial" "${APT_CACHE_DIR}/archives/partial"
-curl -fsSL "${BASE_URL}/gpg/meridian.asc" | gpg --dearmor > "${GPG_KEY_FILE}"
-echo "Meridian GPG key dearmored to ${GPG_KEY_FILE}."
+curl -fsSL "${BASE_URL}/gpg/lts.asc" | gpg --dearmor > "${GPG_KEY_FILE}"
+echo "LTS GPG key dearmored to ${GPG_KEY_FILE}."
 
 # ─── Sources file ────────────────────────────────────────────────────────────
 

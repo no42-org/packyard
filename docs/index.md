@@ -1,6 +1,6 @@
 # Packyard
 
-Packyard is a self-hosted, authenticated package distribution service for Meridian. It serves RPM, DEB, and OCI artefacts with per-component API key scoping, Prometheus metrics, and automated keystore backups.
+Packyard is a self-hosted, authenticated package distribution service for LTS subscription packages. It serves RPM, DEB, and OCI artefacts with per-component API key scoping, Prometheus metrics, and automated keystore backups.
 
 ## What's in this documentation
 

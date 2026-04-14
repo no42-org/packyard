@@ -10,7 +10,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
-	"github.com/opennms/packyard-auth/internal/store"
+	"github.com/no42-org/packyard-auth/internal/store"
 )
 
 // validComponents is the authoritative set of component values accepted by the admin API.

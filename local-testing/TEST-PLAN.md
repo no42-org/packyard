@@ -40,7 +40,7 @@ Expected: all services `running` or `healthy`. `rustfs-init` should show `exited
 
 ```bash
 # Traefik is ready when this returns 200 (static file served by the `static` service)
-curl -v http://localhost/gpg/meridian.asc
+curl -v http://localhost/gpg/lts.asc
 ```
 
 ```bash
@@ -58,7 +58,7 @@ Expected: `{"status":"ok"}` or similar. HTTP 200.
 
 ```bash
 # Both files are public — no credentials required
-curl -o /dev/null -w "%{http_code}\n" http://localhost/gpg/meridian.asc
+curl -o /dev/null -w "%{http_code}\n" http://localhost/gpg/lts.asc
 curl -o /dev/null -w "%{http_code}\n" http://localhost/gpg/cosign.pub
 ```
 
@@ -66,7 +66,7 @@ Expected: `200` for both.
 
 ```bash
 # Confirm no Authorization header is needed (explicitly provide none)
-curl -s http://localhost/gpg/meridian.asc | head -3
+curl -s http://localhost/gpg/lts.asc | head -3
 ```
 
 Expected: ASCII-armored GPG key (`-----BEGIN PGP PUBLIC KEY BLOCK-----`).
@@ -256,24 +256,24 @@ Expected: first three `401`, last one `200`.
 
 ### 5.1 OCI component extraction
 
-OCI paths use the format `/oci/v2/meridian-{component}/...`. The auth service strips the `meridian-` prefix.
+OCI paths use the format `/oci/v2/lts-{component}/...`. The auth service strips the `lts-` prefix.
 
 ```bash
 # core key on OCI core repo
 curl -u "subscriber:${CORE_KEY}" \
   -o /dev/null -w "%{http_code}\n" \
-  "http://localhost/oci/v2/meridian-core/tags/list"
+  "http://localhost/oci/v2/lts-core/tags/list"
 
 # core key on OCI minion repo — denied
 curl -u "subscriber:${CORE_KEY}" \
   -o /dev/null -w "%{http_code}\n" \
-  "http://localhost/oci/v2/meridian-minion/tags/list"
+  "http://localhost/oci/v2/lts-minion/tags/list"
 ```
 
 Expected: first `200` or `404` (Zot has no images pushed yet), second `401`.
 
 ```bash
-# Path without meridian- prefix — should be denied (unrecognised format)
+# Path without lts- prefix — should be denied (unrecognised format)
 curl -u "subscriber:${CORE_KEY}" \
   -o /dev/null -w "%{http_code}\n" \
   "http://localhost/oci/v2/someother-repo/tags/list"

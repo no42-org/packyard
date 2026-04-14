@@ -1,6 +1,6 @@
 # Packyard
 
-Packyard is a self-hosted, authenticated package distribution platform for Meridian. It serves RPM, DEB, and OCI container packages behind subscription key authentication, with a promotion pipeline that signs and publishes artifacts from CI.
+Packyard is a self-hosted, authenticated package distribution platform for LTS subscription packages. It serves RPM, DEB, and OCI container packages behind subscription key authentication, with a promotion pipeline that signs and publishes artifacts from CI.
 
 ## Architecture
 

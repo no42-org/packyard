@@ -87,7 +87,7 @@ RUSTFS_SECRET_KEY=<generate>
 | `SSH_KNOWN_HOST`      | `ssh-keyscan pkg.example.org` output               |
 | `RUSTFS_ACCESS_KEY`   | Same as `.env`                                 |
 | `RUSTFS_SECRET_KEY`   | Same as `.env`                                 |
-| `GPG_PRIVATE_KEY`     | ASCII-armored Meridian GPG signing key         |
+| `GPG_PRIVATE_KEY`     | ASCII-armored LTS GPG signing key         |
 | `GPG_KEY_ID`          | Key fingerprint (40 hex chars, no spaces)      |
 | `GPG_PASSPHRASE`      | GPG key passphrase                             |
 | `COSIGN_PRIVATE_KEY`  | Contents of `cosign.key`                       |
@@ -101,38 +101,38 @@ Keys are generated once, kept offline in a secrets manager (e.g. 1Password, Vaul
 
 ### 4.1 GPG signing key
 
-Used to sign RPM and DEB packages at promotion time. Use a dedicated key for Meridian — do not reuse an operator's personal key.
+Used to sign RPM and DEB packages at promotion time. Use a dedicated key for LTS — do not reuse an operator's personal key.
 
 ```bash
 # 1. Generate the key (batch mode, no TTY required)
-cat > /tmp/meridian-gpg-params <<'EOF'
-%echo Generating Meridian signing key
+cat > /tmp/lts-gpg-params <<'EOF'
+%echo Generating LTS signing key
 Key-Type: RSA
 Key-Length: 4096
 Subkey-Type: RSA
 Subkey-Length: 4096
-Name-Real: OpenNMS Meridian
+Name-Real: LTS
 Name-Comment: Package Signing Key
-Name-Email: meridian-signing@example.org
+Name-Email: lts-signing@example.org
 Expire-Date: 0
 Passphrase: <CHOOSE_A_STRONG_PASSPHRASE>
 %commit
 %echo Done
 EOF
 
-gpg --batch --gen-key /tmp/meridian-gpg-params
-rm /tmp/meridian-gpg-params
+gpg --batch --gen-key /tmp/lts-gpg-params
+rm /tmp/lts-gpg-params
 
 # 2. Find the 40-character fingerprint — this is GPG_KEY_ID
-gpg --list-keys --fingerprint meridian-signing@example.org
+gpg --list-keys --fingerprint lts-signing@example.org
 GPG_KEY_ID="<40-char fingerprint, no spaces>"
 
 # 3. Export ASCII-armored private key — this is GPG_PRIVATE_KEY
 gpg --armor --export-secret-keys "$GPG_KEY_ID"
 
 # 4. Export public key and commit it to the repo
-gpg --armor --export "$GPG_KEY_ID" > static/content/gpg/meridian.asc
-# git add static/content/gpg/meridian.asc && git commit
+gpg --armor --export "$GPG_KEY_ID" > static/content/gpg/lts.asc
+# git add static/content/gpg/lts.asc && git commit
 ```
 
 **Secrets to set:**
@@ -176,7 +176,7 @@ shred -u cosign.key
 - [ ] GPG passphrase stored in secrets manager
 - [ ] cosign private key stored in secrets manager, local copy shredded
 - [ ] cosign password stored in secrets manager
-- [ ] `static/content/gpg/meridian.asc` committed to repository
+- [ ] `static/content/gpg/lts.asc` committed to repository
 - [ ] `static/content/gpg/cosign.pub` committed to repository
 - [ ] All 10 secrets set in GitHub Actions repository settings
 
@@ -233,7 +233,7 @@ ssh-keyscan pkg.example.org
 - [ ] VM firewall: `tcp/443` and `tcp/80` open to internet
 - [ ] Docker + Compose plugin v2 installed on VM
 - [ ] `deploy` user created, added to `docker` group, SSH key authorized (§5)
-- [ ] GPG Meridian signing key generated (§4.1); `meridian.asc` committed to `static/content/gpg/`
+- [ ] GPG LTS signing key generated (§4.1); `lts.asc` committed to `static/content/gpg/`
 - [ ] cosign key pair generated (§4.2); `cosign.pub` committed to `static/content/gpg/`
 - [ ] `.env` file written on VM with production values (§3)
 - [ ] All 10 GitHub Actions secrets set in repository settings (§3)
@@ -248,7 +248,7 @@ git clone <packyard-repo> ~/packyard
 cd ~/packyard
 
 # Write .env (see §3)
-# Ensure static/content/gpg/meridian.asc and cosign.pub are present
+# Ensure static/content/gpg/lts.asc and cosign.pub are present
 
 docker compose pull
 docker compose up -d
@@ -271,7 +271,7 @@ Run these from an **external host**, not the VM itself.
 
 ```bash
 # 1. GPG key endpoint — tests TLS + routing (unauthenticated)
-curl -sI https://pkg.example.org/gpg/meridian.asc
+curl -sI https://pkg.example.org/gpg/lts.asc
 # Expect: HTTP/2 200, Content-Type: text/plain
 
 # 2. Package endpoint rejects unauthenticated requests
@@ -298,7 +298,7 @@ curl -sk https://127.0.0.1:8443/api/v1/keys
 
 | Check | Method | SLA |
 |-------|--------|-----|
-| Endpoint availability | HTTP GET `https://pkg.example.org/gpg/meridian.asc` from external monitor | 99.9% monthly |
+| Endpoint availability | HTTP GET `https://pkg.example.org/gpg/lts.asc` from external monitor | 99.9% monthly |
 | TLS cert expiry | Alert at ≤ 30 days remaining | — |
 | Auth service health | Traefik health check (auto; returns 503 on failure) | Fail-closed |
 
@@ -322,10 +322,10 @@ curl -sk -X POST https://127.0.0.1:8443/api/v1/keys \
 Example subscriber `yum.repos.d` entry:
 
 ```ini
-[onms-meridian-core]
-name=OpenNMS Meridian Core
+[onms-lts-core]
+name=LTS Core
 baseurl=https://subscriber:<KEY>@pkg.example.org/rpm/core/2025/el9-x86_64/
 enabled=1
 gpgcheck=1
-gpgkey=https://pkg.example.org/gpg/meridian.asc
+gpgkey=https://pkg.example.org/gpg/lts.asc
 ```
