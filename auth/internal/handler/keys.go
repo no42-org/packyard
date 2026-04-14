@@ -14,12 +14,31 @@ import (
 )
 
 // KeysHandler handles admin API key management endpoints (Epic 3).
+// Construct with NewKeysHandler to guarantee non-nil component maps.
 type KeysHandler struct {
-	Store              store.KeyStore
-	Logger             *slog.Logger
-	ValidComponents    map[string]bool   // set for O(1) membership checks
-	ValidComponentList string            // pre-formatted for error messages
+	Store               store.KeyStore
+	Logger              *slog.Logger
+	ValidComponents     map[string]bool   // set for O(1) membership checks
+	ValidComponentList  string            // pre-formatted for error messages
 	ComponentVisibility map[string]string // component name → "public" | "private"
+}
+
+// NewKeysHandler returns a KeysHandler with nil maps coerced to empty maps so
+// that component lookups in List and Create never misbehave silently.
+func NewKeysHandler(st store.KeyStore, logger *slog.Logger, validComponents map[string]bool, validComponentList string, componentVisibility map[string]string) *KeysHandler {
+	if validComponents == nil {
+		validComponents = map[string]bool{}
+	}
+	if componentVisibility == nil {
+		componentVisibility = map[string]string{}
+	}
+	return &KeysHandler{
+		Store:               st,
+		Logger:              logger,
+		ValidComponents:     validComponents,
+		ValidComponentList:  validComponentList,
+		ComponentVisibility: componentVisibility,
+	}
 }
 
 // keyResponse wraps a store.Key with the component's current visibility, computed at

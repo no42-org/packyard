@@ -81,6 +81,16 @@ func newTestHandler(s store.KeyStore) *ForwardAuthHandler {
 	}
 }
 
+func TestNewForwardAuthHandler_NilMapsCoerced(t *testing.T) {
+	h := NewForwardAuthHandler(&mockStore{}, slog.Default(), nil, nil)
+	if h.ValidComponents == nil {
+		t.Error("ValidComponents should not be nil after construction with nil input")
+	}
+	if h.PublicComponents == nil {
+		t.Error("PublicComponents should not be nil after construction with nil input")
+	}
+}
+
 func TestForwardAuth_ValidKey(t *testing.T) {
 	h := newTestHandler(&mockStore{
 		getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
@@ -163,6 +173,26 @@ func TestForwardAuth_MissingAuthHeader(t *testing.T) {
 		},
 	})
 	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401, got %d", w.Code)
+	}
+}
+
+func TestForwardAuth_NonHexKey(t *testing.T) {
+	// 64 chars but non-hex — must be rejected before the store is consulted.
+	nonHexKey := strings.Repeat("!", 64)
+	h := newTestHandler(&mockStore{
+		getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
+			t.Fatal("GetByValue should not be called for non-hex key")
+			return nil, nil
+		},
+	})
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("Authorization", basicAuthHeader(nonHexKey))
 	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)

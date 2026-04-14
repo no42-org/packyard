@@ -14,11 +14,29 @@ import (
 
 // ForwardAuthHandler validates subscriber credentials for Traefik forwardAuth.
 // GET /auth — returns 200 (allow), 401 (deny), or 503 (error/fail-closed).
+// Construct with NewForwardAuthHandler to guarantee non-nil component maps.
 type ForwardAuthHandler struct {
 	Store            store.KeyStore
 	Logger           *slog.Logger
-	ValidComponents  map[string]bool // set for O(1) membership checks; nil treated as deny-all
+	ValidComponents  map[string]bool // set for O(1) membership checks
 	PublicComponents map[string]bool // components that bypass credential checking
+}
+
+// NewForwardAuthHandler returns a ForwardAuthHandler with nil maps coerced to
+// empty maps so that component lookups in ServeHTTP never misbehave silently.
+func NewForwardAuthHandler(st store.KeyStore, logger *slog.Logger, validComponents, publicComponents map[string]bool) *ForwardAuthHandler {
+	if validComponents == nil {
+		validComponents = map[string]bool{}
+	}
+	if publicComponents == nil {
+		publicComponents = map[string]bool{}
+	}
+	return &ForwardAuthHandler{
+		Store:            st,
+		Logger:           logger,
+		ValidComponents:  validComponents,
+		PublicComponents: publicComponents,
+	}
 }
 
 // ServeHTTP implements http.Handler.
@@ -50,7 +68,7 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	// Parse HTTP Basic Auth — r.BasicAuth() handles RFC 7235 decoding correctly.
 	// The username is ignored; the password IS the subscription key value.
 	_, password, ok := r.BasicAuth()
-	if !ok || len(password) != 64 {
+	if !ok || len(password) != 64 || !isHex(password) {
 		metrics.RequestsTotal.WithLabelValues("denied").Inc()
 		w.WriteHeader(http.StatusUnauthorized)
 		return
@@ -93,6 +111,18 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	metrics.RequestsTotal.WithLabelValues("allowed").Inc()
 	w.WriteHeader(http.StatusOK)
+}
+
+// isHex reports whether s consists entirely of hexadecimal characters [0-9a-fA-F].
+// Used to fast-reject non-hex key values before a store lookup.
+func isHex(s string) bool {
+	for i := 0; i < len(s); i++ {
+		c := s[i]
+		if !((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F')) {
+			return false
+		}
+	}
+	return true
 }
 
 // extractComponent parses the LTS component name from an X-Forwarded-Uri path.

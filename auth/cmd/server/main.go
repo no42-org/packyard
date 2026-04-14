@@ -74,21 +74,10 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	forwardAuth := &handler.ForwardAuthHandler{
-		Store:            st,
-		Logger:           logger,
-		ValidComponents:  validComponents,
-		PublicComponents: publicComponents,
-	}
+	forwardAuth := handler.NewForwardAuthHandler(st, logger, validComponents, publicComponents)
 	r.Get("/auth", forwardAuth.ServeHTTP)
 
-	keys := &handler.KeysHandler{
-		Store:               st,
-		Logger:              logger,
-		ValidComponents:     validComponents,
-		ValidComponentList:  componentList,
-		ComponentVisibility: compVisibility,
-	}
+	keys := handler.NewKeysHandler(st, logger, validComponents, componentList, compVisibility)
 	r.Post("/api/v1/keys", keys.Create)
 	r.Get("/api/v1/keys", keys.List)
 	r.Get("/api/v1/keys/{id}", keys.Get)
