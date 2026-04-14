@@ -52,3 +52,20 @@ gh release create v1.2.3 \
 ```
 
 Publishing the release triggers `docs.yml`, which runs `mike deploy v1.2.3 latest` and pushes the versioned docs to `gh-pages`. Confirm at `https://no42-org.github.io/packyard/`.
+
+## 4. Bump to next development version
+
+After the release is tagged, bump `main` to the next version with a `-dev` suffix so builds on `main` are never mistaken for a release:
+
+```bash
+# auth/cmd/server/version.go — update the version constant
+# const version = "1.2.4-dev"
+
+echo "1.2.4-dev" > rpm/VERSION
+
+git add auth/cmd/server/version.go rpm/VERSION
+git commit -m "chore: bump versions to 1.2.4-dev post v1.2.3 release"
+git push
+```
+
+Open a PR as normal — no special handling needed. Builds on `main` will tag images with the `-dev` version until the next release cycle begins.
