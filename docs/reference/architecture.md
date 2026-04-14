@@ -1,6 +1,6 @@
 # Architecture
 
 !!! note
-    Content coming in Phase 3 — content migration.
+    Documentation in progress.
 
 <!-- Source: README §Architecture (diagram + services table) + §Repository Layout -->

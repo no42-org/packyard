@@ -9,7 +9,6 @@ _bmad-output/
 .claude/
 .agents/
 
-# MkDocs build output
 site/
 
 # Local secrets — never commit

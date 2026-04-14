@@ -1,6 +1,6 @@
 # Observability
 
 !!! note
-    Content coming in Phase 3 — content migration.
+    Documentation in progress.
 
 <!-- Source: README §Observability -->

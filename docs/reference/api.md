@@ -1,6 +1,6 @@
 # Admin API
 
 !!! note
-    Content coming in Phase 3 — content migration.
+    Documentation in progress.
 
 <!-- Source: README §Key Management (expanded into full API reference) -->

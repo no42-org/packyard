@@ -1,6 +1,6 @@
 # Local Development
 
 !!! note
-    Content coming in Phase 3 — content migration.
+    Documentation in progress.
 
 <!-- Source: README §Local Development (full walkthrough + verify.sh) -->

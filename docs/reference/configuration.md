@@ -1,6 +1,6 @@
 # Configuration
 
 !!! note
-    Content coming in Phase 3 — content migration.
+    Documentation in progress.
 
 <!-- Source: README §Prerequisites + .env variable reference -->
