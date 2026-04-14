@@ -34,7 +34,7 @@ nav:
   - Getting Started: getting-started/quick-start.md
   - Operations:
     - Production Deployment: ops/production-deployment.md
-    - Release Runbook: ops/release-runbook.md
+    - Package Promotion: ops/release-runbook.md
     - Restore Keystore: ops/restore-keystore.md
     - Manual Test Plan: ops/manual-test-plan.md
     - Troubleshooting: ops/troubleshooting.md
