@@ -74,8 +74,10 @@ func basicAuthHeader(key string) string {
 
 func newTestHandler(s store.KeyStore) *ForwardAuthHandler {
 	return &ForwardAuthHandler{
-		Store:  s,
-		Logger: slog.Default(),
+		Store:            s,
+		Logger:           slog.Default(),
+		ValidComponents:  map[string]bool{"core": true, "minion": true},
+		PublicComponents: map[string]bool{},
 	}
 }
 
@@ -246,5 +248,123 @@ func TestForwardAuth_StoreError(t *testing.T) {
 	}
 	if w.Body.Len() != 0 {
 		t.Errorf("expected empty body, got %q", w.Body.String())
+	}
+}
+
+func TestForwardAuth_PublicComponent_NoCreds(t *testing.T) {
+	h := &ForwardAuthHandler{
+		Store:            &mockStore{},
+		Logger:           slog.Default(),
+		ValidComponents:  map[string]bool{"core": true, "minion": true},
+		PublicComponents: map[string]bool{"core": true},
+	}
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for public component with no creds, got %d", w.Code)
+	}
+}
+
+func TestForwardAuth_PublicComponent_WithCreds(t *testing.T) {
+	// Credentials are present but bypassed entirely — store is never consulted.
+	h := &ForwardAuthHandler{
+		Store: &mockStore{
+			getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
+				t.Fatal("GetByValue should not be called for public component")
+				return nil, nil
+			},
+		},
+		Logger:           slog.Default(),
+		ValidComponents:  map[string]bool{"core": true, "minion": true},
+		PublicComponents: map[string]bool{"core": true},
+	}
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("Authorization", basicAuthHeader(validKey))
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for public component with any creds, got %d", w.Code)
+	}
+}
+
+func TestForwardAuth_PublicComponent_MalformedAuth(t *testing.T) {
+	// Malformed Authorization header is also bypassed for public components.
+	h := &ForwardAuthHandler{
+		Store: &mockStore{
+			getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
+				t.Fatal("GetByValue should not be called for public component")
+				return nil, nil
+			},
+		},
+		Logger:           slog.Default(),
+		ValidComponents:  map[string]bool{"core": true, "minion": true},
+		PublicComponents: map[string]bool{"core": true},
+	}
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("Authorization", "Bearer not-basic-auth")
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for public component with malformed auth, got %d", w.Code)
+	}
+}
+
+func TestForwardAuth_PrivateComponent_NoCreds(t *testing.T) {
+	h := &ForwardAuthHandler{
+		Store:            &mockStore{},
+		Logger:           slog.Default(),
+		ValidComponents:  map[string]bool{"core": true, "minion": true},
+		PublicComponents: map[string]bool{"core": true},
+	}
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("X-Forwarded-Uri", "/rpm/minion/2025/el9-x86_64/")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for private component with no creds, got %d", w.Code)
+	}
+}
+
+func TestForwardAuth_NonexistentComponent(t *testing.T) {
+	// 404 is only visible to authenticated callers — credential check runs first.
+	h := newTestHandler(&mockStore{
+		getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
+			return &store.Key{ID: value, Component: "core", Active: true}, nil
+		},
+	})
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("Authorization", basicAuthHeader(validKey))
+	req.Header.Set("X-Forwarded-Uri", "/rpm/unknown/2025/el9-x86_64/")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("expected 404 for nonexistent component (authenticated), got %d", w.Code)
+	}
+}
+
+func TestForwardAuth_NonexistentComponent_NoCreds(t *testing.T) {
+	// Unauthenticated callers get 401 for unknown components — prevents component enumeration.
+	h := newTestHandler(&mockStore{
+		getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
+			t.Fatal("GetByValue should not be called when no Authorization header")
+			return nil, nil
+		},
+	})
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("X-Forwarded-Uri", "/rpm/unknown/2025/el9-x86_64/")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for nonexistent component with no creds, got %d", w.Code)
 	}
 }

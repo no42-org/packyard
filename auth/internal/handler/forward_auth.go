@@ -15,9 +15,10 @@ import (
 // ForwardAuthHandler validates subscriber credentials for Traefik forwardAuth.
 // GET /auth — returns 200 (allow), 401 (deny), or 503 (error/fail-closed).
 type ForwardAuthHandler struct {
-	Store           store.KeyStore
-	Logger          *slog.Logger
-	ValidComponents map[string]bool // set for O(1) membership checks; nil treated as deny-all
+	Store            store.KeyStore
+	Logger           *slog.Logger
+	ValidComponents  map[string]bool // set for O(1) membership checks; nil treated as deny-all
+	PublicComponents map[string]bool // components that bypass credential checking
 }
 
 // ServeHTTP implements http.Handler.
@@ -29,6 +30,23 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		metrics.RequestDuration.Observe(time.Since(start).Seconds())
 	}()
 
+	// Resolve component to check for public bypass before any credential work.
+	requestedComponent, ok := extractComponent(r.Header.Get("X-Forwarded-Uri"))
+	if !ok {
+		metrics.RequestsTotal.WithLabelValues("denied").Inc()
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	// Public components bypass credential checking entirely.
+	if h.PublicComponents[requestedComponent] {
+		h.Logger.Info("public component access allowed", slog.String("component", requestedComponent))
+		metrics.RequestsTotal.WithLabelValues("allowed-public").Inc()
+		w.WriteHeader(http.StatusOK)
+		return
+	}
+
+	// Private component: require valid credentials.
 	// Parse HTTP Basic Auth — r.BasicAuth() handles RFC 7235 decoding correctly.
 	// The username is ignored; the password IS the subscription key value.
 	_, password, ok := r.BasicAuth()
@@ -52,8 +70,14 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestedComponent, ok := extractComponent(r.Header.Get("X-Forwarded-Uri"))
-	if !ok || !h.ValidComponents[requestedComponent] || key.Component != requestedComponent {
+	// 404 only visible to authenticated callers — prevents component enumeration by unauthenticated actors.
+	if !h.ValidComponents[requestedComponent] {
+		metrics.RequestsTotal.WithLabelValues("denied").Inc()
+		w.WriteHeader(http.StatusNotFound)
+		return
+	}
+
+	if key.Component != requestedComponent {
 		metrics.RequestsTotal.WithLabelValues("denied").Inc()
 		w.WriteHeader(http.StatusUnauthorized)
 		return

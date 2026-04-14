@@ -25,6 +25,7 @@ METRICS_URL="http://localhost:9090"
 SKIP_STACK=false
 TEST_KEY=""
 TEST_COMPONENT="core"
+PUBLIC_COMPONENT=""
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
 usage() {
@@ -46,8 +47,9 @@ Options:
   --metrics-url URL     Prometheus metrics URL, local mode only (default: http://localhost:9090)
   --skip-stack          Skip docker compose up (stack already running)
   --test-key KEY        Subscriber key for remote mode (required when --base-url is not localhost)
-  --test-component NAME Component scope of the test key — must match a name in config/packyard.yml (default: core)
-  -h, --help            Show this help and exit
+  --test-component NAME   Component scope of the test key — must match a name in config/packyard.yml (default: core)
+  --public-component NAME Component configured with visibility: public; enables unauthenticated-access tests (default: "")
+  -h, --help              Show this help and exit
 
 Examples:
   bash verify.sh
@@ -64,7 +66,8 @@ while [[ $# -gt 0 ]]; do
     --metrics-url)    METRICS_URL="$2";    shift 2 ;;
     --skip-stack)     SKIP_STACK=true;     shift ;;
     --test-key)       TEST_KEY="$2";       shift 2 ;;
-    --test-component) TEST_COMPONENT="$2"; shift 2 ;;
+    --test-component)    TEST_COMPONENT="$2";    shift 2 ;;
+    --public-component) PUBLIC_COMPONENT="$2";  shift 2 ;;
     *) echo "Unknown option: $1" >&2; echo "Run 'bash verify.sh --help' for usage." >&2; exit 1 ;;
   esac
 done
@@ -224,6 +227,18 @@ if [[ "$MODE" == "local" ]]; then
     MINION_KEY=""
   fi
 
+  if [[ -n "$PUBLIC_COMPONENT" ]]; then
+    RESPONSE=$(curl -s -X POST "$ADMIN_URL/api/v1/keys" \
+      -H 'Content-Type: application/json' \
+      -d "$(jq -n --arg comp "$PUBLIC_COMPONENT" '{"component":$comp,"label":"verify-public"}')" || true)
+    PUB_KEY=$(echo "$RESPONSE" | jq -r '.id // empty')
+    if [[ -n "$PUB_KEY" ]]; then
+      info "public component ($PUBLIC_COMPONENT) key created: ${PUB_KEY:0:16}..."
+    else
+      info "public component ($PUBLIC_COMPONENT) key creation failed (non-fatal): $RESPONSE"
+    fi
+  fi
+
   TEST_KEY="$CORE_KEY"
   TEST_COMPONENT="core"
   if [[ -n "$MINION_KEY" ]]; then
@@ -250,12 +265,47 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/gpg/cosign.pub" || tr
   && pass "/gpg/cosign.pub → 200" \
   || fail "/gpg/cosign.pub → $STATUS (expected 200)"
 
-# Negative: authenticated route without credentials → 401
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
-  "$BASE_URL/rpm/$TEST_COMPONENT/2025/el9-x86_64/" || true)
-[[ "$STATUS" == "401" ]] \
-  && pass "/rpm/$TEST_COMPONENT/ (no creds) → 401" \
-  || fail "/rpm/$TEST_COMPONENT/ (no creds) → $STATUS (expected 401)"
+# Negative: authenticated route without credentials → 401 (skip when TEST_COMPONENT is public)
+if [[ "$TEST_COMPONENT" != "$PUBLIC_COMPONENT" || -z "$PUBLIC_COMPONENT" ]]; then
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+    "$BASE_URL/rpm/$TEST_COMPONENT/2025/el9-x86_64/" || true)
+  [[ "$STATUS" == "401" ]] \
+    && pass "/rpm/$TEST_COMPONENT/ (no creds) → 401" \
+    || fail "/rpm/$TEST_COMPONENT/ (no creds) → $STATUS (expected 401)"
+else
+  info "/rpm/$TEST_COMPONENT/ no-creds check skipped ($TEST_COMPONENT is a public component)"
+fi
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Public access  (skipped when --public-component is not set)
+# ─────────────────────────────────────────────────────────────────────────────
+if [[ -n "$PUBLIC_COMPONENT" ]]; then
+  section "Public access ($PUBLIC_COMPONENT)"
+  BAD_KEY_PUB=$(printf '%064s' "" | tr ' ' 'x')
+
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+    "$BASE_URL/rpm/$PUBLIC_COMPONENT/2025/el9-x86_64/" || true)
+  [[ "$STATUS" == "200" ]] \
+    && pass "/rpm/$PUBLIC_COMPONENT/ (no creds) → 200" \
+    || fail "/rpm/$PUBLIC_COMPONENT/ (no creds) → $STATUS (expected 200)"
+
+  STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+    -u "subscriber:${BAD_KEY_PUB}" "$BASE_URL/rpm/$PUBLIC_COMPONENT/2025/el9-x86_64/" || true)
+  [[ "$STATUS" == "200" ]] \
+    && pass "/rpm/$PUBLIC_COMPONENT/ (invalid creds) → 200" \
+    || fail "/rpm/$PUBLIC_COMPONENT/ (invalid creds) → $STATUS (expected 200)"
+
+  # Private component must still enforce auth even when a public component is configured.
+  if [[ -n "$CROSS_COMPONENT" ]]; then
+    STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
+      "$BASE_URL/rpm/$CROSS_COMPONENT/2025/el9-x86_64/" || true)
+    [[ "$STATUS" == "401" ]] \
+      && pass "/rpm/$CROSS_COMPONENT/ (no creds, private) → 401" \
+      || fail "/rpm/$CROSS_COMPONENT/ (no creds, private) → $STATUS (expected 401)"
+  else
+    info "Private component no-creds check skipped (no cross-component available)"
+  fi
+fi
 
 # ─────────────────────────────────────────────────────────────────────────────
 # ForwardAuth allow / deny  (shared)
@@ -481,15 +531,23 @@ if [[ "$MODE" == "local" ]]; then
 
   METRICS=$(curl -s "$METRICS_URL/metrics" || true)
   if echo "$METRICS" | grep -q "packyard_auth_requests_total"; then
-    ALLOWED=$(echo "$METRICS" | grep 'packyard_auth_requests_total{status="allowed"}' | awk '{print $2}' || true)
-    DENIED=$(echo  "$METRICS" | grep 'packyard_auth_requests_total{status="denied"}'  | awk '{print $2}' || true)
-    pass "packyard_auth_requests_total present — allowed=${ALLOWED:-?} denied=${DENIED:-?}"
+    ALLOWED=$(echo "$METRICS"         | grep 'packyard_auth_requests_total{status="allowed"}'        | awk '{print $2}' || true)
+    ALLOWED_PUB=$(echo "$METRICS"     | grep 'packyard_auth_requests_total{status="allowed-public"}' | awk '{print $2}' || true)
+    DENIED=$(echo  "$METRICS"         | grep 'packyard_auth_requests_total{status="denied"}'         | awk '{print $2}' || true)
+    pass "packyard_auth_requests_total present — allowed=${ALLOWED:-?} allowed-public=${ALLOWED_PUB:-?} denied=${DENIED:-?}"
+    if [[ -n "$PUBLIC_COMPONENT" ]]; then
+      if [[ -n "${ALLOWED_PUB:-}" ]]; then
+        pass "allowed-public counter present (${ALLOWED_PUB})"
+      else
+        fail "allowed-public counter missing — expected after public component requests"
+      fi
+    fi
   else
     fail "packyard_auth_requests_total not found in metrics"
     ALLOWED=""
   fi
 
-  # Counter increment: snapshot before/after one allowed request
+  # Counter increment: snapshot before/after one allowed request (uses minion key — private component)
   if [[ -n "${ALLOWED:-}" && -n "$MINION_KEY" ]]; then
     BEFORE="$ALLOWED"
     curl -s -u "subscriber:${MINION_KEY}" \
@@ -561,6 +619,8 @@ if [[ "$MODE" == "local" ]]; then
   echo "--- Cleanup ---"
   [[ -n "$MINION_KEY" ]] && \
     curl -s -X DELETE "$ADMIN_URL/api/v1/keys/${MINION_KEY}" > /dev/null || true
+  [[ -n "${PUB_KEY:-}" ]] && \
+    curl -s -X DELETE "$ADMIN_URL/api/v1/keys/${PUB_KEY}" > /dev/null || true
   info "Test keys revoked"
 fi
 

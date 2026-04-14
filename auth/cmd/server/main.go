@@ -50,6 +50,8 @@ func main() {
 		os.Exit(1)
 	}
 	componentList := cfg.ComponentList()
+	publicComponents := cfg.PublicComponents()
+	compVisibility := cfg.ComponentVisibility()
 	logger.Info("loaded components", slog.String("components", componentList))
 
 	dbPath := os.Getenv("DB_PATH")
@@ -73,17 +75,19 @@ func main() {
 	})
 
 	forwardAuth := &handler.ForwardAuthHandler{
-		Store:           st,
-		Logger:          logger,
-		ValidComponents: validComponents,
+		Store:            st,
+		Logger:           logger,
+		ValidComponents:  validComponents,
+		PublicComponents: publicComponents,
 	}
 	r.Get("/auth", forwardAuth.ServeHTTP)
 
 	keys := &handler.KeysHandler{
-		Store:              st,
-		Logger:             logger,
-		ValidComponents:    validComponents,
-		ValidComponentList: componentList,
+		Store:               st,
+		Logger:              logger,
+		ValidComponents:     validComponents,
+		ValidComponentList:  componentList,
+		ComponentVisibility: compVisibility,
 	}
 	r.Post("/api/v1/keys", keys.Create)
 	r.Get("/api/v1/keys", keys.List)
