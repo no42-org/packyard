@@ -21,7 +21,7 @@
 
 ## 1. DNS Records
 
-All records are on the `example.org` zone. Apply these **before** starting the deployment — Traefik's ACME HTTP-01 challenge requires `pkg.example.org` to resolve to the VM before it can issue the TLS certificate.
+All records are on the `example.org` zone. Apply these **before** starting the deployment — Traefik's ACME TLS-ALPN-01 challenge requires `pkg.example.org` to resolve to the VM before it can issue the TLS certificate.
 
 | Type  | Name              | Value                            | TTL   | Notes |
 |-------|-------------------|----------------------------------|-------|-------|
