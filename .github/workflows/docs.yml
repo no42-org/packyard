@@ -21,7 +21,7 @@ jobs:
           cache: pip
           cache-dependency-path: docs/requirements.txt
 
-      - run: pip install -r docs/requirements.txt
+      - run: make docs-install
 
       - run: git config user.name "github-actions[bot]"
       - run: git config user.email "github-actions[bot]@users.noreply.github.com"
