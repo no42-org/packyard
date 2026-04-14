@@ -1,5 +1,5 @@
 site_name: Packyard
-site_description: Self-hosted authenticated package distribution for LTS subscription packages
+site_description: Authenticated package distribution for LTS releases
 site_url: https://no42-org.github.io/packyard/
 repo_name: no42-org/packyard
 repo_url: https://github.com/no42-org/packyard
