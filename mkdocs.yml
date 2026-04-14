@@ -31,9 +31,7 @@ extra:
 
 nav:
   - Home: index.md
-  - Getting Started:
-    - Quick Start: getting-started/quick-start.md
-    - Local Development: getting-started/local-development.md
+  - Getting Started: getting-started/quick-start.md
   - Operations:
     - Production Deployment: ops/production-deployment.md
     - Restore Keystore: ops/restore-keystore.md

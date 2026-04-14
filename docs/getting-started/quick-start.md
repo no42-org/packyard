@@ -1,6 +1,8 @@
-# Quick Start
+# Getting Started
 
 Get a local Packyard stack running and make your first authenticated request in a few minutes.
+
+No public domain or TLS certificate required. The CI override switches Traefik to plain HTTP and exposes the admin API directly on the host.
 
 **Prerequisites:** Docker Compose v2, `curl`, `jq`.
 
@@ -36,14 +38,19 @@ docker compose -f compose.yml \
                up -d
 ```
 
-Wait for the auth service to be ready:
+Wait for services to be ready:
 
 ```bash
+until curl -sf -o /dev/null http://localhost/gpg/lts.asc; do sleep 1; done
+echo "Traefik ready"
+
 until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done
-echo "Ready"
+echo "Auth ready"
 ```
 
 ## 3. Create a subscription key
+
+The admin API is exposed directly at `localhost:8080`:
 
 ```bash
 curl -s -X POST http://localhost:8080/api/v1/keys \
@@ -51,13 +58,31 @@ curl -s -X POST http://localhost:8080/api/v1/keys \
   -d '{"component": "core", "label": "dev-key"}' | jq .
 ```
 
+```json
+{
+  "id": "abc123...",
+  "component": "core",
+  "label": "dev-key",
+  "active": true,
+  "created_at": "2025-01-01T00:00:00Z"
+}
+```
+
 ## 4. Make an authenticated request
 
-Use the key `id` from the response above as the HTTP Basic password:
+Use the key `id` as the HTTP Basic password with username `subscriber`:
 
 ```bash
-KEY=<id from step 3>
+KEY=abc123...
+
+# GPG key (unauthenticated)
+curl http://localhost/gpg/lts.asc
+
+# RPM repo metadata (authenticated)
 curl -u subscriber:${KEY} http://localhost/rpm/core/2025/el9-x86_64/repodata/repomd.xml
+
+# Check auth metrics
+curl -s http://localhost:9090/metrics | grep packyard_auth
 ```
 
 ## 5. Run the verification suite
@@ -68,6 +93,22 @@ bash local-testing/verify.sh
 
 Expected output: all tests passed, 0 failed.
 
+The script also supports running against a remote production deployment:
+
+```bash
+bash local-testing/verify.sh --base-url https://pkg.example.org --test-key <key>
+```
+
+## 6. Tear down
+
+```bash
+docker compose -f compose.yml -f compose.override.ci.yml down -v
+```
+
 ---
 
-For the full walkthrough including tear-down, arm64 notes, and the automated verification script, see [Local Development](local-development.md).
+!!! note
+    The local stack runs HTTP only — no TLS, no ACME. Port 80 serves public and authenticated routes; the admin API is on `localhost:8080`. Promotion workflows (RPM/DEB/OCI signing) require a running production host with SSH access.
+
+!!! note "Apple Silicon (arm64)"
+    `zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `compose.override.arm64.yml` to swap it to the `arm64` variant. `aptly` is published as a multi-arch image and selects the correct binary automatically.
