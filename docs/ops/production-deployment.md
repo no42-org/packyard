@@ -14,8 +14,9 @@
 6. [Pre-Deployment Checklist](#6-pre-deployment-checklist)
 7. [Deployment Steps](#7-deployment-steps)
 8. [Post-Deployment Validation](#8-post-deployment-validation)
-9. [Monitoring](#9-monitoring)
-10. [First Subscriber Onboarding](#10-first-subscriber-onboarding)
+9. [First Subscriber Onboarding](#9-first-subscriber-onboarding)
+10. [Run the Verification Suite](#10-run-the-verification-suite)
+11. [Monitoring](#11-monitoring)
 
 ---
 
@@ -293,19 +294,7 @@ curl -sk https://127.0.0.1:8443/api/v1/keys
 
 ---
 
-## 9. Monitoring
-
-| Check | Method | SLA |
-|-------|--------|-----|
-| Endpoint availability | HTTP GET `https://pkg.example.org/gpg/lts.asc` from external monitor | 99.9% monthly |
-| TLS cert expiry | Alert at ≤ 30 days remaining | — |
-| Auth service health | Traefik health check (auto; returns 503 on failure) | Fail-closed |
-
-Prometheus metrics are available at `http://auth:9090/metrics` (internal Docker network only). Expose to an internal monitoring stack via SSH tunnel or a separate Traefik route on the admin entrypoint.
-
----
-
-## 10. First Subscriber Onboarding
+## 9. First Subscriber Onboarding
 
 ```bash
 # Open SSH tunnel to admin API
@@ -328,3 +317,53 @@ enabled=1
 gpgcheck=1
 gpgkey=https://pkg.example.org/gpg/lts.asc
 ```
+
+---
+
+## 10. Run the Verification Suite
+
+Two scripts verify the stack end-to-end. Run them in order.
+
+### 10.1 Container health check
+
+Run on the VM as the `deploy` user. Checks container states, GPG endpoint, auth service reachability, admin API isolation, RPM routing, network isolation, and RustFS health:
+
+```bash
+cd ~/packyard
+PKG_DOMAIN=pkg.example.org bash scripts/health-check.sh
+```
+
+Expected: all lines start with `OK:` and the script exits `All services healthy`.
+
+### 10.2 Remote smoke test
+
+Run from any machine with network access to the deployment. Requires the subscriber key created in [§9](#9-first-subscriber-onboarding):
+
+```bash
+# Clone the repo locally if needed
+git clone <packyard-repo> packyard && cd packyard
+
+bash local-testing/verify.sh \
+  --base-url https://pkg.example.org \
+  --test-key "$KEY" \
+  --test-component core
+```
+
+Expected output ends with:
+```
+=== Results: N passed, 0 failed ===
+```
+
+The remote mode covers: public GPG endpoints, forwardAuth allow/deny, scope enforcement, and OCI scope — without touching the admin API or the Docker socket.
+
+---
+
+## 11. Monitoring
+
+| Check | Method | SLA |
+|-------|--------|-----|
+| Endpoint availability | HTTP GET `https://pkg.example.org/gpg/lts.asc` from external monitor | 99.9% monthly |
+| TLS cert expiry | Alert at ≤ 30 days remaining | — |
+| Auth service health | Traefik health check (auto; returns 503 on failure) | Fail-closed |
+
+Prometheus metrics are available at `http://auth:9090/metrics` (internal Docker network only). Expose to an internal monitoring stack via SSH tunnel or a separate Traefik route on the admin entrypoint.
