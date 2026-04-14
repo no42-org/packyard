@@ -9,6 +9,7 @@ Three places must match the intended release tag (without the `v` prefix):
 ```bash
 sed -i "s/const version = .*/const version = \"1.2.3\"/" auth/cmd/server/version.go
 echo "1.2.3" > rpm/VERSION
+echo "1.2.3" > static/VERSION
 
 sed -i "s|packyard-auth:[^ ]*|packyard-auth:1.2.3|" compose.yml
 sed -i "s|packyard-rpm:[^ ]*|packyard-rpm:1.2.3|" compose.yml
@@ -63,6 +64,7 @@ git checkout -b chore/bump-1.2.4-rc
 
 sed -i "s/const version = .*/const version = \"1.2.4-rc\"/" auth/cmd/server/version.go
 echo "1.2.4-rc" > rpm/VERSION
+echo "1.2.4-rc" > static/VERSION
 
 sed -i "s|packyard-auth:[^ ]*|packyard-auth:1.2.4-rc|" compose.yml
 sed -i "s|packyard-rpm:[^ ]*|packyard-rpm:1.2.4-rc|" compose.yml
