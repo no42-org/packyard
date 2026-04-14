@@ -27,15 +27,45 @@ TEST_KEY=""
 TEST_COMPONENT="core"
 
 # ── Argument parsing ──────────────────────────────────────────────────────────
+usage() {
+  cat <<'EOF'
+Usage: bash verify.sh [OPTIONS]
+
+Smoke-tests a running Packyard stack. Runs the full suite locally by default;
+use --base-url to run a read-only remote smoke test against a live deployment.
+
+Modes:
+  local   Stack is on localhost. Admin API and metrics are accessible.
+          Starts the stack automatically unless --skip-stack is given.
+  remote  Inferred when --base-url is not localhost. Read-only: forwardAuth
+          and scope checks only. Requires --test-key.
+
+Options:
+  --base-url URL        Base URL of the Packyard instance (default: http://localhost)
+  --admin-url URL       Admin API URL, local mode only (default: http://localhost:8080)
+  --metrics-url URL     Prometheus metrics URL, local mode only (default: http://localhost:9090)
+  --skip-stack          Skip docker compose up (stack already running)
+  --test-key KEY        Subscriber key for remote mode (required when --base-url is not localhost)
+  --test-component NAME Component scope of the test key: core|minion|sentinel (default: core)
+  -h, --help            Show this help and exit
+
+Examples:
+  bash verify.sh
+  bash verify.sh --skip-stack
+  bash verify.sh --base-url https://pkg.example.org --test-key "$KEY" --test-component core
+EOF
+}
+
 while [[ $# -gt 0 ]]; do
   case "$1" in
+    -h|--help)         usage; exit 0 ;;
     --base-url)       BASE_URL="$2";       shift 2 ;;
     --admin-url)      ADMIN_URL="$2";      shift 2 ;;
     --metrics-url)    METRICS_URL="$2";    shift 2 ;;
     --skip-stack)     SKIP_STACK=true;     shift ;;
     --test-key)       TEST_KEY="$2";       shift 2 ;;
     --test-component) TEST_COMPONENT="$2"; shift 2 ;;
-    *) echo "Unknown option: $1" >&2; exit 1 ;;
+    *) echo "Unknown option: $1" >&2; echo "Run 'bash verify.sh --help' for usage." >&2; exit 1 ;;
   esac
 done
 
