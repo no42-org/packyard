@@ -7,14 +7,11 @@ This covers cutting a new version of the Packyard infrastructure itself — the 
 Two files must match the intended release tag (without the `v` prefix):
 
 ```bash
-# auth service
-# edit the version constant in auth/cmd/server/version.go
-
-# rpm image
+sed -i "s/const version = .*/const version = \"1.2.3\"/" auth/cmd/server/version.go
 echo "1.2.3" > rpm/VERSION
 ```
 
-Commit and merge to `main` before tagging.
+Open a PR and merge to `main` before tagging.
 
 ## 2. Tag and push
 
@@ -58,14 +55,15 @@ Publishing the release triggers `docs.yml`, which runs `mike deploy v1.2.3 lates
 After the release is tagged, bump `main` to the next version with a `-rc` suffix so builds on `main` are never mistaken for a release:
 
 ```bash
-# auth/cmd/server/version.go — update the version constant
-# const version = "1.2.4-rc"
+git checkout -b chore/bump-1.2.4-rc
 
+sed -i "s/const version = .*/const version = \"1.2.4-rc\"/" auth/cmd/server/version.go
 echo "1.2.4-rc" > rpm/VERSION
 
 git add auth/cmd/server/version.go rpm/VERSION
 git commit -m "chore: bump versions to 1.2.4-rc post v1.2.3 release"
-git push
+git push -u origin chore/bump-1.2.4-rc
+gh pr create --title "chore: bump versions to 1.2.4-rc post v1.2.3" --fill
 ```
 
-Open a PR as normal — no special handling needed. Builds on `main` will tag images with the `-rc` version until the next release cycle begins.
+Builds on `main` will tag images with the `-rc` version until the next release cycle begins.
