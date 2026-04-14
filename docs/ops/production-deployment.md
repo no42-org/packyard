@@ -1,6 +1,6 @@
-# Production Deployment — pkg.onms.eu
+# Production Deployment — pkg.example.org
 
-**Target domain:** `onms.eu` | **Primary hostname:** `pkg.onms.eu` | **Last updated:** 2026-04-13
+**Target domain:** `example.org` | **Primary hostname:** `pkg.example.org` | **Last updated:** 2026-04-13
 
 ---
 
@@ -21,22 +21,22 @@
 
 ## 1. DNS Records
 
-All records are on the `onms.eu` zone. Apply these **before** starting the deployment — Traefik's ACME HTTP-01 challenge requires `pkg.onms.eu` to resolve to the VM before it can issue the TLS certificate.
+All records are on the `example.org` zone. Apply these **before** starting the deployment — Traefik's ACME HTTP-01 challenge requires `pkg.example.org` to resolve to the VM before it can issue the TLS certificate.
 
 | Type  | Name              | Value                            | TTL   | Notes |
 |-------|-------------------|----------------------------------|-------|-------|
-| A     | `pkg.onms.eu`     | `<VM_IPV4>`                      | 300   | Primary package serving endpoint |
-| AAAA  | `pkg.onms.eu`     | `<VM_IPV6>`                      | 300   | Only if VM has a public IPv6 address |
-| CAA   | `pkg.onms.eu`     | `0 issue "letsencrypt.org"`      | 3600  | Restricts TLS cert issuance to Let's Encrypt |
-| CAA   | `pkg.onms.eu`     | `0 iodef "mailto:ops@onms.eu"`   | 3600  | CAA violation notification address |
+| A     | `pkg.example.org`     | `<VM_IPV4>`                      | 300   | Primary package serving endpoint |
+| AAAA  | `pkg.example.org`     | `<VM_IPV6>`                      | 300   | Only if VM has a public IPv6 address |
+| CAA   | `pkg.example.org`     | `0 issue "letsencrypt.org"`      | 3600  | Restricts TLS cert issuance to Let's Encrypt |
+| CAA   | `pkg.example.org`     | `0 iodef "mailto:ops@example.org"`   | 3600  | CAA violation notification address |
 
-> **No other subdomains are needed.** The admin API is loopback-only (`127.0.0.1:8443`), reached via SSH tunnel. RPM, DEB, OCI, and GPG key endpoints all share `pkg.onms.eu`.
+> **No other subdomains are needed.** The admin API is loopback-only (`127.0.0.1:8443`), reached via SSH tunnel. RPM, DEB, OCI, and GPG key endpoints all share `pkg.example.org`.
 
 ### DNS propagation check
 
 ```bash
-dig +short pkg.onms.eu A
-dig +short pkg.onms.eu CAA
+dig +short pkg.example.org A
+dig +short pkg.example.org CAA
 ```
 
 ---
@@ -70,8 +70,8 @@ dig +short pkg.onms.eu CAA
 
 ```dotenv
 # TLS
-ACME_EMAIL=ops@onms.eu
-DOMAIN=pkg.onms.eu
+ACME_EMAIL=ops@example.org
+DOMAIN=pkg.example.org
 
 # RustFS staging storage (generate with: openssl rand -hex 20)
 RUSTFS_ACCESS_KEY=<generate>
@@ -82,9 +82,9 @@ RUSTFS_SECRET_KEY=<generate>
 
 | Secret name           | Value source                                   |
 |-----------------------|------------------------------------------------|
-| `HOST`                | `pkg.onms.eu`                                  |
+| `HOST`                | `pkg.example.org`                                  |
 | `SSH_PRIVATE_KEY`     | Private key for the `deploy` user on VM        |
-| `SSH_KNOWN_HOST`      | `ssh-keyscan pkg.onms.eu` output               |
+| `SSH_KNOWN_HOST`      | `ssh-keyscan pkg.example.org` output               |
 | `RUSTFS_ACCESS_KEY`   | Same as `.env`                                 |
 | `RUSTFS_SECRET_KEY`   | Same as `.env`                                 |
 | `GPG_PRIVATE_KEY`     | ASCII-armored Meridian GPG signing key         |
@@ -113,7 +113,7 @@ Subkey-Type: RSA
 Subkey-Length: 4096
 Name-Real: OpenNMS Meridian
 Name-Comment: Package Signing Key
-Name-Email: meridian-signing@onms.eu
+Name-Email: meridian-signing@example.org
 Expire-Date: 0
 Passphrase: <CHOOSE_A_STRONG_PASSPHRASE>
 %commit
@@ -124,7 +124,7 @@ gpg --batch --gen-key /tmp/meridian-gpg-params
 rm /tmp/meridian-gpg-params
 
 # 2. Find the 40-character fingerprint — this is GPG_KEY_ID
-gpg --list-keys --fingerprint meridian-signing@onms.eu
+gpg --list-keys --fingerprint meridian-signing@example.org
 GPG_KEY_ID="<40-char fingerprint, no spaces>"
 
 # 3. Export ASCII-armored private key — this is GPG_PRIVATE_KEY
@@ -215,21 +215,21 @@ Verify access, then capture secrets:
 
 ```bash
 # Test login
-ssh -i ~/.ssh/packyard_deploy deploy@pkg.onms.eu
+ssh -i ~/.ssh/packyard_deploy deploy@pkg.example.org
 
 # SSH_PRIVATE_KEY secret value
 cat ~/.ssh/packyard_deploy
 
 # SSH_KNOWN_HOST secret value (run after DNS propagates)
-ssh-keyscan pkg.onms.eu
+ssh-keyscan pkg.example.org
 ```
 
 ---
 
 ## 6. Pre-Deployment Checklist
 
-- [ ] DNS A record for `pkg.onms.eu` propagated (`dig` confirms VM IP)
-- [ ] DNS CAA record for `pkg.onms.eu` present
+- [ ] DNS A record for `pkg.example.org` propagated (`dig` confirms VM IP)
+- [ ] DNS CAA record for `pkg.example.org` present
 - [ ] VM firewall: `tcp/443` and `tcp/80` open to internet
 - [ ] Docker + Compose plugin v2 installed on VM
 - [ ] `deploy` user created, added to `docker` group, SSH key authorized (§5)
@@ -260,7 +260,7 @@ docker compose logs traefik -f
 Expected cert issuance log line:
 
 ```
-traefik  | msg="Certificate obtained successfully" domain=pkg.onms.eu
+traefik  | msg="Certificate obtained successfully" domain=pkg.example.org
 ```
 
 ---
@@ -271,23 +271,23 @@ Run these from an **external host**, not the VM itself.
 
 ```bash
 # 1. GPG key endpoint — tests TLS + routing (unauthenticated)
-curl -sI https://pkg.onms.eu/gpg/meridian.asc
+curl -sI https://pkg.example.org/gpg/meridian.asc
 # Expect: HTTP/2 200, Content-Type: text/plain
 
 # 2. Package endpoint rejects unauthenticated requests
-curl -sI https://pkg.onms.eu/rpm/core/2025/el9-x86_64/repodata/repomd.xml
+curl -sI https://pkg.example.org/rpm/core/2025/el9-x86_64/repodata/repomd.xml
 # Expect: HTTP/2 401
 
 # 3. Valid key is accepted
-curl -sI -u subscriber:<KEY> https://pkg.onms.eu/rpm/core/2025/el9-x86_64/repodata/repomd.xml
+curl -sI -u subscriber:<KEY> https://pkg.example.org/rpm/core/2025/el9-x86_64/repodata/repomd.xml
 # Expect: HTTP/2 200 (after first promotion) or 404 if no artifacts yet
 
 # 4. Wrong-component key is rejected
-curl -sI -u subscriber:<CORE_KEY> https://pkg.onms.eu/rpm/minion/2025/el9-x86_64/repodata/repomd.xml
+curl -sI -u subscriber:<CORE_KEY> https://pkg.example.org/rpm/minion/2025/el9-x86_64/repodata/repomd.xml
 # Expect: HTTP/2 401
 
 # 5. Admin API reachable only via SSH tunnel
-ssh -L 8443:127.0.0.1:8443 deploy@pkg.onms.eu -N &
+ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.org -N &
 curl -sk https://127.0.0.1:8443/api/v1/keys
 # Expect: JSON array (empty if no keys created yet)
 ```
@@ -298,7 +298,7 @@ curl -sk https://127.0.0.1:8443/api/v1/keys
 
 | Check | Method | SLA |
 |-------|--------|-----|
-| Endpoint availability | HTTP GET `https://pkg.onms.eu/gpg/meridian.asc` from external monitor | 99.9% monthly |
+| Endpoint availability | HTTP GET `https://pkg.example.org/gpg/meridian.asc` from external monitor | 99.9% monthly |
 | TLS cert expiry | Alert at ≤ 30 days remaining | — |
 | Auth service health | Traefik health check (auto; returns 503 on failure) | Fail-closed |
 
@@ -310,7 +310,7 @@ Prometheus metrics are available at `http://auth:9090/metrics` (internal Docker 
 
 ```bash
 # Open SSH tunnel to admin API
-ssh -L 8443:127.0.0.1:8443 deploy@pkg.onms.eu -N &
+ssh -L 8443:127.0.0.1:8443 deploy@pkg.example.org -N &
 
 # Create an API key for a subscriber
 curl -sk -X POST https://127.0.0.1:8443/api/v1/keys \
@@ -324,8 +324,8 @@ Example subscriber `yum.repos.d` entry:
 ```ini
 [onms-meridian-core]
 name=OpenNMS Meridian Core
-baseurl=https://subscriber:<KEY>@pkg.onms.eu/rpm/core/2025/el9-x86_64/
+baseurl=https://subscriber:<KEY>@pkg.example.org/rpm/core/2025/el9-x86_64/
 enabled=1
 gpgcheck=1
-gpgkey=https://pkg.onms.eu/gpg/meridian.asc
+gpgkey=https://pkg.example.org/gpg/meridian.asc
 ```
