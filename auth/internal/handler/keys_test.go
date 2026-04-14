@@ -25,16 +25,17 @@ const testKeyID = "aabbccdd" + "aabbccdd" + "aabbccdd" + "aabbccdd" +
 func newTestKeysHandler(s store.KeyStore) *KeysHandler {
 	testCfg := &config.Config{
 		Components: []config.ComponentConfig{
-			{Name: "core"},
+			{Name: "core", Visibility: "public"},
 			{Name: "minion"},
 			{Name: "sentinel"},
 		},
 	}
 	return &KeysHandler{
-		Store:              s,
-		Logger:             slog.Default(),
-		ValidComponents:    testCfg.ComponentSet(),
-		ValidComponentList: testCfg.ComponentList(),
+		Store:               s,
+		Logger:              slog.Default(),
+		ValidComponents:     testCfg.ComponentSet(),
+		ValidComponentList:  testCfg.ComponentList(),
+		ComponentVisibility: testCfg.ComponentVisibility(),
 	}
 }
 
@@ -603,5 +604,109 @@ func TestDelete_GetByIDStoreError(t *testing.T) {
 	}
 	if w.Body.Len() != 0 {
 		t.Errorf("expected empty body, got %q", w.Body.String())
+	}
+}
+
+// keyWithVisibility mirrors keyResponse for decoding in visibility tests.
+type keyWithVisibility struct {
+	store.Key
+	ComponentVisibility string `json:"component_visibility"`
+}
+
+// TestCreate_ComponentVisibility_Public — Create for a public component includes component_visibility="public".
+func TestCreate_ComponentVisibility_Public(t *testing.T) {
+	h := newTestKeysHandler(&mockStore{
+		createKeyFn: func(_ context.Context, component, label string, _ *time.Time) (*store.Key, error) {
+			return makeKey(component, label), nil
+		},
+	})
+	w := postKeys(h, `{"component":"core","label":"test"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("expected 201, got %d", w.Code)
+	}
+	var got keyWithVisibility
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ComponentVisibility != "public" {
+		t.Errorf("expected component_visibility=public, got %q", got.ComponentVisibility)
+	}
+}
+
+// TestGet_ComponentVisibility_Private — Get for a private component includes component_visibility="private".
+func TestGet_ComponentVisibility_Private(t *testing.T) {
+	h := newTestKeysHandler(&mockStore{
+		getByIDFn: func(_ context.Context, _ string) (*store.Key, error) {
+			return makeKey("minion", "sub"), nil
+		},
+	})
+	w := inspectKey(h, testKeyID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var got keyWithVisibility
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ComponentVisibility != "private" {
+		t.Errorf("expected component_visibility=private, got %q", got.ComponentVisibility)
+	}
+}
+
+// TestList_ComponentVisibility — List returns correct visibility for each key's component.
+func TestList_ComponentVisibility(t *testing.T) {
+	h := newTestKeysHandler(&mockStore{
+		listKeysFn: func(_ context.Context, _ string) ([]*store.Key, error) {
+			return []*store.Key{makeKey("core", "A"), makeKey("minion", "B")}, nil
+		},
+	})
+	w := getKeys(h, "")
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var got []keyWithVisibility
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(got) != 2 {
+		t.Fatalf("expected 2 keys, got %d", len(got))
+	}
+	for _, k := range got {
+		switch k.Component {
+		case "core":
+			if k.ComponentVisibility != "public" {
+				t.Errorf("core: expected component_visibility=public, got %q", k.ComponentVisibility)
+			}
+		case "minion":
+			if k.ComponentVisibility != "private" {
+				t.Errorf("minion: expected component_visibility=private, got %q", k.ComponentVisibility)
+			}
+		}
+	}
+}
+
+// TestGet_ComponentVisibility_RemovedComponent — key whose component is absent from the map defaults to "private".
+func TestGet_ComponentVisibility_RemovedComponent(t *testing.T) {
+	h := &KeysHandler{
+		Store:               &mockStore{
+			getByIDFn: func(_ context.Context, _ string) (*store.Key, error) {
+				return makeKey("removed", "orphan"), nil
+			},
+		},
+		Logger:              slog.Default(),
+		ValidComponents:     map[string]bool{"core": true},
+		ValidComponentList:  "core",
+		ComponentVisibility: map[string]string{"core": "public"},
+	}
+	w := inspectKey(h, testKeyID)
+	if w.Code != http.StatusOK {
+		t.Fatalf("expected 200, got %d", w.Code)
+	}
+	var got keyWithVisibility
+	if err := json.NewDecoder(w.Body).Decode(&got); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got.ComponentVisibility != "private" {
+		t.Errorf("removed component: expected component_visibility=private, got %q", got.ComponentVisibility)
 	}
 }

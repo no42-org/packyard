@@ -11,7 +11,8 @@ import (
 )
 
 type ComponentConfig struct {
-	Name string `yaml:"name"`
+	Name       string `yaml:"name"`
+	Visibility string `yaml:"visibility"` // "public" | "private" (default: "private")
 }
 
 type Config struct {
@@ -45,6 +46,35 @@ func (c *Config) ComponentList() string {
 	return strings.Join(c.ComponentNames(), ", ")
 }
 
+// PublicComponents returns the set of component names whose visibility is "public".
+func (c *Config) PublicComponents() map[string]bool {
+	set := make(map[string]bool)
+	for _, comp := range c.Components {
+		if name := strings.TrimSpace(comp.Name); name != "" && comp.Visibility == "public" {
+			set[name] = true
+		}
+	}
+	return set
+}
+
+// ComponentVisibility returns a map of component name to visibility string.
+// Components with no visibility set default to "private".
+func (c *Config) ComponentVisibility() map[string]string {
+	m := make(map[string]string, len(c.Components))
+	for _, comp := range c.Components {
+		name := strings.TrimSpace(comp.Name)
+		if name == "" {
+			continue
+		}
+		vis := comp.Visibility
+		if vis == "" {
+			vis = "private"
+		}
+		m[name] = vis
+	}
+	return m
+}
+
 // Load reads and parses the YAML config file at path.
 // Returns an error if the file cannot be read, is not valid YAML, or defines no components.
 func Load(path string) (*Config, error) {
@@ -56,10 +86,24 @@ func Load(path string) (*Config, error) {
 	if err := yaml.Unmarshal(data, &cfg); err != nil {
 		return nil, fmt.Errorf("parse config %s: %w", path, err)
 	}
+	hasValid := false
+	seen := map[string]bool{}
 	for _, comp := range cfg.Components {
-		if strings.TrimSpace(comp.Name) != "" {
-			return &cfg, nil
+		name := strings.TrimSpace(comp.Name)
+		if name == "" {
+			continue
+		}
+		if seen[name] {
+			return nil, fmt.Errorf("config %s: duplicate component name %q", path, name)
+		}
+		seen[name] = true
+		hasValid = true
+		if vis := comp.Visibility; vis != "" && vis != "public" && vis != "private" {
+			return nil, fmt.Errorf("config %s: component %q has invalid visibility %q (must be \"public\" or \"private\")", path, comp.Name, vis)
 		}
 	}
-	return nil, fmt.Errorf("config %s: no components defined", path)
+	if !hasValid {
+		return nil, fmt.Errorf("config %s: no components defined", path)
+	}
+	return &cfg, nil
 }

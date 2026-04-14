@@ -15,10 +15,28 @@ import (
 
 // KeysHandler handles admin API key management endpoints (Epic 3).
 type KeysHandler struct {
-	Store               store.KeyStore
-	Logger              *slog.Logger
-	ValidComponents     map[string]bool // set for O(1) membership checks
-	ValidComponentList  string          // pre-formatted for error messages
+	Store              store.KeyStore
+	Logger             *slog.Logger
+	ValidComponents    map[string]bool   // set for O(1) membership checks
+	ValidComponentList string            // pre-formatted for error messages
+	ComponentVisibility map[string]string // component name → "public" | "private"
+}
+
+// keyResponse wraps a store.Key with the component's current visibility, computed at
+// serialisation time from ComponentVisibility so it is never stored in the database.
+type keyResponse struct {
+	*store.Key
+	ComponentVisibility string `json:"component_visibility"`
+}
+
+// wrapKey converts a store.Key into a keyResponse, defaulting visibility to "private"
+// when the component is absent from the map (e.g. component removed from config).
+func (h *KeysHandler) wrapKey(k *store.Key) *keyResponse {
+	vis := h.ComponentVisibility[k.Component]
+	if vis == "" {
+		vis = "private"
+	}
+	return &keyResponse{Key: k, ComponentVisibility: vis}
 }
 
 // createKeyRequest is the JSON body for POST /api/v1/keys.
@@ -59,7 +77,7 @@ func (h *KeysHandler) Get(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(key)
+	_ = json.NewEncoder(w).Encode(h.wrapKey(key))
 }
 
 // Delete handles DELETE /api/v1/keys/{id} — revokes a key immediately.
@@ -115,14 +133,14 @@ func (h *KeysHandler) List(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// nil slice encodes as JSON null — return [] for empty result (AC4).
-	if keys == nil {
-		keys = []*store.Key{}
+	wrapped := make([]*keyResponse, len(keys))
+	for i, k := range keys {
+		wrapped[i] = h.wrapKey(k)
 	}
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(keys)
+	_ = json.NewEncoder(w).Encode(wrapped)
 }
 
 // Create handles POST /api/v1/keys — provisions a new component-scoped subscription key.
@@ -149,5 +167,5 @@ func (h *KeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusCreated)
-	_ = json.NewEncoder(w).Encode(key)
+	_ = json.NewEncoder(w).Encode(h.wrapKey(key))
 }
