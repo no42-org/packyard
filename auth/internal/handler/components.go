@@ -125,7 +125,7 @@ func (h *ComponentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("failed to create component", slog.String("name", req.Name), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "COMPONENT_CREATE_FAILED", "failed to create component")
 		return
 	}
 
@@ -151,7 +151,7 @@ func (h *ComponentsHandler) List(w http.ResponseWriter, r *http.Request) {
 	comps, err := h.Store.ListComponents(r.Context())
 	if err != nil {
 		h.Logger.Error("failed to list components", slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "COMPONENT_LIST_FAILED", "failed to list components")
 		return
 	}
 
@@ -172,7 +172,7 @@ func (h *ComponentsHandler) GetOne(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("failed to get component", slog.String("name", name), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "COMPONENT_GET_FAILED", "failed to get component")
 		return
 	}
 
@@ -195,14 +195,14 @@ func (h *ComponentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("failed to get component for delete", slog.String("name", name), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "COMPONENT_DELETE_FAILED", "failed to get component for delete")
 		return
 	}
 
 	activeKeys, err := h.Store.CountActiveComponentKeys(r.Context(), name)
 	if err != nil {
 		h.Logger.Error("failed to count keys", slog.String("name", name), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "COMPONENT_DELETE_FAILED", "failed to count keys")
 		return
 	}
 
@@ -228,7 +228,7 @@ func (h *ComponentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	revoked, err := h.Store.DeleteComponentWithRevoke(r.Context(), name)
 	if err != nil {
 		h.Logger.Error("failed to delete component", slog.String("name", name), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "COMPONENT_DELETE_FAILED", "failed to delete component")
 		return
 	}
 
@@ -268,7 +268,7 @@ func (h *ComponentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("failed to update component", slog.String("name", name), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "COMPONENT_UPDATE_FAILED", "failed to update component")
 		return
 	}
 

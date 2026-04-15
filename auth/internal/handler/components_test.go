@@ -20,8 +20,9 @@ import (
 // ─── in-memory ComponentStore stub ───────────────────────────────────────────
 
 type stubComponentStore struct {
-	comps map[string]*store.Component
-	keys  map[string]int64 // component → active key count (for impact preview)
+	comps    map[string]*store.Component
+	keys     map[string]int64 // component → active key count (for impact preview)
+	updateFn func(ctx context.Context, name, visibility string) (*store.Component, error)
 }
 
 func newStubComponentStore() *stubComponentStore {
@@ -96,12 +97,16 @@ func (s *stubComponentStore) DeleteComponentWithRevoke(ctx context.Context, name
 	return n, nil
 }
 
-func (s *stubComponentStore) UpdateComponentVisibility(_ context.Context, name, visibility string) (*store.Component, error) {
+func (s *stubComponentStore) UpdateComponentVisibility(ctx context.Context, name, visibility string) (*store.Component, error) {
+	if s.updateFn != nil {
+		return s.updateFn(ctx, name, visibility)
+	}
 	c, ok := s.comps[name]
 	if !ok {
 		return nil, store.ErrComponentNotFound
 	}
 	c.Visibility = visibility
+	s.comps[name] = c // explicit re-store so callers see the mutation via map lookup
 	return c, nil
 }
 
@@ -494,6 +499,35 @@ func TestComponentUpdate_InvalidVisibility(t *testing.T) {
 		t.Errorf("status: want 400, got %d", w.Code)
 	}
 	assertErrorCode(t, w, "INVALID_VISIBILITY")
+}
+
+func TestComponentUpdate_MalformedBody(t *testing.T) {
+	h, _ := newTestComponentsHandler(t)
+	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", []byte("not-json"))
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status: want 400, got %d", w.Code)
+	}
+	assertErrorCode(t, w, "INVALID_REQUEST")
+}
+
+func TestComponentUpdate_StoreError(t *testing.T) {
+	h, cs := newTestComponentsHandler(t)
+	cs.updateFn = func(_ context.Context, _, _ string) (*store.Component, error) {
+		return nil, errors.New("database locked")
+	}
+
+	body, _ := json.Marshal(updateComponentRequest{Visibility: "public"})
+	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", body)
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusInternalServerError {
+		t.Errorf("status: want 500, got %d", w.Code)
+	}
+	assertErrorCode(t, w, "COMPONENT_UPDATE_FAILED")
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────

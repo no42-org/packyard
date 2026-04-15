@@ -288,7 +288,7 @@ func TestForwardAuth_StoreError(t *testing.T) {
 	}
 }
 
-func newPublicCoreHandler(keyStore store.KeyStore) *ForwardAuthHandler {
+func newMixedVisibilityHandler(keyStore store.KeyStore) *ForwardAuthHandler {
 	cs := newStubComponentStore()
 	cs.comps["core"] = &store.Component{Name: "core", Visibility: "public"}
 	cs.comps["minion"] = &store.Component{Name: "minion", Visibility: "private"}
@@ -296,7 +296,7 @@ func newPublicCoreHandler(keyStore store.KeyStore) *ForwardAuthHandler {
 }
 
 func TestForwardAuth_PublicComponent_NoCreds(t *testing.T) {
-	h := newPublicCoreHandler(&mockStore{})
+	h := newMixedVisibilityHandler(&mockStore{})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
@@ -309,7 +309,7 @@ func TestForwardAuth_PublicComponent_NoCreds(t *testing.T) {
 
 func TestForwardAuth_PublicComponent_WithCreds(t *testing.T) {
 	// Credentials are present but bypassed entirely — key store is never consulted.
-	h := newPublicCoreHandler(&mockStore{
+	h := newMixedVisibilityHandler(&mockStore{
 		getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
 			t.Fatal("GetByValue should not be called for public component")
 			return nil, nil
@@ -328,7 +328,7 @@ func TestForwardAuth_PublicComponent_WithCreds(t *testing.T) {
 
 func TestForwardAuth_PublicComponent_MalformedAuth(t *testing.T) {
 	// Malformed Authorization header is also bypassed for public components.
-	h := newPublicCoreHandler(&mockStore{
+	h := newMixedVisibilityHandler(&mockStore{
 		getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
 			t.Fatal("GetByValue should not be called for public component")
 			return nil, nil
@@ -346,7 +346,7 @@ func TestForwardAuth_PublicComponent_MalformedAuth(t *testing.T) {
 }
 
 func TestForwardAuth_PrivateComponent_NoCreds(t *testing.T) {
-	h := newPublicCoreHandler(&mockStore{})
+	h := newMixedVisibilityHandler(&mockStore{})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("X-Forwarded-Uri", "/rpm/minion/2025/el9-x86_64/")
 	w := httptest.NewRecorder()

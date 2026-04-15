@@ -6,6 +6,7 @@ import (
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
+	"errors"
 	"fmt"
 	"strings"
 	"time"
@@ -115,7 +116,7 @@ func (s *SQLiteStore) GetByValue(ctx context.Context, value string) (*Key, error
 		 FROM subscription_key WHERE id = ?`, value)
 
 	k, err := scanKey(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("get key: %w", ErrNotFound)
 	}
 	if err != nil {
@@ -138,7 +139,7 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (*Key, error) {
 		 FROM subscription_key WHERE id = ?`, id)
 
 	k, err := scanKey(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("get key: %w", ErrNotFound)
 	}
 	if err != nil {
@@ -322,7 +323,7 @@ func (s *SQLiteStore) GetComponent(ctx context.Context, name string) (*Component
 		`SELECT name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at
 		 FROM components WHERE name = ?`, name)
 	c, err := scanComponent(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("get component: %w", ErrComponentNotFound)
 	}
 	if err != nil {
@@ -450,7 +451,7 @@ func (s *SQLiteStore) UpdateComponentVisibility(ctx context.Context, name, visib
 		 RETURNING name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at`,
 		visibility, name)
 	c, err := scanComponent(row)
-	if err == sql.ErrNoRows {
+	if errors.Is(err, sql.ErrNoRows) {
 		return nil, fmt.Errorf("update component visibility: %w", ErrComponentNotFound)
 	}
 	if err != nil {

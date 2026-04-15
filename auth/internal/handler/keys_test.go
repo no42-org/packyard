@@ -205,8 +205,10 @@ func TestCreate_StoreError(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)
 	}
-	if w.Body.Len() != 0 {
-		t.Errorf("expected empty body on 500, got %q", w.Body.String())
+	var ae apiError
+	json.NewDecoder(w.Body).Decode(&ae)
+	if ae.Code != "KEY_CREATE_FAILED" {
+		t.Errorf("expected KEY_CREATE_FAILED, got %q", ae.Code)
 	}
 }
 
@@ -350,8 +352,10 @@ func TestList_StoreError(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)
 	}
-	if w.Body.Len() != 0 {
-		t.Errorf("expected empty body on 500, got %q", w.Body.String())
+	var ae apiError
+	json.NewDecoder(w.Body).Decode(&ae)
+	if ae.Code != "KEY_LIST_FAILED" {
+		t.Errorf("expected KEY_LIST_FAILED, got %q", ae.Code)
 	}
 }
 
@@ -486,8 +490,10 @@ func TestGet_StoreError(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)
 	}
-	if w.Body.Len() != 0 {
-		t.Errorf("expected empty body on 500, got %q", w.Body.String())
+	var ae apiError
+	json.NewDecoder(w.Body).Decode(&ae)
+	if ae.Code != "KEY_GET_FAILED" {
+		t.Errorf("expected KEY_GET_FAILED, got %q", ae.Code)
 	}
 }
 
@@ -573,7 +579,7 @@ func TestDelete_NotFound(t *testing.T) {
 	}
 }
 
-// TestDelete_RevokeStoreError — unexpected RevokeKey error returns 500 with empty body.
+// TestDelete_RevokeStoreError — unexpected RevokeKey error returns 500 KEY_DELETE_FAILED.
 func TestDelete_RevokeStoreError(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
 		revokeKeyFn: func(_ context.Context, _ string) error {
@@ -584,12 +590,14 @@ func TestDelete_RevokeStoreError(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)
 	}
-	if w.Body.Len() != 0 {
-		t.Errorf("expected empty body, got %q", w.Body.String())
+	var ae apiError
+	json.NewDecoder(w.Body).Decode(&ae)
+	if ae.Code != "KEY_DELETE_FAILED" {
+		t.Errorf("expected KEY_DELETE_FAILED, got %q", ae.Code)
 	}
 }
 
-// TestDelete_GetByIDStoreError — RevokeKey returns ErrNotFound but GetByID errors → 500.
+// TestDelete_GetByIDStoreError — RevokeKey returns ErrNotFound but GetByID errors → 500 KEY_DELETE_FAILED.
 func TestDelete_GetByIDStoreError(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
 		revokeKeyFn: func(_ context.Context, _ string) error {
@@ -603,8 +611,10 @@ func TestDelete_GetByIDStoreError(t *testing.T) {
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)
 	}
-	if w.Body.Len() != 0 {
-		t.Errorf("expected empty body, got %q", w.Body.String())
+	var ae apiError
+	json.NewDecoder(w.Body).Decode(&ae)
+	if ae.Code != "KEY_DELETE_FAILED" {
+		t.Errorf("expected KEY_DELETE_FAILED, got %q", ae.Code)
 	}
 }
 
