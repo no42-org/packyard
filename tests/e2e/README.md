@@ -43,7 +43,7 @@ At least one signed package per format under test must exist in the serving tree
 # 1. Upload a test RPM to RustFS staging:
 RUSTFS_ACCESS_KEY=... RUSTFS_SECRET_KEY=... \
   bash scripts/stage-artifact.sh /path/to/lts-core.rpm core rpm 2025 el9-x86_64
-# 2. Trigger the promote-rpm GHA workflow for component=core, year=2025, os=el9-x86_64
+# 2. Trigger the promote-rpm GHA workflow for component=core, series=2025, os=el9-x86_64
 
 # Option B: Manual (for local dev only)
 docker compose exec rpm cp /path/to/lts-core.rpm /usr/share/nginx/html/core/2025/el9-x86_64/
@@ -56,7 +56,7 @@ docker compose exec rpm createrepo_c --update /usr/share/nginx/html/core/2025/el
 # 1. Upload a test DEB to RustFS staging:
 RUSTFS_ACCESS_KEY=... RUSTFS_SECRET_KEY=... \
   bash scripts/stage-artifact.sh /path/to/lts-core_2025.1.0_amd64.deb core deb 2025 bookworm
-# 2. Trigger the promote-deb GHA workflow for component=core, year=2025, distro=bookworm
+# 2. Trigger the promote-deb GHA workflow for component=core, series=2025, distro=bookworm
 
 # Option B: Manual (for local dev only — requires aptly container access)
 docker compose exec aptly /scripts/create-snapshot.sh core 2025 bookworm
@@ -65,7 +65,7 @@ docker compose exec aptly /scripts/publish-snapshot.sh core 2025 bookworm
 
 **OCI** — must have cosign-signed multi-arch image index in Zot:
 ```bash
-# Use the promote-oci GHA workflow for component=core, year=2025
+# Use the promote-oci GHA workflow for component=core, series=2025
 # The workflow pushes x86_64 and arm64 images, creates a multi-arch index,
 # and signs all three with cosign (stored in Zot alongside the images).
 
@@ -89,7 +89,7 @@ crane push /tmp/test-arm64.tar localhost:5000/lts-core:2025-arm64 --insecure
 | Variable    | Default       | Description                        |
 |-------------|---------------|------------------------------------|
 | `COMPONENT` | `core`        | LTS component                 |
-| `YEAR`      | `2025`        | LTS release year              |
+| `SERIES`    | `2025`        | LTS release series            |
 | `OS_ARCH`   | `el9-x86_64`  | RPM OS/arch path segment           |
 | `DISTRO`    | `bookworm`    | DEB distro name                    |
 | `PACKAGE`   | `lts-core` | Package name to install          |
@@ -123,7 +123,7 @@ Optional overrides:
 BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 COMPONENT=core \
-YEAR=2025 \
+SERIES=2025 \
 DISTRO=bookworm \
 PACKAGE=lts-core \
 bash tests/e2e/deb-subscriber.sh
@@ -146,7 +146,7 @@ Optional overrides:
 BASE_URL=https://pkg.example.org \
 VALID_KEY=your-subscription-key \
 COMPONENT=core \
-YEAR=2025 \
+SERIES=2025 \
 bash tests/e2e/oci-subscriber.sh
 ```
 
@@ -197,6 +197,6 @@ These tests are integration tests, not unit tests. They require:
 
 | File | Purpose |
 |------|---------|
-| `fixtures/lts-test.repo.tmpl` | RPM `.repo` file template; `{{BASE_URL}}`, `{{COMPONENT}}`, `{{YEAR}}`, `{{OS_ARCH}}` substituted at runtime |
-| `fixtures/lts-test.list.tmpl` | DEB `sources.list` template; `{{KEY}}`, `{{BASE_URL_HOST}}`, `{{COMPONENT}}`, `{{YEAR}}`, `{{DISTRO}}` substituted at runtime |
+| `fixtures/lts-test.repo.tmpl` | RPM `.repo` file template; `{{BASE_URL}}`, `{{COMPONENT}}`, `{{SERIES}}`, `{{OS_ARCH}}` substituted at runtime |
+| `fixtures/lts-test.list.tmpl` | DEB `sources.list` template; `{{KEY}}`, `{{BASE_URL_HOST}}`, `{{COMPONENT}}`, `{{SERIES}}`, `{{DISTRO}}` substituted at runtime |
 | `fixtures/docker-daemon.json.tmpl` | Docker auth template; documents `docker login` as the recommended credential approach for OCI pull |

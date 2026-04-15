@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # stage-artifact.sh — upload an unsigned artefact to RustFS staging
-# Usage: stage-artifact.sh <component> <year> <format> <os-arch> <local-file>
+# Usage: stage-artifact.sh <component> <series> <format> <os-arch> <local-file>
 #
 # Required env vars:
 #   RUSTFS_ENDPOINT     — e.g. http://localhost:9000 (via SSH tunnel: ssh -L 9000:localhost:9000 deploy@HOST)
@@ -9,8 +9,8 @@
 #   RUSTFS_BUCKET       — (optional) bucket name, defaults to "staging"
 #
 # Uploads artifact + SHA256 checksum to:
-#   s3://{bucket}/{component}/{year}/{format}/{os-arch}/{filename}
-#   s3://{bucket}/{component}/{year}/{format}/{os-arch}/{filename}.sha256
+#   s3://{bucket}/{component}/{series}/{format}/{os-arch}/{filename}
+#   s3://{bucket}/{component}/{series}/{format}/{os-arch}/{filename}.sha256
 set -euo pipefail
 
 COMPONENT="${1:?component required (e.g. core)}"
@@ -19,9 +19,9 @@ if ! [[ "$COMPONENT" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   echo "       Allowed: letters, digits, hyphens, underscores"
   exit 1
 fi
-YEAR="${2:?year required (e.g. 2025)}"
-if ! [[ "$YEAR" =~ ^[0-9]{4}$ ]]; then
-  echo "ERROR: year must be a 4-digit number (got: ${YEAR})"
+SERIES="${2:?series required (e.g. 2025)}"
+if ! [[ "$SERIES" =~ ^[0-9]{4}$ ]]; then
+  echo "ERROR: series must be a 4-digit number (got: ${SERIES})"
   exit 1
 fi
 FORMAT="${3:?format required (rpm|deb|oci)}"
@@ -47,7 +47,7 @@ esac
 [ -f "${LOCAL_FILE}" ] || { echo "ERROR: file not found: ${LOCAL_FILE}"; exit 1; }
 
 FILENAME=$(basename "${LOCAL_FILE}")
-S3_KEY="${COMPONENT}/${YEAR}/${FORMAT}/${OS_ARCH}/${FILENAME}"
+S3_KEY="${COMPONENT}/${SERIES}/${FORMAT}/${OS_ARCH}/${FILENAME}"
 
 # Generate SHA256 checksum
 echo "Generating checksum for ${FILENAME}..."

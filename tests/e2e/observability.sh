@@ -13,7 +13,7 @@
 #   METRICS_URL — auth metrics endpoint (default: http://localhost:9090/metrics)
 #                 Override if running from outside the Docker network.
 #   COMPONENT   — LTS component (default: core)
-#   YEAR        — LTS year (default: 2025)
+#   SERIES      — LTS series (default: 2025)
 #
 # USAGE:
 #   BASE_URL=https://pkg.example.org VALID_KEY=abc123 bash tests/e2e/observability.sh
@@ -23,7 +23,7 @@ BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.example.org)}"
 VALID_KEY="${VALID_KEY:?VALID_KEY is required (a valid subscription key)}"
 METRICS_URL="${METRICS_URL:-http://localhost:9090/metrics}"
 COMPONENT="${COMPONENT:-core}"
-YEAR="${YEAR:-2025}"
+SERIES="${SERIES:-2025}"
 
 FAILED=0
 
@@ -42,7 +42,7 @@ done
 echo "Precondition: sending one authenticated request to generate log and metrics data..."
 curl -s -o /dev/null \
   -u "subscriber:${VALID_KEY}" \
-  "${BASE_URL}/rpm/el9-x86_64/${COMPONENT}/${YEAR}/repodata/repomd.xml" || true
+  "${BASE_URL}/rpm/el9-x86_64/${COMPONENT}/${SERIES}/repodata/repomd.xml" || true
 echo "Precondition complete."
 
 # ─── AC1: Prometheus metrics endpoint ────────────────────────────────────────
