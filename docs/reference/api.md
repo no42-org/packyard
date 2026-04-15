@@ -24,7 +24,7 @@ The health endpoint `GET /health` returns 200 when the service is up.
 
 | Code | Condition |
 |------|-----------|
-| `200 OK` | Returns a JSON array of key objects (empty array when none match) |
+| `200 OK` | Returns a JSON array of key objects (empty array when no keys exist or none match the filter) |
 | `400 Bad Request` | `?component=` names a component not in the startup-loaded map (`INVALID_COMPONENT`) |
 | `500 Internal Server Error` | Unexpected store error |
 
@@ -217,7 +217,7 @@ curl -s -X POST http://127.0.0.1:8088/api/v1/keys \
 }
 ```
 
-`component_visibility` reflects the current visibility of the key's component as stored in the database. It is computed at response time — not stored with the key. If the component has been removed since the key was created, this field defaults to `"private"`.
+`component_visibility` reflects the component visibility from the startup-loaded map, not the live database value. It is computed at response time — not stored with the key. If the component was provisioned after the service started, or its visibility was changed via `PATCH /api/v1/components/{name}` since the last restart, this field may show a stale value. If the component has been removed since the key was created, it defaults to `"private"`.
 
 **List keys:**
 
