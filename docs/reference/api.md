@@ -73,6 +73,21 @@ curl -s -X POST http://127.0.0.1:8088/api/v1/components \
 | `409 Conflict` | A component with this name already exists (`COMPONENT_EXISTS`) |
 | `500 Internal Server Error` | RPM directory initialisation failed (`RPM_INIT_FAILED`) |
 
+Example `201 Created` response:
+
+```json
+{
+  "name": "minion",
+  "visibility": "private",
+  "rpm_series": ["2025"],
+  "rpm_os_families": ["el9"],
+  "rpm_architectures": ["x86_64", "aarch64"],
+  "created_at": "2025-01-01T00:00:00Z"
+}
+```
+
+Note: when `visibility` is omitted from the request, the response body shows `"visibility": "private"` (the default).
+
 DEB (aptly) and OCI (Zot) provision lazily on first publish.
 
 ### Listing and inspecting components
@@ -85,7 +100,7 @@ curl -s http://127.0.0.1:8088/api/v1/components | jq .
 curl -s http://127.0.0.1:8088/api/v1/components/minion | jq .
 ```
 
-**Response codes for GET `/api/v1/components`:** `200 OK` (always; returns empty array when none exist).
+**Response codes for GET `/api/v1/components`:** `200 OK` (returns empty array when none exist), `500 Internal Server Error` (store error).
 
 **Response codes for GET `/api/v1/components/{name}`:** `200 OK` (found), `404 Not Found` (`COMPONENT_NOT_FOUND`).
 
@@ -111,11 +126,17 @@ With the correct `?confirm={name}`:
 curl -s -X DELETE http://127.0.0.1:8088/api/v1/components/minion?confirm=minion | jq .
 ```
 
-**Response codes for DELETE `/api/v1/components/{name}`:**
+**Response codes — without `?confirm` (impact preview):**
 
 | Code | Condition |
 |------|-----------|
-| `409 Conflict` | `?confirm` absent or does not match the component name exactly (`CONFIRM_REQUIRED`) |
+| `409 Conflict` | `?confirm` absent or value does not match the component name exactly (`CONFIRM_REQUIRED`) |
+| `404 Not Found` | Component does not exist (`COMPONENT_NOT_FOUND`) |
+
+**Response codes — with `?confirm={name}` (confirmed delete):**
+
+| Code | Condition |
+|------|-----------|
 | `200 OK` | Component deleted; keys revoked atomically — returns `{"keys_revoked": N}` |
 | `404 Not Found` | Component does not exist (`COMPONENT_NOT_FOUND`) |
 | `500 Internal Server Error` | Unexpected store error during atomic delete |

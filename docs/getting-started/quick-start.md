@@ -81,7 +81,8 @@ curl -s -X POST http://localhost:8080/api/v1/keys \
   "component": "core",
   "label": "dev-key",
   "active": true,
-  "created_at": "2025-01-01T00:00:00Z"
+  "created_at": "2025-01-01T00:00:00Z",
+  "component_visibility": "public"
 }
 ```
 

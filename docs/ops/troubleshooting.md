@@ -115,12 +115,31 @@ docker compose logs auth | grep "loaded components"
 
 - **Key creation** (`POST /api/v1/keys`) queries the database directly — a restart is **not** needed for the auth service to accept keys for a newly provisioned component.
 - **Forward-auth decisions** (subscriber package access) use an in-memory component map loaded at startup — a restart **is** required for new or deleted components to be reflected in access control.
+- **Key list filter** (`GET /api/v1/keys?component=<name>`) also validates the component name against the in-memory map — it returns `400 INVALID_COMPONENT` for a newly provisioned component until the service is restarted.
+- **Authenticated requests to an unrecognised component** return `404` (not `401`) — if a subscriber has a valid key but the component isn't in the in-memory map, the auth service returns `404 Not Found` rather than `401 Unauthorized`. Restart auth to resolve.
 
 If the component record was updated in the database (via the API) but the auth service was not restarted, restart it:
 
 ```bash
 docker compose restart auth
 ```
+
+---
+
+## POST /api/v1/components returns 500 RPM_INIT_FAILED
+
+The auth service failed to create the RPM directory tree for the new component. The component record was rolled back — the name is safe to reuse.
+
+**Common causes:**
+
+| Cause | How to confirm | Fix |
+|-------|---------------|-----|
+| `rpm-data` volume not mounted to auth container | `docker compose exec auth ls /data/rpm` — should list a `rpm/` subdirectory | Verify `compose.yml` has `rpm-data:/data/rpm` under the `auth` service volumes |
+| `RPM_DATA_ROOT` mismatch | `docker compose exec auth env \| grep RPM_DATA_ROOT` | Ensure `RPM_DATA_ROOT` matches the volume mount point (default: `/data/rpm`) |
+| Wrong permissions on the volume | `docker compose exec auth ls -la /data/rpm` | `docker compose exec rpm chown -R nobody:nobody /usr/share/nginx/html/rpm` or adjust mount ownership |
+| Disk full | `docker compose exec auth df -h /data/rpm` | Free disk space |
+
+After fixing the underlying cause, retry `POST /api/v1/components` with the same body — the name is available again.
 
 ---
 
