@@ -20,6 +20,24 @@ ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
 
 The health endpoint `GET /health` returns 200 when the service is up.
 
+**Response codes for `GET /api/v1/keys`:**
+
+| Code | Condition |
+|------|-----------|
+| `200 OK` | Returns a JSON array of key objects (empty array when no keys exist or none match the filter) |
+| `400 Bad Request` | `?component=` names a component not in the startup-loaded map (`INVALID_COMPONENT`) |
+| `500 Internal Server Error` | Unexpected store error |
+
+**Response codes for `GET /api/v1/keys/{id}`:**
+
+| Code | Condition |
+|------|-----------|
+| `200 OK` | Key found; returns the key object |
+| `404 Not Found` | No key with the given ID exists (`KEY_NOT_FOUND`) |
+| `500 Internal Server Error` | Unexpected store error |
+
+> **Note:** The `?component=` filter and the `component_visibility` field in key responses are validated against a component map loaded at auth service startup. Newly provisioned components return `400 INVALID_COMPONENT` until the auth service is restarted; `component_visibility` likewise reflects the startup snapshot, not the live database value. Forward-auth access control uses the live database and does not require a restart — only the `?component=` filter parameter and `component_visibility` field are affected by the startup caveat. See also the [Components](#components) section preamble.
+
 ## Components
 
 Components are provisioned via the admin API and stored in the SQLite database. Forward-auth resolves component visibility via a live database lookup on every request; the `GET /api/v1/keys?component=` filter and `component_visibility` field in key responses use a snapshot loaded at startup (restart required to pick up new components in those paths).
@@ -199,7 +217,7 @@ curl -s -X POST http://127.0.0.1:8088/api/v1/keys \
 }
 ```
 
-`component_visibility` reflects the current visibility of the key's component as stored in the database. It is computed at response time — not stored with the key. If the component has been removed since the key was created, this field defaults to `"private"`.
+`component_visibility` reflects the component visibility from the startup-loaded map, not the live database value. It is computed at response time — not stored with the key. If the component was provisioned after the service started, or its visibility was changed via `PATCH /api/v1/components/{name}` since the last restart, this field may show a stale value. If the component has been removed since the key was created, it defaults to `"private"`.
 
 **List keys:**
 
