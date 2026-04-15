@@ -77,9 +77,12 @@ curl -s -X POST http://localhost:8080/api/v1/keys \
   "label": "dev-key",
   "active": true,
   "created_at": "2025-01-01T00:00:00Z",
-  "component_visibility": "public"
+  "component_visibility": "private"
 }
 ```
+
+!!! note
+    `component_visibility` is derived from a startup-loaded snapshot and shows `"private"` (the safe default) for any component provisioned after the service started. This field is cosmetic — forward-auth always reads visibility live from the database, so `core` is publicly accessible immediately without a restart.
 
 ## 4. Make an authenticated request
 

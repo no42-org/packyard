@@ -22,7 +22,7 @@ The health endpoint `GET /health` returns 200 when the service is up.
 
 ## Components
 
-Components are provisioned via the admin API and stored in the SQLite database. The auth service loads the component list at startup.
+Components are provisioned via the admin API and stored in the SQLite database. Forward-auth resolves component visibility via a live database lookup on every request; the `GET /api/v1/keys?component=` filter and `component_visibility` field in key responses use a snapshot loaded at startup (restart required to pick up new components in those paths).
 
 | Method | Path | Description |
 |--------|------|-------------|
@@ -146,7 +146,7 @@ RPM directory content is **not** removed — the operator is responsible for arc
 
 ### Updating a component
 
-`PATCH /api/v1/components/{name}` updates mutable component fields. Currently only `visibility` may be changed. The update is persisted immediately and takes effect on the next subscriber request — no service restart is required.
+`PATCH /api/v1/components/{name}` updates mutable component fields. Currently only `visibility` may be changed. The `visibility` field is **required** — omitting it or sending an empty body returns `400 INVALID_VISIBILITY`. The update is persisted immediately and takes effect on the next subscriber request — no service restart is required.
 
 ```bash
 curl -s -X PATCH http://127.0.0.1:8088/api/v1/components/minion \
