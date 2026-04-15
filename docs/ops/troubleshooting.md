@@ -103,7 +103,7 @@ curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | {id, component, label, act
 
 **Step 4 — Is the component marked public?**
 
-If a component has `visibility: public` (as set via `POST /api/v1/components`), the auth service allows requests to its paths without inspecting credentials. Keys for public components are valid but are not checked during auth — any request, authenticated or not, returns `200`. If a subscriber reports getting `401` on a public component path, confirm the component's visibility via the API and that the auth service has restarted since the change:
+If a component has `visibility: public` (as set via `POST /api/v1/components`), the auth service allows requests to its paths without inspecting credentials. Keys for public components are valid but are not checked during auth — any request, authenticated or not, returns `200`. If a subscriber reports getting `401` on a public component path, confirm the component's visibility via the API and that the auth service has restarted since the component was provisioned:
 
 ```bash
 curl -s http://127.0.0.1:8088/api/v1/components/core | jq .visibility
@@ -111,7 +111,12 @@ docker compose logs auth | grep "loaded components"
 # expect the public component to appear in the list
 ```
 
-If the config was changed but the service was not restarted, restart it:
+**Restart semantics — when a restart is and is not required:**
+
+- **Key creation** (`POST /api/v1/keys`) queries the database directly — a restart is **not** needed for the auth service to accept keys for a newly provisioned component.
+- **Forward-auth decisions** (subscriber package access) use an in-memory component map loaded at startup — a restart **is** required for new or deleted components to be reflected in access control.
+
+If the component record was updated in the database (via the API) but the auth service was not restarted, restart it:
 
 ```bash
 docker compose restart auth
