@@ -132,3 +132,56 @@ func TestForwardAuthIntegration_PublicToPrivate(t *testing.T) {
 		t.Errorf("after patch to private: want 401, got %d", authRec2.Code)
 	}
 }
+
+// TestForwardAuthIntegration_DeletedComponent verifies that deleting a component
+// causes forward-auth to return 401 immediately — the live DB lookup means the
+// deletion takes effect on the very next request without a restart.
+func TestForwardAuthIntegration_DeletedComponent(t *testing.T) {
+	s := newIntegrationStore(t)
+	logger := slog.Default()
+
+	compHandler := NewComponentsHandler(s, logger, t.TempDir())
+	authHandler := NewForwardAuthHandler(s, s, logger)
+
+	// --- Step 1: Provision "core" as public ---
+	createBody, _ := json.Marshal(createComponentRequest{
+		Name:             "core",
+		Visibility:       "public",
+		RPMSeries:        []string{},
+		RPMOSFamilies:    []string{},
+		RPMArchitectures: []string{},
+	})
+	createReq := httptest.NewRequest(http.MethodPost, "/api/v1/components", bytes.NewReader(createBody))
+	createReq.Header.Set("Content-Type", "application/json")
+	createRec := httptest.NewRecorder()
+	compHandler.Create(createRec, createReq)
+	if createRec.Code != http.StatusCreated {
+		t.Fatalf("create component: want 201, got %d — body: %s", createRec.Code, createRec.Body.String())
+	}
+
+	// --- Step 2: Unauthenticated request → 200 (public) ---
+	authReq := httptest.NewRequest(http.MethodGet, "/auth", nil)
+	authReq.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
+	authRec := httptest.NewRecorder()
+	authHandler.ServeHTTP(authRec, authReq)
+	if authRec.Code != http.StatusOK {
+		t.Errorf("before delete (public): want 200, got %d", authRec.Code)
+	}
+
+	// --- Step 3: Delete the component (with confirm) ---
+	deleteReq := chiRequest(http.MethodDelete, "/api/v1/components/core?confirm=core", "core", nil)
+	deleteRec := httptest.NewRecorder()
+	compHandler.Delete(deleteRec, deleteReq)
+	if deleteRec.Code != http.StatusOK {
+		t.Fatalf("delete component: want 200, got %d — body: %s", deleteRec.Code, deleteRec.Body.String())
+	}
+
+	// --- Step 4: Same request → 401 immediately (component no longer in DB) ---
+	authReq2 := httptest.NewRequest(http.MethodGet, "/auth", nil)
+	authReq2.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
+	authRec2 := httptest.NewRecorder()
+	authHandler.ServeHTTP(authRec2, authReq2)
+	if authRec2.Code != http.StatusUnauthorized {
+		t.Errorf("after delete: want 401, got %d", authRec2.Code)
+	}
+}
