@@ -12,9 +12,9 @@ Promotion is always manual — one `workflow_dispatch` per component and target.
 
 | Format | Workflow | Key input parameters |
 |--------|----------|---------------------|
-| RPM | `promote-rpm.yml` | `component`, `year`, `os` |
-| DEB | `promote-deb.yml` | `component`, `year`, `distro` |
-| OCI | `promote-oci.yml` | `component`, `year` |
+| RPM | `promote-rpm.yml` | `component`, `series`, `os` |
+| DEB | `promote-deb.yml` | `component`, `series`, `distro` |
+| OCI | `promote-oci.yml` | `component`, `series` |
 
 ---
 
@@ -79,7 +79,7 @@ Promotions are serialised per component/target by GitHub's concurrency groups �
 ```bash
 gh workflow run promote-rpm.yml \
   -f component=core \
-  -f year=2025 \
+  -f series=2025 \
   -f os=el9-x86_64
 ```
 
@@ -90,7 +90,7 @@ Valid `os` values: `el8-x86_64`, `el9-x86_64`, `el10-x86_64`, `centos10-x86_64`
 ```bash
 gh workflow run promote-deb.yml \
   -f component=core \
-  -f year=2025 \
+  -f series=2025 \
   -f distro=noble
 ```
 
@@ -101,7 +101,7 @@ Valid `distro` values: `bookworm`, `trixie`, `jammy`, `noble`
 ```bash
 gh workflow run promote-oci.yml \
   -f component=core \
-  -f year=2025
+  -f series=2025
 ```
 
 OCI promotion builds the multi-arch index from both staged architectures and cosign-signs all manifests in a single run — no per-arch dispatch needed.

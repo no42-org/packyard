@@ -1,22 +1,22 @@
 #!/usr/bin/env bash
 # prune-snapshots.sh — remove old Aptly snapshots, retaining the 2 most recent
-# Usage: prune-snapshots.sh <component> <year>
+# Usage: prune-snapshots.sh <component> <series>
 # Example: prune-snapshots.sh core 2025
 #
 # C2 CONSTRAINT: MUST use `aptly publish list -raw` to identify published snapshots.
 # NEVER deletes a snapshot that is currently published.
-# Retains the 2 most recent snapshots per component/year (NFR14).
+# Retains the 2 most recent snapshots per component/series (NFR14).
 # Supports dry-run mode: DRY_RUN=1 prune-snapshots.sh core 2025
 set -euo pipefail
 
 COMPONENT="${1:?component required}"
-YEAR="${2:?year required}"
+SERIES="${2:?series required}"
 KEEP_COUNT="${KEEP_COUNT:-2}"
 DRY_RUN="${DRY_RUN:-0}"
 
-PREFIX="${COMPONENT}-${YEAR}-"
+PREFIX="${COMPONENT}-${SERIES}-"
 
-echo "Pruning snapshots for ${COMPONENT}/${YEAR} (keeping ${KEEP_COUNT} most recent)..."
+echo "Pruning snapshots for ${COMPONENT}/${SERIES} (keeping ${KEEP_COUNT} most recent)..."
 [ "${DRY_RUN}" = "1" ] && echo "  [DRY RUN — no deletions will occur]"
 
 # C2: identify snapshot names for all currently-published endpoints
@@ -36,7 +36,7 @@ else
   echo "${PUBLISHED}" | sed 's/^/  /'
 fi
 
-# List all snapshots matching this component/year prefix, sorted by name
+# List all snapshots matching this component/series prefix, sorted by name
 # Timestamp in name (YYYYMMDDTHHMMSSZ) ensures correct chronological sort
 ALL=$(aptly snapshot list -raw 2>/dev/null | grep "^${PREFIX}" | sort || true)
 
@@ -46,7 +46,7 @@ if [ -z "${ALL}" ]; then
 fi
 
 TOTAL=$(echo "${ALL}" | wc -l | tr -d ' ')
-echo "Found ${TOTAL} snapshot(s) for ${COMPONENT}/${YEAR}:"
+echo "Found ${TOTAL} snapshot(s) for ${COMPONENT}/${SERIES}:"
 echo "${ALL}" | sed 's/^/  /'
 
 if [ "${TOTAL}" -le "${KEEP_COUNT}" ]; then

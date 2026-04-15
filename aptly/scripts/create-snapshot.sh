@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 # create-snapshot.sh — create an immutable Aptly snapshot from staged DEBs
-# Usage: create-snapshot.sh <component> <year> <distro>
+# Usage: create-snapshot.sh <component> <series> <distro>
 # Example: create-snapshot.sh core 2025 bookworm
 #
 # Staged DEBs must be present in /tmp/deb-stage/ before calling this script.
@@ -8,11 +8,11 @@
 set -euo pipefail
 
 COMPONENT="${1:?component required (core|minion|sentinel)}"
-YEAR="${2:?year required (e.g. 2025)}"
+SERIES="${2:?series required (e.g. 2025)}"
 DISTRO="${3:?distro required (bookworm|trixie|jammy|noble)}"
 
-REPO_NAME="${COMPONENT}-${YEAR}"
-SNAPSHOT_NAME="${COMPONENT}-${YEAR}-$(date -u +%Y%m%dT%H%M%SZ)"
+REPO_NAME="${COMPONENT}-${SERIES}"
+SNAPSHOT_NAME="${COMPONENT}-${SERIES}-$(date -u +%Y%m%dT%H%M%SZ)"
 STAGE_DIR="${DEB_STAGE_DIR:-/tmp/deb-stage}"
 
 echo "Creating snapshot: ${SNAPSHOT_NAME}" >&2

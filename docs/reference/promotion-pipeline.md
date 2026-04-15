@@ -17,11 +17,11 @@ RUSTFS_ACCESS_KEY=... RUSTFS_SECRET_KEY=... \
   bash scripts/stage-artifact.sh core 2025 rpm el9-x86_64 /path/to/artifact.rpm
 ```
 
-Then trigger the corresponding promotion workflow with `component`, `year`, and `os` inputs via the GitHub Actions UI or CLI:
+Then trigger the corresponding promotion workflow with `component`, `series`, and `os` inputs via the GitHub Actions UI or CLI:
 
 ```bash
 gh workflow run promote-rpm.yml \
   -f component=core \
-  -f year=2025 \
+  -f series=2025 \
   -f os=el9-x86_64
 ```

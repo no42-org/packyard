@@ -226,7 +226,7 @@ The promotion workflows SSH into the VM to run `docker exec` commands. If the co
 
 The promotion workflow downloads a staged artifact from RustFS before signing. If the artifact is not found:
 
-1. Confirm the artifact was staged with the correct `component`, `year`, and `os` values that match the workflow inputs.
+1. Confirm the artifact was staged with the correct `component`, `series`, and `os` values that match the workflow inputs.
 2. Open an SSH tunnel to RustFS and list the staging bucket:
    ```bash
    ssh -L 9000:localhost:9000 deploy@pkg.example.org -N &
