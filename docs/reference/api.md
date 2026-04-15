@@ -22,17 +22,14 @@ The health endpoint `GET /health` returns 200 when the service is up.
 
 ## Components
 
-Valid component names are defined in `config/packyard.yml` and loaded by the auth service at startup. The default configuration ships with a single component (`core`). Operators add components by editing the file and restarting the auth service:
+Components are provisioned via the admin API and stored in the SQLite database. The auth service loads the component list at startup.
 
-```yaml
-# config/packyard.yml
-components:
-  - name: core
-    visibility: private   # default; credentials required
-  - name: minion          # add as needed
-  - name: enterprise
-    visibility: public    # no credentials required for this component
-```
+| Method | Path | Description |
+|--------|------|-------------|
+| `POST` | `/api/v1/components` | Provision a new component |
+| `GET` | `/api/v1/components` | List all components |
+| `GET` | `/api/v1/components/{name}` | Get a single component |
+| `DELETE` | `/api/v1/components/{name}` | Deprovision a component (safe-lock) |
 
 A key scoped to `core` grants access only to `/rpm/core/`, `/deb/core/`, and `lts-core` OCI paths. Cross-component access is denied — a `core` key cannot access `/rpm/minion/`. The component name in the key must match the path segment exactly.
 
@@ -46,6 +43,46 @@ Each component has a `visibility` setting:
 | `public` | Requests are allowed without credentials — credentials, if present, are ignored |
 
 Public components are useful for freely distributable software. The auth service returns `200` for any request to a public component path, regardless of whether credentials are present or valid.
+
+### Provisioning a component
+
+```bash
+curl -s -X POST http://127.0.0.1:8088/api/v1/components \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "minion",
+    "visibility": "private",
+    "rpm_series": ["2025"],
+    "rpm_os_families": ["el9"],
+    "rpm_architectures": ["x86_64", "aarch64"]
+  }' | jq .
+```
+
+Returns `201 Created` with the component record. The RPM directory tree is initialised on disk automatically. DEB (aptly) and OCI (Zot) provision lazily on first publish.
+
+### Deprovisioning a component
+
+Without `?confirm`, the API returns `409` with an impact preview:
+
+```bash
+curl -s -X DELETE http://127.0.0.1:8088/api/v1/components/minion | jq .
+```
+
+```json
+{
+  "code": "CONFIRM_REQUIRED",
+  "message": "Deleting \"minion\" will remove the component and revoke all associated keys. Pass ?confirm=minion to proceed.",
+  "impact": { "keys_revoked": 4, "rpm_series_removed": ["2025"] }
+}
+```
+
+With the correct `?confirm={name}`:
+
+```bash
+curl -s -X DELETE http://127.0.0.1:8088/api/v1/components/minion?confirm=minion | jq .
+```
+
+Returns `200 OK` with `{"keys_revoked": 4}`. RPM directory content is **not** removed — the operator is responsible for archiving packages before deleting the directory.
 
 ## Examples
 
@@ -70,7 +107,7 @@ curl -s -X POST http://127.0.0.1:8088/api/v1/keys \
 }
 ```
 
-`component_visibility` reflects the current visibility of the key's component as defined in `config/packyard.yml`. It is computed at response time — not stored in the database. If the component has been removed from config since the key was created, this field defaults to `"private"`.
+`component_visibility` reflects the current visibility of the key's component as stored in the database. It is computed at response time — not stored with the key. If the component has been removed since the key was created, this field defaults to `"private"`.
 
 **List keys:**
 

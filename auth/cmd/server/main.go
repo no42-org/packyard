@@ -1,16 +1,18 @@
 package main
 
 import (
+	"context"
 	"log/slog"
 	"net/http"
 	"os"
+	"sort"
+	"strings"
 	"time"
 
 	"github.com/go-chi/chi/v5"
 	chimiddleware "github.com/go-chi/chi/v5/middleware"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 
-	"github.com/no42-org/packyard-auth/internal/config"
 	"github.com/no42-org/packyard-auth/internal/handler"
 	"github.com/no42-org/packyard-auth/internal/metrics"
 	"github.com/no42-org/packyard-auth/internal/middleware"
@@ -35,25 +37,6 @@ func main() {
 
 	logger := slog.New(slog.NewJSONHandler(os.Stdout, nil))
 
-	cfgPath := os.Getenv("CONFIG_PATH")
-	if cfgPath == "" {
-		cfgPath = "/etc/packyard/packyard.yml"
-	}
-	cfg, err := config.Load(cfgPath)
-	if err != nil {
-		logger.Error("failed to load config", slog.String("error", err.Error()))
-		os.Exit(1)
-	}
-	validComponents := cfg.ComponentSet()
-	if len(validComponents) == 0 {
-		logger.Error("no valid components loaded — refusing to start")
-		os.Exit(1)
-	}
-	componentList := cfg.ComponentList()
-	publicComponents := cfg.PublicComponents()
-	compVisibility := cfg.ComponentVisibility()
-	logger.Info("loaded components", slog.String("components", componentList))
-
 	dbPath := os.Getenv("DB_PATH")
 	if dbPath == "" {
 		dbPath = "/data/db/auth.db"
@@ -65,6 +48,32 @@ func main() {
 		os.Exit(1)
 	}
 	defer st.Close()
+
+	validComponents, publicComponents, err := st.LoadComponentSets(context.Background())
+	if err != nil {
+		logger.Error("failed to load components from database", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+
+	// Build sorted component list string for error messages.
+	names := make([]string, 0, len(validComponents))
+	for name := range validComponents {
+		names = append(names, name)
+	}
+	sort.Strings(names)
+	componentList := strings.Join(names, ", ")
+
+	// Build visibility map for key response wrapping.
+	compVisibility := make(map[string]string, len(validComponents))
+	for name := range validComponents {
+		if publicComponents[name] {
+			compVisibility[name] = "public"
+		} else {
+			compVisibility[name] = "private"
+		}
+	}
+
+	logger.Info("loaded components from database", slog.String("components", componentList))
 
 	r := chi.NewRouter()
 	r.Use(chimiddleware.RequestID)
@@ -82,6 +91,13 @@ func main() {
 	r.Get("/api/v1/keys", keys.List)
 	r.Get("/api/v1/keys/{id}", keys.Get)
 	r.Delete("/api/v1/keys/{id}", keys.Delete)
+
+	rpmDataRoot := os.Getenv("RPM_DATA_ROOT")
+	components := handler.NewComponentsHandler(st, logger, rpmDataRoot)
+	r.Post("/api/v1/components", components.Create)
+	r.Get("/api/v1/components", components.List)
+	r.Get("/api/v1/components/{name}", components.GetOne)
+	r.Delete("/api/v1/components/{name}", components.Delete)
 
 	// Metrics server on :9090 — internal Docker network only, not published to host.
 	_ = metrics.RequestsTotal   // ensure package init() runs before the server starts

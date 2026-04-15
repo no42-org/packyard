@@ -6,7 +6,7 @@
 |---------|-------------|---------|
 | TLS cert not issuing after first `docker compose up` | DNS not propagated, or port 443 not open | [TLS certificate not issuing](#tls-certificate-not-issuing) |
 | Subscribers getting `401` on a key that should work | Key scope mismatch, revoked key, or auth service down | [Subscribers getting 401](#subscribers-getting-401) |
-| Subscribers getting `404` on a path that should exist | Component name in URL not listed in `config/packyard.yml` | [Subscribers getting 401](#subscribers-getting-401) |
+| Subscribers getting `404` on a path that should exist | Component name in URL not provisioned via the components API | [Subscribers getting 401](#subscribers-getting-401) |
 | All requests returning `503` | Auth service is down (fail-closed by design) | [All requests returning 503](#all-requests-returning-503) |
 | Admin API returns connection refused / `000` | SSH tunnel not open | [Admin API unreachable](#admin-api-unreachable) |
 | Container shows `unhealthy` or `exited` | Crash loop, disk full, or DB permissions | [Container unhealthy or crashing](#container-unhealthy-or-crashing) |
@@ -95,7 +95,7 @@ If the key is present but `"active": false`, it has been revoked. Issue a new ke
 
 **Step 3 — Is the key scoped to the right component?**
 
-Each key is scoped to a single component (as defined in `config/packyard.yml`). A `core` key cannot access `/rpm/minion/` — that is the expected behaviour, not a bug. Confirm the subscriber is using a key whose `component` matches the path they are requesting.
+Each key is scoped to a single component. A `core` key cannot access `/rpm/minion/` — that is the expected behaviour, not a bug. Confirm the subscriber is using a key whose `component` matches the path they are requesting.
 
 ```bash
 curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | {id, component, label, active}'
@@ -103,9 +103,10 @@ curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | {id, component, label, act
 
 **Step 4 — Is the component marked public?**
 
-If a component has `visibility: public` in `config/packyard.yml`, the auth service allows requests to its paths without inspecting credentials. Keys for public components are valid but are not checked during auth — any request, authenticated or not, returns `200`. If a subscriber reports getting `401` on a public component path, confirm the auth service loaded the updated config:
+If a component has `visibility: public` (as set via `POST /api/v1/components`), the auth service allows requests to its paths without inspecting credentials. Keys for public components are valid but are not checked during auth — any request, authenticated or not, returns `200`. If a subscriber reports getting `401` on a public component path, confirm the component's visibility via the API and that the auth service has restarted since the change:
 
 ```bash
+curl -s http://127.0.0.1:8088/api/v1/components/core | jq .visibility
 docker compose logs auth | grep "loaded components"
 # expect the public component to appear in the list
 ```

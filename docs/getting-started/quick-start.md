@@ -48,11 +48,22 @@ until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done
 echo "Auth ready"
 ```
 
-## 3. Create a subscription key
+## 3. Provision a component and create a subscription key
 
-The admin API is exposed directly at `localhost:8080`. The `component` value must match a name in `config/packyard.yml` — the default ships with `core`:
+The admin API is exposed directly at `localhost:8080`. Provision a component first, then create a key scoped to it:
 
 ```bash
+# Provision the component (initialises RPM directory tree automatically)
+curl -s -X POST http://localhost:8080/api/v1/components \
+  -H 'Content-Type: application/json' \
+  -d '{
+    "name": "core",
+    "rpm_series": ["2025"],
+    "rpm_os_families": ["el9"],
+    "rpm_architectures": ["x86_64"]
+  }' | jq .
+
+# Create a subscription key scoped to the component
 curl -s -X POST http://localhost:8080/api/v1/keys \
   -H 'Content-Type: application/json' \
   -d '{"component": "core", "label": "dev-key"}' | jq .

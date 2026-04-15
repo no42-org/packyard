@@ -2,7 +2,7 @@
 
 Subscribers authenticate with HTTP Basic auth: username `subscriber`, password = subscription key.
 
-All examples below use the component name `core`. Replace `core` with the component your subscription key is scoped to — check with your Packyard administrator if unsure. Valid component names are defined in the deployment's `config/packyard.yml`.
+All examples below use the component name `core`. Replace `core` with the component your subscription key is scoped to — check with your Packyard administrator if unsure.
 
 ## RPM (dnf/yum)
 

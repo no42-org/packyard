@@ -4,7 +4,7 @@ on:
   workflow_dispatch:
     inputs:
       component:
-        description: "LTS component name (as defined in config/packyard.yml)"
+        description: "LTS component name (must be provisioned via POST /api/v1/components)"
         required: true
       series:
         description: "LTS series (e.g. 2025)"

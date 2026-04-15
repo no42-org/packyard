@@ -47,7 +47,7 @@ Options:
   --metrics-url URL     Prometheus metrics URL, local mode only (default: http://localhost:9090)
   --skip-stack          Skip docker compose up (stack already running)
   --test-key KEY        Subscriber key for remote mode (required when --base-url is not localhost)
-  --test-component NAME   Component scope of the test key — must match a name in config/packyard.yml (default: core)
+  --test-component NAME   Component scope of the test key — must be a provisioned component (default: core)
   --public-component NAME Component configured with visibility: public; enables unauthenticated-access tests (default: "")
   -h, --help              Show this help and exit
 
@@ -361,7 +361,7 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" \
   || fail "/rpm/$SCOPE_TARGET/ ($TEST_COMPONENT key, wrong scope) → $STATUS (expected 401)"
 
 # Full matrix — local only, requires both CORE_KEY and MINION_KEY.
-# These paths assume core, minion, and sentinel are all in config/packyard.yml.
+# These paths assume core, minion, and sentinel are all provisioned via the components API.
 # If your deployment uses a different component set, these tests may report false
 # failures — adjust the paths or extend the matrix to match your configuration.
 if [[ "$MODE" == "local" && -n "$MINION_KEY" ]]; then

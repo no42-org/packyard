@@ -76,7 +76,7 @@ docker compose ps auth
 
 ## Step 5 — Verify forwardAuth is operational
 
-Use a subscription key that was valid at the time of the backup. Replace `core` with the component name the key is scoped to (as configured in `config/packyard.yml`):
+Use a subscription key that was valid at the time of the backup. Replace `core` with the component name the key is scoped to:
 
 ```bash
 curl -s -o /dev/null -w '%{http_code}' \

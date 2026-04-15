@@ -39,11 +39,11 @@ services:
     expose:
       - "9090"  # Prometheus metrics — internal Docker network only, not published to host
     environment:
-      - CONFIG_PATH=/etc/packyard/packyard.yml
+      - RPM_DATA_ROOT=/data/rpm
     volumes:
-      - ./config/packyard.yml:/etc/packyard/packyard.yml:ro
       - auth-db:/data/db
       - auth-backup:/data/backup
+      - rpm-data:/data/rpm
     healthcheck:
       test: ["CMD", "/auth", "-health-check"]
       interval: 10s

@@ -87,7 +87,7 @@ Expected: `401` — Traefik called `/auth`, auth rejected the missing credential
 
 ### 3.1 Create keys
 
-The examples below use `core`, `minion`, and `sentinel` — adjust to match the components defined in `config/packyard.yml`.
+The examples below use `core`, `minion`, and `sentinel` — adjust to match the components provisioned via `POST /api/v1/components`.
 
 ```bash
 # core key
@@ -232,7 +232,7 @@ Expected: `401`.
 
 **What this teaches:** a key scoped to `core` cannot access `minion` or `sentinel` repos, even with a valid key value.
 
-The examples below assume `core`, `minion`, and `sentinel` are all configured in `config/packyard.yml`. Adjust the component names and paths to match your deployment.
+The examples below assume `core`, `minion`, and `sentinel` are all provisioned via `POST /api/v1/components`. Adjust the component names and paths to match your deployment.
 
 ```bash
 # core key vs minion path — denied

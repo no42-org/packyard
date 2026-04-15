@@ -5,7 +5,9 @@ import (
 	"crypto/rand"
 	"database/sql"
 	"encoding/hex"
+	"encoding/json"
 	"fmt"
+	"strings"
 	"time"
 
 	_ "modernc.org/sqlite"
@@ -23,6 +25,16 @@ CREATE TABLE IF NOT EXISTS subscription_key (
 );
 
 CREATE INDEX IF NOT EXISTS idx_subscription_key_component ON subscription_key(component);
+
+CREATE TABLE IF NOT EXISTS components (
+	name              TEXT PRIMARY KEY,
+	visibility        TEXT NOT NULL DEFAULT 'private'
+	                  CHECK (visibility IN ('public', 'private')),
+	rpm_series        TEXT NOT NULL DEFAULT '[]',
+	rpm_os_families   TEXT NOT NULL DEFAULT '[]',
+	rpm_architectures TEXT NOT NULL DEFAULT '[]',
+	created_at        DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now'))
+);
 `
 
 // SQLiteStore implements KeyStore using modernc.org/sqlite (pure Go, no CGo).
@@ -254,4 +266,198 @@ func formatNullTime(t *time.Time) sql.NullString {
 		return sql.NullString{}
 	}
 	return sql.NullString{String: t.UTC().Format(time.RFC3339), Valid: true}
+}
+
+// ─── ComponentStore implementation ───────────────────────────────────────────
+
+// CreateComponent inserts a new component record.
+// Returns ErrComponentExists if a component with the same name already exists.
+func (s *SQLiteStore) CreateComponent(ctx context.Context, comp *Component) (*Component, error) {
+	seriesJSON, err := json.Marshal(comp.RPMSeries)
+	if err != nil {
+		return nil, fmt.Errorf("marshal rpm_series: %w", err)
+	}
+	familiesJSON, err := json.Marshal(comp.RPMOSFamilies)
+	if err != nil {
+		return nil, fmt.Errorf("marshal rpm_os_families: %w", err)
+	}
+	archsJSON, err := json.Marshal(comp.RPMArchitectures)
+	if err != nil {
+		return nil, fmt.Errorf("marshal rpm_architectures: %w", err)
+	}
+
+	vis := comp.Visibility
+	if vis == "" {
+		vis = "private"
+	}
+
+	now := time.Now().UTC()
+	_, err = s.db.ExecContext(ctx,
+		`INSERT INTO components (name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at)
+		 VALUES (?, ?, ?, ?, ?, ?)`,
+		comp.Name, vis, string(seriesJSON), string(familiesJSON), string(archsJSON),
+		now.Format(time.RFC3339),
+	)
+	if err != nil {
+		if strings.Contains(err.Error(), "UNIQUE constraint failed") {
+			return nil, fmt.Errorf("create component: %w", ErrComponentExists)
+		}
+		return nil, fmt.Errorf("create component: %w", err)
+	}
+
+	return &Component{
+		Name:             comp.Name,
+		Visibility:       vis,
+		RPMSeries:        comp.RPMSeries,
+		RPMOSFamilies:    comp.RPMOSFamilies,
+		RPMArchitectures: comp.RPMArchitectures,
+		CreatedAt:        now,
+	}, nil
+}
+
+// GetComponent retrieves a component by name.
+// Returns ErrComponentNotFound if it does not exist.
+func (s *SQLiteStore) GetComponent(ctx context.Context, name string) (*Component, error) {
+	row := s.db.QueryRowContext(ctx,
+		`SELECT name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at
+		 FROM components WHERE name = ?`, name)
+	c, err := scanComponent(row)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("get component: %w", ErrComponentNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("get component: %w", err)
+	}
+	return c, nil
+}
+
+// ListComponents returns all components ordered by name ascending.
+func (s *SQLiteStore) ListComponents(ctx context.Context) ([]*Component, error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at
+		 FROM components ORDER BY name ASC`)
+	if err != nil {
+		return nil, fmt.Errorf("list components: %w", err)
+	}
+	defer rows.Close()
+
+	var comps []*Component
+	for rows.Next() {
+		c, err := scanComponent(rows)
+		if err != nil {
+			return nil, fmt.Errorf("scan component: %w", err)
+		}
+		comps = append(comps, c)
+	}
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("list components rows: %w", err)
+	}
+	if comps == nil {
+		comps = []*Component{}
+	}
+	return comps, nil
+}
+
+// DeleteComponent removes the component record by name.
+// Returns ErrComponentNotFound if the component does not exist.
+func (s *SQLiteStore) DeleteComponent(ctx context.Context, name string) error {
+	res, err := s.db.ExecContext(ctx, `DELETE FROM components WHERE name = ?`, name)
+	if err != nil {
+		return fmt.Errorf("delete component: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return fmt.Errorf("delete component rows affected: %w", err)
+	}
+	if n == 0 {
+		return fmt.Errorf("delete component: %w", ErrComponentNotFound)
+	}
+	return nil
+}
+
+// RevokeComponentKeys sets active=0 for all keys scoped to the given component.
+// Returns the number of keys revoked.
+func (s *SQLiteStore) RevokeComponentKeys(ctx context.Context, component string) (int64, error) {
+	res, err := s.db.ExecContext(ctx,
+		`UPDATE subscription_key SET active = 0 WHERE component = ? AND active = 1`, component)
+	if err != nil {
+		return 0, fmt.Errorf("revoke component keys: %w", err)
+	}
+	n, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("revoke component keys rows affected: %w", err)
+	}
+	return n, nil
+}
+
+// CountActiveComponentKeys returns the number of active keys scoped to the given component.
+func (s *SQLiteStore) CountActiveComponentKeys(ctx context.Context, component string) (int64, error) {
+	var count int64
+	err := s.db.QueryRowContext(ctx,
+		`SELECT COUNT(*) FROM subscription_key WHERE component = ? AND active = 1`, component).Scan(&count)
+	if err != nil {
+		return 0, fmt.Errorf("count component keys: %w", err)
+	}
+	return count, nil
+}
+
+// LoadComponentSets queries the components table and returns two maps for O(1) lookups:
+//   - validComponents: all component names
+//   - publicComponents: component names with visibility="public"
+func (s *SQLiteStore) LoadComponentSets(ctx context.Context) (valid map[string]bool, public map[string]bool, err error) {
+	rows, err := s.db.QueryContext(ctx,
+		`SELECT name, visibility FROM components ORDER BY name ASC`)
+	if err != nil {
+		return nil, nil, fmt.Errorf("load component sets: %w", err)
+	}
+	defer rows.Close()
+
+	valid = make(map[string]bool)
+	public = make(map[string]bool)
+	for rows.Next() {
+		var name, vis string
+		if err := rows.Scan(&name, &vis); err != nil {
+			return nil, nil, fmt.Errorf("scan component set: %w", err)
+		}
+		valid[name] = true
+		if vis == "public" {
+			public[name] = true
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return nil, nil, fmt.Errorf("load component sets rows: %w", err)
+	}
+	return valid, public, nil
+}
+
+type componentScanner interface {
+	Scan(dest ...any) error
+}
+
+func scanComponent(s componentScanner) (*Component, error) {
+	var (
+		c          Component
+		createdStr string
+		seriesRaw  string
+		familyRaw  string
+		archRaw    string
+	)
+	if err := s.Scan(&c.Name, &c.Visibility, &seriesRaw, &familyRaw, &archRaw, &createdStr); err != nil {
+		return nil, err
+	}
+	if err := json.Unmarshal([]byte(seriesRaw), &c.RPMSeries); err != nil {
+		return nil, fmt.Errorf("unmarshal rpm_series: %w", err)
+	}
+	if err := json.Unmarshal([]byte(familyRaw), &c.RPMOSFamilies); err != nil {
+		return nil, fmt.Errorf("unmarshal rpm_os_families: %w", err)
+	}
+	if err := json.Unmarshal([]byte(archRaw), &c.RPMArchitectures); err != nil {
+		return nil, fmt.Errorf("unmarshal rpm_architectures: %w", err)
+	}
+	t, err := time.Parse(time.RFC3339, createdStr)
+	if err != nil {
+		return nil, fmt.Errorf("parse created_at: %w", err)
+	}
+	c.CreatedAt = t
+	return &c, nil
 }

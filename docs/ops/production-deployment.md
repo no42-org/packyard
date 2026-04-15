@@ -269,7 +269,7 @@ traefik  | msg="Certificate obtained successfully" domain=pkg.example.org
 
 Run these from an **external host**, not the VM itself.
 
-Replace `core` and `minion` in the examples below with component names from your `config/packyard.yml`.
+Replace `core` and `minion` in the examples below with component names provisioned via `POST /api/v1/components`.
 
 ```bash
 # 1. GPG key endpoint — tests TLS + routing (unauthenticated)
@@ -303,7 +303,7 @@ curl -s http://127.0.0.1:8088/api/v1/keys
 ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
 
 # Create an API key for a subscriber
-# Replace "core" with a component name from config/packyard.yml
+# Replace "core" with a provisioned component name (see GET /api/v1/components)
 curl -s -X POST http://127.0.0.1:8088/api/v1/keys \
   -H 'Content-Type: application/json' \
   -d '{"component": "core", "label": "Acme Corp — Core"}'
