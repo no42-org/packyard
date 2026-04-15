@@ -15,7 +15,7 @@
  *   VUS           — number of virtual users for the baseline scenario (default: 50)
  *   DOWNLOAD_VUS  — VUs for the download scenario (default: min(5, VUS/10), capped to avoid bandwidth saturation)
  *   COMPONENT     — LTS component (default: core)
- *   YEAR          — LTS release year (default: 2025)
+ *   SERIES        — LTS release series (default: 2025)
  *   OS_ARCH       — RPM OS/arch segment (default: el9-x86_64)
  *   RPM_FILE      — RPM filename for download scenario (must be set to an existing RPM; default: lts-core.rpm)
  *
@@ -36,7 +36,7 @@ const BASE_URL  = (__ENV.BASE_URL  || 'https://pkg.example.org').replace(/\/$/, 
 const KEY       = __ENV.KEY;
 const VUS       = parseInt(__ENV.VUS)  || 50;
 const COMPONENT = __ENV.COMPONENT || 'core';
-const YEAR      = __ENV.YEAR      || '2025';
+const SERIES    = __ENV.SERIES    || '2025';
 const OS_ARCH   = __ENV.OS_ARCH   || 'el9-x86_64';
 const RPM_FILE  = __ENV.RPM_FILE  || 'lts-core.rpm';
 
@@ -52,7 +52,7 @@ if (!KEY) {
 const AUTH_HEADER = `Basic ${encoding.b64encode('subscriber:' + KEY)}`;
 
 // Commonly referenced URL segments.
-const RPM_BASE     = `${BASE_URL}/rpm/${COMPONENT}/${YEAR}/${OS_ARCH}`;
+const RPM_BASE     = `${BASE_URL}/rpm/${COMPONENT}/${SERIES}/${OS_ARCH}`;
 const METADATA_URL = `${RPM_BASE}/repodata/repomd.xml`;
 const DOWNLOAD_URL = `${RPM_BASE}/${RPM_FILE}`;
 

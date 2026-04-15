@@ -129,9 +129,9 @@ func isHex(s string) bool {
 //
 // Supported formats:
 //
-//	/rpm/{component}/{year}/{os-arch}/...   → component at index 1
-//	/deb/{component}/{year}/...             → component at index 1
-//	/oci/v2/lts-{component}/...             → strip "lts-" prefix from index 2
+//	/rpm/{component}/{series}/{os-arch}/...   → component at index 1
+//	/deb/{component}/{series}/...             → component at index 1
+//	/oci/v2/lts-{component}/...               → strip "lts-" prefix from index 2
 //
 // Returns ("", false) if the path is unrecognised or too short.
 func extractComponent(path string) (string, bool) {
@@ -142,10 +142,10 @@ func extractComponent(path string) (string, bool) {
 	}
 	switch parts[0] {
 	case "rpm":
-		// /rpm/{component}/{year}/{os-arch}/...
+		// /rpm/{component}/{series}/{os-arch}/...
 		return parts[1], true
 	case "deb":
-		// /deb/{component}/{year}/...
+		// /deb/{component}/{series}/...
 		return parts[1], true
 	case "oci":
 		// /oci/v2/lts-{component}/...

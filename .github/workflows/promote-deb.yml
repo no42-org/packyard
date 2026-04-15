@@ -6,8 +6,8 @@ on:
       component:
         description: "LTS component name (as defined in config/packyard.yml)"
         required: true
-      year:
-        description: "LTS year (e.g. 2025)"
+      series:
+        description: "LTS series (e.g. 2025)"
         required: true
       distro:
         description: "Debian distro (bookworm|trixie|jammy|noble)"
@@ -50,7 +50,7 @@ jobs:
           AWS_ACCESS_KEY_ID=${{ secrets.RUSTFS_ACCESS_KEY }} \
           AWS_SECRET_ACCESS_KEY=${{ secrets.RUSTFS_SECRET_KEY }} \
             aws s3 sync \
-              "s3://staging/${{ inputs.component }}/${{ inputs.year }}/deb/${{ inputs.distro }}-amd64/" \
+              "s3://staging/${{ inputs.component }}/${{ inputs.series }}/deb/${{ inputs.distro }}-amd64/" \
               ./staging/ \
               --endpoint-url "$RUSTFS_ENDPOINT"
 
@@ -101,14 +101,14 @@ jobs:
       - name: Create Aptly snapshot on host
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
           DISTRO: ${{ inputs.distro }}
         run: |
           SNAPSHOT_NAME=$(ssh deploy@${{ secrets.HOST }} \
             "docker compose -f /opt/packyard/compose.yml exec -T \
-              -e COMPONENT='${COMPONENT}' -e YEAR='${YEAR}' -e DISTRO='${DISTRO}' \
+              -e COMPONENT='${COMPONENT}' -e SERIES='${SERIES}' -e DISTRO='${DISTRO}' \
               -e DEB_STAGE_DIR=/tmp/deb-stage \
-              aptly /scripts/create-snapshot.sh '${COMPONENT}' '${YEAR}' '${DISTRO}'")
+              aptly /scripts/create-snapshot.sh '${COMPONENT}' '${SERIES}' '${DISTRO}'")
           [ -n "${SNAPSHOT_NAME}" ] || { echo "ERROR: snapshot name is empty"; exit 1; }
           echo "SNAPSHOT_NAME=${SNAPSHOT_NAME}" >> "$GITHUB_ENV"
           echo "Created snapshot: ${SNAPSHOT_NAME}"
@@ -116,23 +116,23 @@ jobs:
       - name: Publish Aptly snapshot on host
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
           DISTRO: ${{ inputs.distro }}
         run: |
           ssh deploy@${{ secrets.HOST }} \
             "docker compose -f /opt/packyard/compose.yml exec -T aptly \
               /scripts/publish-snapshot.sh \
-              '${SNAPSHOT_NAME}' '${COMPONENT}' '${YEAR}' '${DISTRO}'"
+              '${SNAPSHOT_NAME}' '${COMPONENT}' '${SERIES}' '${DISTRO}'"
 
       - name: Smoke test — verify InRelease published to filesystem
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
           DISTRO: ${{ inputs.distro }}
         run: |
           ssh deploy@${{ secrets.HOST }} "
             docker compose -f /opt/packyard/compose.yml exec -T aptly \
-              test -f '/opt/aptly/public/${COMPONENT}/${YEAR}/dists/${DISTRO}/InRelease' \
+              test -f '/opt/aptly/public/${COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease' \
               && echo 'SMOKE TEST PASS' \
               || { echo 'SMOKE TEST FAIL'; exit 1; }
           "
@@ -140,11 +140,11 @@ jobs:
       - name: Prune old snapshots
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
         run: |
           ssh deploy@${{ secrets.HOST }} \
             "docker compose -f /opt/packyard/compose.yml exec -T aptly \
-              /scripts/prune-snapshots.sh '${COMPONENT}' '${YEAR}'"
+              /scripts/prune-snapshots.sh '${COMPONENT}' '${SERIES}'"
 
       - name: Cleanup
         if: always()

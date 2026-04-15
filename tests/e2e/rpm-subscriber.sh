@@ -11,7 +11,7 @@
 #
 # OPTIONAL ENV VARS:
 #   COMPONENT  — LTS component (default: core)
-#   YEAR       — LTS year (default: 2025)
+#   SERIES     — LTS series (default: 2025)
 #   OS_ARCH    — RPM OS/arch path segment (default: el9-x86_64)
 #   PACKAGE    — RPM package name to install (default: lts-core)
 #
@@ -22,7 +22,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.example.org)}"
 VALID_KEY="${VALID_KEY:?VALID_KEY is required (a valid subscription key)}"
 COMPONENT="${COMPONENT:-core}"
-YEAR="${YEAR:-2025}"
+SERIES="${SERIES:-2025}"
 OS_ARCH="${OS_ARCH:-el9-x86_64}"
 PACKAGE="${PACKAGE:-lts-core}"
 
@@ -56,7 +56,7 @@ done
 cat > "${REPO_FILE}" <<REPO
 [lts-test]
 name=LTS Test Repo
-baseurl=${AUTH_URL}/rpm/${COMPONENT}/${YEAR}/${OS_ARCH}/
+baseurl=${AUTH_URL}/rpm/${COMPONENT}/${SERIES}/${OS_ARCH}/
 enabled=1
 gpgcheck=1
 gpgkey=${BASE_URL}/gpg/lts.asc
@@ -65,7 +65,7 @@ REPO
 cat > "${BAD_REPO_FILE}" <<REPO
 [lts-bad]
 name=LTS Bad Key Test
-baseurl=$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/rpm/${COMPONENT}/${YEAR}/${OS_ARCH}/
+baseurl=$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/rpm/${COMPONENT}/${SERIES}/${OS_ARCH}/
 enabled=1
 gpgcheck=1
 gpgkey=${BASE_URL}/gpg/lts.asc
@@ -131,7 +131,7 @@ fi
 
 echo ""
 echo "=== AC3: Invalid key returns 401 ==="
-BAD_AUTH_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/rpm/${COMPONENT}/${YEAR}/${OS_ARCH}/repodata/repomd.xml"
+BAD_AUTH_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/rpm/${COMPONENT}/${SERIES}/${OS_ARCH}/repodata/repomd.xml"
 HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "${BAD_AUTH_URL}" || true)
 if [ "${HTTP_STATUS}" = "401" ]; then
   pass "AC3 — invalid key correctly returns HTTP 401"

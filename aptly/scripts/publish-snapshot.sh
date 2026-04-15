@@ -1,19 +1,19 @@
 #!/usr/bin/env bash
 # publish-snapshot.sh — publish or atomically switch an Aptly snapshot
-# Usage: publish-snapshot.sh <snapshot-name> <component> <year> <distro>
+# Usage: publish-snapshot.sh <snapshot-name> <component> <series> <distro>
 # Example: publish-snapshot.sh core-2025-20260329T120000Z core 2025 bookworm
 #
-# Publish path: :{component}/{year}
-# Maps to subscriber URL: https://pkg.example.org/deb/{component}/{year}/
+# Publish path: :{component}/{series}
+# Maps to subscriber URL: https://pkg.example.org/deb/{component}/{series}/
 # Aptly's publish switch is atomic — subscribers always see a consistent state.
 set -euo pipefail
 
 SNAPSHOT_NAME="${1:?snapshot-name required}"
 COMPONENT="${2:?component required}"
-YEAR="${3:?year required}"
+SERIES="${3:?series required}"
 DISTRO="${4:?distro required (bookworm|trixie|jammy|noble)}"
 
-PUBLISH_POINT=":${COMPONENT}/${YEAR}"
+PUBLISH_POINT=":${COMPONENT}/${SERIES}"
 
 echo "Publishing snapshot: ${SNAPSHOT_NAME}"
 echo "  → publish point: ${PUBLISH_POINT} (distribution: ${DISTRO})"
@@ -28,7 +28,7 @@ if aptly publish show "${DISTRO}" "${PUBLISH_POINT}" > /dev/null 2>&1; then
     "${PUBLISH_POINT}" \
     "${SNAPSHOT_NAME}"
 else
-  # First-time publish for this component/year
+  # First-time publish for this component/series
   echo "Publishing snapshot for the first time at ${PUBLISH_POINT}..."
   aptly publish snapshot \
     -distribution="${DISTRO}" \

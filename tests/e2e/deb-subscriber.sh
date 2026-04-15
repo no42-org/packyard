@@ -11,7 +11,7 @@
 #
 # OPTIONAL ENV VARS:
 #   COMPONENT  — LTS component (default: core)
-#   YEAR       — LTS year (default: 2025)
+#   SERIES     — LTS series (default: 2025)
 #   DISTRO     — DEB distribution codename (default: bookworm)
 #   PACKAGE    — DEB package name to install (default: lts-core)
 #
@@ -22,7 +22,7 @@ set -euo pipefail
 BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.example.org)}"
 VALID_KEY="${VALID_KEY:?VALID_KEY is required (a valid subscription key)}"
 COMPONENT="${COMPONENT:-core}"
-YEAR="${YEAR:-2025}"
+SERIES="${SERIES:-2025}"
 DISTRO="${DISTRO:-bookworm}"
 PACKAGE="${PACKAGE:-lts-core}"
 
@@ -59,7 +59,7 @@ echo "LTS GPG key dearmored to ${GPG_KEY_FILE}."
 # ─── Sources file ────────────────────────────────────────────────────────────
 
 cat > "${SOURCES_FILE}" <<LIST
-deb [signed-by=${GPG_KEY_FILE}] ${AUTH_URL}/deb/${COMPONENT}/${YEAR}/ ${DISTRO} main
+deb [signed-by=${GPG_KEY_FILE}] ${AUTH_URL}/deb/${COMPONENT}/${SERIES}/ ${DISTRO} main
 LIST
 
 # Shared apt options — isolate cache and sources from system state
@@ -113,7 +113,7 @@ fi
 
 echo ""
 echo "=== AC3: Invalid key returns 401 ==="
-BAD_AUTH_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/deb/${COMPONENT}/${YEAR}/dists/${DISTRO}/InRelease"
+BAD_AUTH_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/deb/${COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease"
 HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "${BAD_AUTH_URL}" || true)
 if [ "${HTTP_STATUS}" = "401" ]; then
   pass "AC3 — invalid key correctly returns HTTP 401"

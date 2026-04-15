@@ -12,7 +12,7 @@
 #
 # OPTIONAL ENV VARS:
 #   COMPONENT  — LTS component (default: core)
-#   YEAR       — LTS year (default: 2025)
+#   SERIES     — LTS series (default: 2025)
 #
 # USAGE:
 #   BASE_URL=https://pkg.example.org VALID_KEY=abc123 bash tests/e2e/oci-subscriber.sh
@@ -21,11 +21,11 @@ set -euo pipefail
 BASE_URL="${BASE_URL:?BASE_URL is required (e.g. https://pkg.example.org)}"
 VALID_KEY="${VALID_KEY:?VALID_KEY is required (a valid subscription key)}"
 COMPONENT="${COMPONENT:-core}"
-YEAR="${YEAR:-2025}"
+SERIES="${SERIES:-2025}"
 
 # Strip scheme — docker/crane use bare registry references
 REGISTRY="${BASE_URL#https://}"
-IMAGE="${REGISTRY}/oci/lts-${COMPONENT}:${YEAR}"
+IMAGE="${REGISTRY}/oci/lts-${COMPONENT}:${SERIES}"
 
 COSIGN_PUB="$(mktemp --suffix=.pub)"
 FAILED=0
@@ -112,7 +112,7 @@ fi
 # AC3b — curl exact HTTP 401 for invalid key
 HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
   -u "subscriber:invalidkey9999" \
-  "${BASE_URL}/oci/v2/lts-${COMPONENT}/manifests/${YEAR}" || true)
+  "${BASE_URL}/oci/v2/lts-${COMPONENT}/manifests/${SERIES}" || true)
 if [ "${HTTP_STATUS}" = "401" ]; then
   pass "AC3b — invalid key correctly returns HTTP 401 on OCI manifest endpoint"
 else

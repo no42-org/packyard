@@ -176,7 +176,7 @@ Expected: HTTP 400, `{"code":"INVALID_COMPONENT","message":"..."}`.
 ### 4.1 Valid key — allowed
 
 ```bash
-# RPM: /rpm/{component}/{year}/{os-arch}/
+# RPM: /rpm/{component}/{series}/{os-arch}/
 curl -u "subscriber:${CORE_KEY}" \
   -o /dev/null -w "%{http_code}\n" \
   http://localhost/rpm/core/2025/el9-x86_64/
@@ -185,7 +185,7 @@ curl -u "subscriber:${CORE_KEY}" \
 Expected: `200` — auth allowed, nginx served the directory (empty in local dev).
 
 ```bash
-# DEB: /deb/{component}/{year}/
+# DEB: /deb/{component}/{series}/
 curl -u "subscriber:${CORE_KEY}" \
   -o /dev/null -w "%{http_code}\n" \
   http://localhost/deb/core/2025/

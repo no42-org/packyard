@@ -45,7 +45,7 @@ k6-based performance validation against a live packyard stack, targeting the NFR
 | `VUS`           | `50`                      | Virtual users for the baseline scenario                       |
 | `DOWNLOAD_VUS`  | `min(5, VUS/10)`          | Virtual users for the download scenario (capped to avoid bandwidth saturation) |
 | `COMPONENT`     | `core`                    | LTS component                                            |
-| `YEAR`          | `2025`                    | LTS release year                                         |
+| `SERIES`        | `2025`                    | LTS release series                                       |
 | `OS_ARCH`       | `el9-x86_64`              | RPM OS/arch path segment                                      |
 | `RPM_FILE`      | `lts-core.rpm`       | RPM filename for download scenario — **must be set to an existing versioned filename** |
 

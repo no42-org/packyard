@@ -6,8 +6,8 @@ on:
       component:
         description: "LTS component name (as defined in config/packyard.yml)"
         required: true
-      year:
-        description: "LTS year (e.g. 2025)"
+      series:
+        description: "LTS series (e.g. 2025)"
         required: true
 
 env:
@@ -16,7 +16,7 @@ env:
   ZOT_REGISTRY: localhost:5000
 
 concurrency:
-  group: oci-promote-${{ inputs.component }}-${{ inputs.year }}
+  group: oci-promote-${{ inputs.component }}-${{ inputs.series }}
   cancel-in-progress: false
 
 jobs:
@@ -58,7 +58,7 @@ jobs:
       - name: Download OCI archives from RustFS
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
           RUSTFS_ACCESS_KEY: ${{ secrets.RUSTFS_ACCESS_KEY }}
           RUSTFS_SECRET_KEY: ${{ secrets.RUSTFS_SECRET_KEY }}
         run: |
@@ -67,7 +67,7 @@ jobs:
             AWS_ACCESS_KEY_ID="${RUSTFS_ACCESS_KEY}" \
             AWS_SECRET_ACCESS_KEY="${RUSTFS_SECRET_KEY}" \
               aws s3 sync \
-                "s3://staging/${COMPONENT}/${YEAR}/oci/${arch}/" \
+                "s3://staging/${COMPONENT}/${SERIES}/oci/${arch}/" \
                 "./staging/${arch}/" \
                 --endpoint-url "$RUSTFS_ENDPOINT"
           done
@@ -98,39 +98,39 @@ jobs:
       - name: Push images to Zot
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
         run: |
           IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           for arch in x86_64 arm64; do
             tarcount=$(ls ./staging/${arch}/*.tar 2>/dev/null | wc -l || echo 0)
             [ "$tarcount" -eq 1 ] || { echo "Expected exactly 1 .tar for ${arch}, found ${tarcount}"; exit 1; }
             tarfile=$(ls ./staging/${arch}/*.tar)
-            crane push "$tarfile" "${IMAGE_BASE}:${YEAR}-${arch}" --insecure
-            echo "Pushed: ${IMAGE_BASE}:${YEAR}-${arch}"
+            crane push "$tarfile" "${IMAGE_BASE}:${SERIES}-${arch}" --insecure
+            echo "Pushed: ${IMAGE_BASE}:${SERIES}-${arch}"
           done
 
       - name: Create multi-arch image index
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
         run: |
           IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           crane index append \
-            --tag "${IMAGE_BASE}:${YEAR}" \
-            --manifest "${IMAGE_BASE}:${YEAR}-x86_64" \
-            --manifest "${IMAGE_BASE}:${YEAR}-arm64" \
+            --tag "${IMAGE_BASE}:${SERIES}" \
+            --manifest "${IMAGE_BASE}:${SERIES}-x86_64" \
+            --manifest "${IMAGE_BASE}:${SERIES}-arm64" \
             --insecure
-          echo "Index created: ${IMAGE_BASE}:${YEAR}"
+          echo "Index created: ${IMAGE_BASE}:${SERIES}"
 
       - name: Sign images with cosign (ephemeral)
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
           COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
           COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
-          for tag in "${YEAR}-x86_64" "${YEAR}-arm64" "${YEAR}"; do
+          for tag in "${SERIES}-x86_64" "${SERIES}-arm64" "${SERIES}"; do
             cosign sign \
               --key env://COSIGN_PRIVATE_KEY \
               --allow-insecure-registry \
@@ -143,7 +143,7 @@ jobs:
       - name: Verify cosign signature (sanity check)
         env:
           COMPONENT: ${{ inputs.component }}
-          YEAR: ${{ inputs.year }}
+          SERIES: ${{ inputs.series }}
         run: |
           grep -q 'BEGIN PUBLIC KEY' ./static/content/gpg/cosign.pub \
             || { echo "ERROR: cosign.pub is still a placeholder — replace with real key before promoting"; exit 1; }
@@ -152,7 +152,7 @@ jobs:
             --key ./static/content/gpg/cosign.pub \
             --allow-insecure-registry \
             --insecure-ignore-tlog \
-            "${IMAGE_BASE}:${YEAR}" \
+            "${IMAGE_BASE}:${SERIES}" \
             && echo "SIGNATURE VERIFIED" \
             || { echo "SIGNATURE VERIFICATION FAILED"; exit 1; }
 

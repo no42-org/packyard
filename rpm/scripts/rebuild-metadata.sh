@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
-# rebuild-metadata.sh — runs createrepo_c for one component/year/os-arch tree
-# Usage: rebuild-metadata.sh <root> <component> <year> <os-arch>
+# rebuild-metadata.sh — runs createrepo_c for one component/series/os-arch tree
+# Usage: rebuild-metadata.sh <root> <component> <series> <os-arch>
 #
 # Serialisation is enforced externally by the GHA concurrency group:
 #   rpm-publish-${component}-${os}  (cancel-in-progress: false)
@@ -10,10 +10,10 @@ set -euo pipefail
 
 ROOT="${1:?RPM tree root required (e.g. /usr/share/nginx/html)}"
 COMPONENT="${2:?component required}"
-YEAR="${3:?year required}"
+SERIES="${3:?series required}"
 OS_ARCH="${4:?os-arch required}"
 
-TARGET="${ROOT}/rpm/${COMPONENT}/${YEAR}/${OS_ARCH}"
+TARGET="${ROOT}/rpm/${COMPONENT}/${SERIES}/${OS_ARCH}"
 [ -d "${TARGET}" ] || { echo "ERROR: directory not found: ${TARGET}"; exit 1; }
 
 echo "Rebuilding RPM metadata for ${TARGET}..."
