@@ -22,10 +22,15 @@ const testKeyID = "aabbccdd" + "aabbccdd" + "aabbccdd" + "aabbccdd" +
 	"aabbccdd" + "aabbccdd" + "aabbccdd" + "aabbccdd"
 
 func newTestKeysHandler(s store.KeyStore) *KeysHandler {
+	cs := newStubComponentStore()
+	cs.comps["core"] = &store.Component{Name: "core", Visibility: "public", RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{}}
+	cs.comps["minion"] = &store.Component{Name: "minion", Visibility: "private", RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{}}
+	cs.comps["sentinel"] = &store.Component{Name: "sentinel", Visibility: "private", RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{}}
 	return &KeysHandler{
-		Store:              s,
-		Logger:             slog.Default(),
-		ValidComponents:    map[string]bool{"core": true, "minion": true, "sentinel": true},
+		Store:           s,
+		ComponentStore:  cs,
+		Logger:          slog.Default(),
+		ValidComponents: map[string]bool{"core": true, "minion": true, "sentinel": true},
 		ValidComponentList: "core, minion, sentinel",
 		ComponentVisibility: map[string]string{
 			"core":     "public",

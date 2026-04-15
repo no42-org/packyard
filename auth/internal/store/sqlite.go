@@ -401,6 +401,45 @@ func (s *SQLiteStore) CountActiveComponentKeys(ctx context.Context, component st
 	return count, nil
 }
 
+// DeleteComponentWithRevoke atomically revokes all active keys for the component
+// and deletes the component record in a single transaction.
+// Returns the number of keys revoked.
+// Returns ErrComponentNotFound if the component does not exist.
+func (s *SQLiteStore) DeleteComponentWithRevoke(ctx context.Context, name string) (int64, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return 0, fmt.Errorf("begin tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	res, err := tx.ExecContext(ctx,
+		`UPDATE subscription_key SET active = 0 WHERE component = ? AND active = 1`, name)
+	if err != nil {
+		return 0, fmt.Errorf("revoke component keys: %w", err)
+	}
+	revoked, err := res.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("revoke component keys rows affected: %w", err)
+	}
+
+	res2, err := tx.ExecContext(ctx, `DELETE FROM components WHERE name = ?`, name)
+	if err != nil {
+		return 0, fmt.Errorf("delete component: %w", err)
+	}
+	n, err := res2.RowsAffected()
+	if err != nil {
+		return 0, fmt.Errorf("delete component rows affected: %w", err)
+	}
+	if n == 0 {
+		return 0, fmt.Errorf("delete component: %w", ErrComponentNotFound)
+	}
+
+	if err := tx.Commit(); err != nil {
+		return 0, fmt.Errorf("commit: %w", err)
+	}
+	return revoked, nil
+}
+
 // LoadComponentSets queries the components table and returns two maps for O(1) lookups:
 //   - validComponents: all component names
 //   - publicComponents: component names with visibility="public"

@@ -85,6 +85,17 @@ func (s *stubComponentStore) CountActiveComponentKeys(_ context.Context, compone
 	return s.keys[component], nil
 }
 
+func (s *stubComponentStore) DeleteComponentWithRevoke(ctx context.Context, name string) (int64, error) {
+	n, err := s.RevokeComponentKeys(ctx, name)
+	if err != nil {
+		return 0, err
+	}
+	if err := s.DeleteComponent(ctx, name); err != nil {
+		return 0, err
+	}
+	return n, nil
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 func newTestComponentsHandler(t *testing.T) (*ComponentsHandler, *stubComponentStore) {
@@ -181,6 +192,28 @@ func TestComponentCreate_InvalidVisibility(t *testing.T) {
 		t.Errorf("status: want 400, got %d", w.Code)
 	}
 	assertErrorCode(t, w, "INVALID_VISIBILITY")
+}
+
+func TestComponentCreate_DefaultVisibility(t *testing.T) {
+	h, _ := newTestComponentsHandler(t)
+
+	body, _ := json.Marshal(createComponentRequest{Name: "core"}) // visibility omitted
+
+	r := httptest.NewRequest(http.MethodPost, "/api/v1/components", bytes.NewReader(body))
+	r.Header.Set("Content-Type", "application/json")
+	w := httptest.NewRecorder()
+	h.Create(w, r)
+
+	if w.Code != http.StatusCreated {
+		t.Fatalf("status: want 201, got %d — body: %s", w.Code, w.Body.String())
+	}
+	var comp store.Component
+	if err := json.NewDecoder(w.Body).Decode(&comp); err != nil {
+		t.Fatalf("decode response: %v", err)
+	}
+	if comp.Visibility != "private" {
+		t.Errorf("visibility: want private (default), got %q", comp.Visibility)
+	}
 }
 
 func TestComponentCreate_EmptyName(t *testing.T) {
@@ -299,7 +332,19 @@ func TestComponentDelete_WithoutConfirm(t *testing.T) {
 	if w.Code != http.StatusConflict {
 		t.Errorf("status: want 409, got %d", w.Code)
 	}
-	assertErrorCode(t, w, "CONFIRM_REQUIRED")
+	var body deleteImpact
+	if err := json.NewDecoder(w.Body).Decode(&body); err != nil {
+		t.Fatalf("decode impact response: %v", err)
+	}
+	if body.Code != "CONFIRM_REQUIRED" {
+		t.Errorf("code: want CONFIRM_REQUIRED, got %q", body.Code)
+	}
+	if body.Impact.KeysRevoked != 4 {
+		t.Errorf("impact.keys_revoked: want 4, got %d", body.Impact.KeysRevoked)
+	}
+	if len(body.Impact.RPMSeriesRemoved) != 1 || body.Impact.RPMSeriesRemoved[0] != "2025" {
+		t.Errorf("impact.rpm_series_removed: want [2025], got %v", body.Impact.RPMSeriesRemoved)
+	}
 }
 
 func TestComponentDelete_WrongConfirm(t *testing.T) {

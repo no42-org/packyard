@@ -86,7 +86,7 @@ func main() {
 	forwardAuth := handler.NewForwardAuthHandler(st, logger, validComponents, publicComponents)
 	r.Get("/auth", forwardAuth.ServeHTTP)
 
-	keys := handler.NewKeysHandler(st, logger, validComponents, componentList, compVisibility)
+	keys := handler.NewKeysHandler(st, st, logger, validComponents, componentList, compVisibility)
 	r.Post("/api/v1/keys", keys.Create)
 	r.Get("/api/v1/keys", keys.List)
 	r.Get("/api/v1/keys/{id}", keys.Get)

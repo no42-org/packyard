@@ -73,6 +73,27 @@ func (h *ComponentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "name is required")
 		return
 	}
+	if strings.ContainsAny(req.Name, "/\\") || strings.Contains(req.Name, "..") {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST",
+			"name must not contain path separators or traversal sequences")
+		return
+	}
+	for _, field := range []struct {
+		label  string
+		values []string
+	}{
+		{"rpm_series", req.RPMSeries},
+		{"rpm_os_families", req.RPMOSFamilies},
+		{"rpm_architectures", req.RPMArchitectures},
+	} {
+		for _, v := range field.values {
+			if strings.ContainsAny(v, "/\\") || strings.Contains(v, "..") {
+				writeError(w, http.StatusBadRequest, "INVALID_REQUEST",
+					fmt.Sprintf("%s contains invalid value %q", field.label, v))
+				return
+			}
+		}
+	}
 	if req.Visibility != "" && req.Visibility != "public" && req.Visibility != "private" {
 		writeError(w, http.StatusBadRequest, "INVALID_VISIBILITY",
 			fmt.Sprintf("visibility %q is invalid; must be \"public\" or \"private\"", req.Visibility))
@@ -178,18 +199,11 @@ func (h *ComponentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Count active keys before deciding.
-	countStore, ok := h.Store.(interface {
-		CountActiveComponentKeys(ctx context.Context, component string) (int64, error)
-	})
-	var activeKeys int64
-	if ok {
-		activeKeys, err = countStore.CountActiveComponentKeys(r.Context(), name)
-		if err != nil {
-			h.Logger.Error("failed to count keys", slog.String("name", name), slog.String("error", err.Error()))
-			w.WriteHeader(http.StatusInternalServerError)
-			return
-		}
+	activeKeys, err := h.Store.CountActiveComponentKeys(r.Context(), name)
+	if err != nil {
+		h.Logger.Error("failed to count keys", slog.String("name", name), slog.String("error", err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
 	}
 
 	confirm := r.URL.Query().Get("confirm")
@@ -210,15 +224,9 @@ func (h *ComponentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Revoke all active keys for this component.
-	revoked, err := h.Store.RevokeComponentKeys(r.Context(), name)
+	// Atomically revoke all active keys and delete the component record (P3).
+	revoked, err := h.Store.DeleteComponentWithRevoke(r.Context(), name)
 	if err != nil {
-		h.Logger.Error("failed to revoke component keys", slog.String("name", name), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
-		return
-	}
-
-	if err := h.Store.DeleteComponent(r.Context(), name); err != nil {
 		h.Logger.Error("failed to delete component", slog.String("name", name), slog.String("error", err.Error()))
 		w.WriteHeader(http.StatusInternalServerError)
 		return

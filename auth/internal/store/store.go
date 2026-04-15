@@ -52,4 +52,6 @@ type ComponentStore interface {
 	ListComponents(ctx context.Context) ([]*Component, error)
 	DeleteComponent(ctx context.Context, name string) error
 	RevokeComponentKeys(ctx context.Context, component string) (int64, error)
+	CountActiveComponentKeys(ctx context.Context, component string) (int64, error)
+	DeleteComponentWithRevoke(ctx context.Context, name string) (int64, error)
 }
