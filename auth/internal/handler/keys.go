@@ -17,15 +17,16 @@ import (
 // Construct with NewKeysHandler to guarantee non-nil component maps.
 type KeysHandler struct {
 	Store               store.KeyStore
+	ComponentStore      store.ComponentStore  // DB lookup for Create component validation (D1)
 	Logger              *slog.Logger
-	ValidComponents     map[string]bool   // set for O(1) membership checks
+	ValidComponents     map[string]bool   // set for O(1) membership checks (List filter only)
 	ValidComponentList  string            // pre-formatted for error messages
 	ComponentVisibility map[string]string // component name → "public" | "private"
 }
 
 // NewKeysHandler returns a KeysHandler with nil maps coerced to empty maps so
 // that component lookups in List and Create never misbehave silently.
-func NewKeysHandler(st store.KeyStore, logger *slog.Logger, validComponents map[string]bool, validComponentList string, componentVisibility map[string]string) *KeysHandler {
+func NewKeysHandler(st store.KeyStore, componentStore store.ComponentStore, logger *slog.Logger, validComponents map[string]bool, validComponentList string, componentVisibility map[string]string) *KeysHandler {
 	if validComponents == nil {
 		validComponents = map[string]bool{}
 	}
@@ -34,6 +35,7 @@ func NewKeysHandler(st store.KeyStore, logger *slog.Logger, validComponents map[
 	}
 	return &KeysHandler{
 		Store:               st,
+		ComponentStore:      componentStore,
 		Logger:              logger,
 		ValidComponents:     validComponents,
 		ValidComponentList:  validComponentList,
@@ -171,9 +173,14 @@ func (h *KeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	if !h.ValidComponents[req.Component] {
-		writeError(w, http.StatusBadRequest, "INVALID_COMPONENT",
-			fmt.Sprintf("component %q is not valid; must be one of: %s", req.Component, h.ValidComponentList))
+	if _, err := h.ComponentStore.GetComponent(r.Context(), req.Component); err != nil {
+		if errors.Is(err, store.ErrComponentNotFound) {
+			writeError(w, http.StatusBadRequest, "INVALID_COMPONENT",
+				fmt.Sprintf("component %q not found", req.Component))
+			return
+		}
+		h.Logger.Error("failed to validate component", slog.String("component", req.Component), slog.String("error", err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
 		return
 	}
 

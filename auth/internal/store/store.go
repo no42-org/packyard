@@ -7,8 +7,10 @@ import (
 )
 
 var (
-	ErrNotFound = errors.New("key not found")
-	ErrRevoked  = errors.New("key is revoked")
+	ErrNotFound          = errors.New("key not found")
+	ErrRevoked           = errors.New("key is revoked")
+	ErrComponentExists   = errors.New("component already exists")
+	ErrComponentNotFound = errors.New("component not found")
 )
 
 // Key represents a subscription key.
@@ -31,4 +33,25 @@ type KeyStore interface {
 	ListKeys(ctx context.Context, component string) ([]*Key, error)
 	RevokeKey(ctx context.Context, id string) error
 	IncrementUsage(ctx context.Context, id string) error
+}
+
+// Component represents a provisioned LTS component.
+type Component struct {
+	Name             string    `json:"name"`
+	Visibility       string    `json:"visibility"`
+	RPMSeries        []string  `json:"rpm_series"`
+	RPMOSFamilies    []string  `json:"rpm_os_families"`
+	RPMArchitectures []string  `json:"rpm_architectures"`
+	CreatedAt        time.Time `json:"created_at"`
+}
+
+// ComponentStore is the interface for component provisioning storage.
+type ComponentStore interface {
+	CreateComponent(ctx context.Context, comp *Component) (*Component, error)
+	GetComponent(ctx context.Context, name string) (*Component, error)
+	ListComponents(ctx context.Context) ([]*Component, error)
+	DeleteComponent(ctx context.Context, name string) error
+	RevokeComponentKeys(ctx context.Context, component string) (int64, error)
+	CountActiveComponentKeys(ctx context.Context, component string) (int64, error)
+	DeleteComponentWithRevoke(ctx context.Context, name string) (int64, error)
 }

@@ -42,6 +42,31 @@ jobs:
             'until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done'
           echo "Auth is healthy."
 
+      - name: Seed CI components
+        run: |
+          # Provision components matching the previous packyard.ci.yml fixture:
+          #   core:   public  — unauthenticated access allowed
+          #   minion: private — credentials required
+          # Treat 409 (already exists) as success so re-runs are idempotent.
+          for payload in \
+            '{"name":"core","visibility":"public","rpm_series":["2025"],"rpm_os_families":["el9"],"rpm_architectures":["x86_64"]}' \
+            '{"name":"minion","visibility":"private","rpm_series":["2025"],"rpm_os_families":["el9"],"rpm_architectures":["x86_64"]}'; do
+            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8080/api/v1/components \
+              -H 'Content-Type: application/json' \
+              -d "${payload}")
+            if [ "${HTTP_CODE}" != "201" ] && [ "${HTTP_CODE}" != "409" ]; then
+              echo "ERROR: unexpected HTTP ${HTTP_CODE} seeding component" >&2
+              exit 1
+            fi
+          done
+          echo "Components provisioned."
+          # Restart auth so it reloads component sets from the database.
+          docker compose -f compose.yml -f compose.override.ci.yml restart auth \
+            || { echo "ERROR: docker compose restart auth failed" >&2; exit 1; }
+          timeout 60 bash -c \
+            'until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done'
+          echo "Auth reloaded with new components."
+
       - name: Seed CI subscription key
         run: |
           RESPONSE=$(curl -sf http://localhost:8080/api/v1/keys \

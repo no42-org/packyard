@@ -10,7 +10,7 @@ Packages are promoted from staging to serving via GitHub Actions:
 
 ## Staging an artifact
 
-The `component` argument must match a name defined in `config/packyard.yml`.
+The `component` argument must match a name provisioned via `POST /api/v1/components`.
 
 ```bash
 RUSTFS_ACCESS_KEY=... RUSTFS_SECRET_KEY=... \
