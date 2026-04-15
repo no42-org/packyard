@@ -54,4 +54,5 @@ type ComponentStore interface {
 	RevokeComponentKeys(ctx context.Context, component string) (int64, error)
 	CountActiveComponentKeys(ctx context.Context, component string) (int64, error)
 	DeleteComponentWithRevoke(ctx context.Context, name string) (int64, error)
+	UpdateComponentVisibility(ctx context.Context, name, visibility string) (*Component, error)
 }

@@ -103,26 +103,17 @@ curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | {id, component, label, act
 
 **Step 4 — Is the component marked public?**
 
-If a component has `visibility: public` (as set via `POST /api/v1/components`), the auth service allows requests to its paths without inspecting credentials. Keys for public components are valid but are not checked during auth — any request, authenticated or not, returns `200`. If a subscriber reports getting `401` on a public component path, confirm the component's visibility via the API and that the auth service has restarted since the component was provisioned:
+If a component has `visibility: public` (as set via `POST /api/v1/components` or updated via `PATCH /api/v1/components/{name}`), the auth service allows requests to its paths without inspecting credentials. Forward-auth reads visibility from the database on every request — changes take effect immediately without a restart. If a subscriber reports getting `401` on a public component path, confirm the component's current visibility:
 
 ```bash
 curl -s http://127.0.0.1:8088/api/v1/components/core | jq .visibility
-docker compose logs auth | grep "loaded components"
-# expect the public component to appear in the list
 ```
 
 **Restart semantics — when a restart is and is not required:**
 
-- **Key creation** (`POST /api/v1/keys`) queries the database directly — a restart is **not** needed for the auth service to accept keys for a newly provisioned component.
-- **Forward-auth decisions** (subscriber package access) use an in-memory component map loaded at startup — a restart **is** required for new or deleted components to be reflected in access control.
-- **Key list filter** (`GET /api/v1/keys?component=<name>`) also validates the component name against the in-memory map — it returns `400 INVALID_COMPONENT` for a newly provisioned component until the service is restarted.
-- **Authenticated requests to an unrecognised component** return `404` (not `401`) — if a subscriber has a valid key but the component isn't in the in-memory map, the auth service returns `404 Not Found` rather than `401 Unauthorized`. Restart auth to resolve.
-
-If the component record was updated in the database (via the API) but the auth service was not restarted, restart it:
-
-```bash
-docker compose restart auth
-```
+- **Key creation** (`POST /api/v1/keys`) and **forward-auth decisions** both query the database on every request — a restart is **not** needed for new components, deleted components, or visibility changes to take effect.
+- **Key list filter** (`GET /api/v1/keys?component=<name>`) validates the component name against an in-memory map loaded at startup — it returns `400 INVALID_COMPONENT` for a newly provisioned component until the service is restarted.
+- **`component_visibility` in key responses** is also derived from the startup-loaded map — it may show a stale value after a `PATCH /api/v1/components/{name}` visibility change until the service is restarted. This is cosmetic only; forward-auth always uses the live value.
 
 ---
 

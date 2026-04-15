@@ -14,28 +14,20 @@ import (
 
 // ForwardAuthHandler validates subscriber credentials for Traefik forwardAuth.
 // GET /auth — returns 200 (allow), 401 (deny), or 503 (error/fail-closed).
-// Construct with NewForwardAuthHandler to guarantee non-nil component maps.
+// Component visibility is resolved via a live DB lookup on every request so that
+// visibility changes take effect immediately without a service restart.
 type ForwardAuthHandler struct {
-	Store            store.KeyStore
-	Logger           *slog.Logger
-	ValidComponents  map[string]bool // set for O(1) membership checks
-	PublicComponents map[string]bool // components that bypass credential checking
+	Store          store.KeyStore
+	ComponentStore store.ComponentStore
+	Logger         *slog.Logger
 }
 
-// NewForwardAuthHandler returns a ForwardAuthHandler with nil maps coerced to
-// empty maps so that component lookups in ServeHTTP never misbehave silently.
-func NewForwardAuthHandler(st store.KeyStore, logger *slog.Logger, validComponents, publicComponents map[string]bool) *ForwardAuthHandler {
-	if validComponents == nil {
-		validComponents = map[string]bool{}
-	}
-	if publicComponents == nil {
-		publicComponents = map[string]bool{}
-	}
+// NewForwardAuthHandler returns a ForwardAuthHandler backed by the given stores.
+func NewForwardAuthHandler(st store.KeyStore, cs store.ComponentStore, logger *slog.Logger) *ForwardAuthHandler {
 	return &ForwardAuthHandler{
-		Store:            st,
-		Logger:           logger,
-		ValidComponents:  validComponents,
-		PublicComponents: publicComponents,
+		Store:          st,
+		ComponentStore: cs,
+		Logger:         logger,
 	}
 }
 
@@ -48,7 +40,6 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		metrics.RequestDuration.Observe(time.Since(start).Seconds())
 	}()
 
-	// Resolve component to check for public bypass before any credential work.
 	requestedComponent, ok := extractComponent(r.Header.Get("X-Forwarded-Uri"))
 	if !ok {
 		metrics.RequestsTotal.WithLabelValues("denied").Inc()
@@ -56,8 +47,27 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// Live DB lookup — resolves visibility without requiring a restart after PATCH.
+	// Unknown components return 401 (not 404) to prevent component enumeration by
+	// unauthenticated callers.
+	comp, err := h.ComponentStore.GetComponent(r.Context(), requestedComponent)
+	if err != nil {
+		if errors.Is(err, store.ErrComponentNotFound) {
+			metrics.RequestsTotal.WithLabelValues("denied").Inc()
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
+		h.Logger.Error("store error resolving component",
+			slog.String("component", requestedComponent),
+			slog.String("error", err.Error()),
+		)
+		metrics.RequestsTotal.WithLabelValues("error").Inc()
+		w.WriteHeader(http.StatusServiceUnavailable)
+		return
+	}
+
 	// Public components bypass credential checking entirely.
-	if h.PublicComponents[requestedComponent] {
+	if comp.Visibility == "public" {
 		h.Logger.Info("public component access allowed", slog.String("component", requestedComponent))
 		metrics.RequestsTotal.WithLabelValues("allowed-public").Inc()
 		w.WriteHeader(http.StatusOK)
@@ -88,13 +98,7 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// 404 only visible to authenticated callers — prevents component enumeration by unauthenticated actors.
-	if !h.ValidComponents[requestedComponent] {
-		metrics.RequestsTotal.WithLabelValues("denied").Inc()
-		w.WriteHeader(http.StatusNotFound)
-		return
-	}
-
+	// Component existence already confirmed by GetComponent above.
 	if key.Component != requestedComponent {
 		metrics.RequestsTotal.WithLabelValues("denied").Inc()
 		w.WriteHeader(http.StatusUnauthorized)
