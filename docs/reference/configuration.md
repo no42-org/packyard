@@ -32,6 +32,14 @@ RUSTFS_ACCESS_KEY=dev-access-key
 RUSTFS_SECRET_KEY=dev-secret-key-value
 ```
 
+### Advanced (auth service)
+
+These are set via `compose.yml` and only need overriding when deploying with a non-standard volume layout:
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `RPM_DATA_ROOT` | `/data/rpm` | Root directory for RPM tree initialisation inside the auth container. Must match the mount point of the `rpm-data` volume. The auth service creates trees under `{RPM_DATA_ROOT}/rpm/{component}/{series}/{os_family}-{arch}/` — note the extra `rpm/` subdirectory level. |
+
 ## Compose Override Files
 
 | File | Purpose |

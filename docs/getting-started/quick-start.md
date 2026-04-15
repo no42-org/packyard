@@ -58,10 +58,16 @@ curl -s -X POST http://localhost:8080/api/v1/components \
   -H 'Content-Type: application/json' \
   -d '{
     "name": "core",
+    "visibility": "public",
     "rpm_series": ["2025"],
     "rpm_os_families": ["el9"],
     "rpm_architectures": ["x86_64"]
   }' | jq .
+
+# The auth service loads its component map at startup — restart to make
+# forward-auth recognise the new component.
+docker compose -f compose.yml -f compose.override.ci.yml restart auth
+until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done
 
 # Create a subscription key scoped to the component
 curl -s -X POST http://localhost:8080/api/v1/keys \
@@ -75,7 +81,8 @@ curl -s -X POST http://localhost:8080/api/v1/keys \
   "component": "core",
   "label": "dev-key",
   "active": true,
-  "created_at": "2025-01-01T00:00:00Z"
+  "created_at": "2025-01-01T00:00:00Z",
+  "component_visibility": "public"
 }
 ```
 

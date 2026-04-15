@@ -58,7 +58,51 @@ curl -s -X POST http://127.0.0.1:8088/api/v1/components \
   }' | jq .
 ```
 
-Returns `201 Created` with the component record. The RPM directory tree is initialised on disk automatically. DEB (aptly) and OCI (Zot) provision lazily on first publish.
+**Validation rules:**
+
+- `name` is required and must not contain `/`, `\`, or `..`
+- `visibility` must be `"public"` or `"private"` (default: `"private"` when omitted)
+- `rpm_series`, `rpm_os_families`, `rpm_architectures` values must not contain `/`, `\`, or `..`
+
+**Response codes:**
+
+| Code | Condition |
+|------|-----------|
+| `201 Created` | Component created; RPM directory tree initialised on disk |
+| `400 Bad Request` | Validation failure (`INVALID_REQUEST` or `INVALID_VISIBILITY`) |
+| `409 Conflict` | A component with this name already exists (`COMPONENT_EXISTS`) |
+| `500 Internal Server Error` | RPM directory initialisation failed (`RPM_INIT_FAILED`) |
+
+Example `201 Created` response:
+
+```json
+{
+  "name": "minion",
+  "visibility": "private",
+  "rpm_series": ["2025"],
+  "rpm_os_families": ["el9"],
+  "rpm_architectures": ["x86_64", "aarch64"],
+  "created_at": "2025-01-01T00:00:00Z"
+}
+```
+
+Note: when `visibility` is omitted from the request, the response body shows `"visibility": "private"` (the default).
+
+DEB (aptly) and OCI (Zot) provision lazily on first publish.
+
+### Listing and inspecting components
+
+```bash
+# List all components
+curl -s http://127.0.0.1:8088/api/v1/components | jq .
+
+# Inspect a single component
+curl -s http://127.0.0.1:8088/api/v1/components/minion | jq .
+```
+
+**Response codes for GET `/api/v1/components`:** `200 OK` (returns empty array when none exist), `500 Internal Server Error` (store error).
+
+**Response codes for GET `/api/v1/components/{name}`:** `200 OK` (found), `404 Not Found` (`COMPONENT_NOT_FOUND`).
 
 ### Deprovisioning a component
 
@@ -82,7 +126,33 @@ With the correct `?confirm={name}`:
 curl -s -X DELETE http://127.0.0.1:8088/api/v1/components/minion?confirm=minion | jq .
 ```
 
-Returns `200 OK` with `{"keys_revoked": 4}`. RPM directory content is **not** removed — the operator is responsible for archiving packages before deleting the directory.
+**Response codes — without `?confirm` (impact preview):**
+
+| Code | Condition |
+|------|-----------|
+| `409 Conflict` | `?confirm` absent or value does not match the component name exactly (`CONFIRM_REQUIRED`) |
+| `404 Not Found` | Component does not exist (`COMPONENT_NOT_FOUND`) |
+
+**Response codes — with `?confirm={name}` (confirmed delete):**
+
+| Code | Condition |
+|------|-----------|
+| `200 OK` | Component deleted; keys revoked atomically — returns `{"keys_revoked": N}` |
+| `404 Not Found` | Component does not exist (`COMPONENT_NOT_FOUND`) |
+| `500 Internal Server Error` | Unexpected store error during atomic delete |
+
+RPM directory content is **not** removed — the operator is responsible for archiving packages before deleting the directory.
+
+### Component API error codes
+
+| Code | Returned by | Description |
+|------|-------------|-------------|
+| `INVALID_REQUEST` | POST | `name` is missing, empty, or contains path-unsafe characters; or an array field contains a path-unsafe value |
+| `INVALID_VISIBILITY` | POST | `visibility` is not `"public"` or `"private"` |
+| `COMPONENT_EXISTS` | POST | A component with the given name already exists |
+| `RPM_INIT_FAILED` | POST | RPM directory tree creation failed; the component record was rolled back |
+| `COMPONENT_NOT_FOUND` | GET `/{name}`, DELETE | No component with the given name exists |
+| `CONFIRM_REQUIRED` | DELETE (no confirm) | `?confirm={name}` was absent or did not match; response includes impact preview |
 
 ## Examples
 
