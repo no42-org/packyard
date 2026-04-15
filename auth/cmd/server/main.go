@@ -83,7 +83,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	forwardAuth := handler.NewForwardAuthHandler(st, logger, validComponents, publicComponents)
+	forwardAuth := handler.NewForwardAuthHandler(st, st, logger)
 	r.Get("/auth", forwardAuth.ServeHTTP)
 
 	keys := handler.NewKeysHandler(st, st, logger, validComponents, componentList, compVisibility)
@@ -97,6 +97,7 @@ func main() {
 	r.Post("/api/v1/components", components.Create)
 	r.Get("/api/v1/components", components.List)
 	r.Get("/api/v1/components/{name}", components.GetOne)
+	r.Patch("/api/v1/components/{name}", components.Update)
 	r.Delete("/api/v1/components/{name}", components.Delete)
 
 	// Metrics server on :9090 — internal Docker network only, not published to host.

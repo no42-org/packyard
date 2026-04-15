@@ -96,6 +96,15 @@ func (s *stubComponentStore) DeleteComponentWithRevoke(ctx context.Context, name
 	return n, nil
 }
 
+func (s *stubComponentStore) UpdateComponentVisibility(_ context.Context, name, visibility string) (*store.Component, error) {
+	c, ok := s.comps[name]
+	if !ok {
+		return nil, store.ErrComponentNotFound
+	}
+	c.Visibility = visibility
+	return c, nil
+}
+
 // ─── helpers ─────────────────────────────────────────────────────────────────
 
 func newTestComponentsHandler(t *testing.T) (*ComponentsHandler, *stubComponentStore) {
@@ -407,6 +416,84 @@ func TestComponentDelete_NotFound(t *testing.T) {
 	if w.Code != http.StatusNotFound {
 		t.Errorf("status: want 404, got %d", w.Code)
 	}
+}
+
+// ─── PATCH /api/v1/components/{name} ─────────────────────────────────────────
+
+func TestComponentUpdate_PrivateToPublic(t *testing.T) {
+	h, st := newTestComponentsHandler(t)
+	ctx := context.Background()
+	_, _ = st.CreateComponent(ctx, &store.Component{
+		Name: "core", Visibility: "private",
+		RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{},
+	})
+
+	body, _ := json.Marshal(updateComponentRequest{Visibility: "public"})
+	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", body)
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status: want 200, got %d — body: %s", w.Code, w.Body.String())
+	}
+	var comp store.Component
+	if err := json.NewDecoder(w.Body).Decode(&comp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if comp.Visibility != "public" {
+		t.Errorf("visibility: want public, got %q", comp.Visibility)
+	}
+}
+
+func TestComponentUpdate_PublicToPrivate(t *testing.T) {
+	h, st := newTestComponentsHandler(t)
+	ctx := context.Background()
+	_, _ = st.CreateComponent(ctx, &store.Component{
+		Name: "core", Visibility: "public",
+		RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{},
+	})
+
+	body, _ := json.Marshal(updateComponentRequest{Visibility: "private"})
+	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", body)
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("status: want 200, got %d", w.Code)
+	}
+	var comp store.Component
+	if err := json.NewDecoder(w.Body).Decode(&comp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if comp.Visibility != "private" {
+		t.Errorf("visibility: want private, got %q", comp.Visibility)
+	}
+}
+
+func TestComponentUpdate_NotFound(t *testing.T) {
+	h, _ := newTestComponentsHandler(t)
+	body, _ := json.Marshal(updateComponentRequest{Visibility: "public"})
+	r := chiRequest(http.MethodPatch, "/api/v1/components/unknown", "unknown", body)
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusNotFound {
+		t.Errorf("status: want 404, got %d", w.Code)
+	}
+	assertErrorCode(t, w, "COMPONENT_NOT_FOUND")
+}
+
+func TestComponentUpdate_InvalidVisibility(t *testing.T) {
+	h, _ := newTestComponentsHandler(t)
+	body, _ := json.Marshal(updateComponentRequest{Visibility: "restricted"})
+	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", body)
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status: want 400, got %d", w.Code)
+	}
+	assertErrorCode(t, w, "INVALID_VISIBILITY")
 }
 
 // ─── helpers ─────────────────────────────────────────────────────────────────

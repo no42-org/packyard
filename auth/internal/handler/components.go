@@ -237,6 +237,46 @@ func (h *ComponentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(deleteResult{KeysRevoked: revoked})
 }
 
+// updateComponentRequest is the JSON body for PATCH /api/v1/components/{name}.
+type updateComponentRequest struct {
+	Visibility string `json:"visibility"`
+}
+
+// Update handles PATCH /api/v1/components/{name} — updates mutable component fields.
+// Currently only visibility ("public" or "private") may be changed.
+// The change is persisted immediately; forward-auth picks it up on the next request
+// without a service restart.
+func (h *ComponentsHandler) Update(w http.ResponseWriter, r *http.Request) {
+	name := chi.URLParam(r, "name")
+	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
+	var req updateComponentRequest
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "request body must be valid JSON")
+		return
+	}
+	if req.Visibility != "public" && req.Visibility != "private" {
+		writeError(w, http.StatusBadRequest, "INVALID_VISIBILITY",
+			fmt.Sprintf("visibility %q is invalid; must be \"public\" or \"private\"", req.Visibility))
+		return
+	}
+
+	comp, err := h.Store.UpdateComponentVisibility(r.Context(), name, req.Visibility)
+	if err != nil {
+		if errors.Is(err, store.ErrComponentNotFound) {
+			writeError(w, http.StatusNotFound, "COMPONENT_NOT_FOUND",
+				fmt.Sprintf("component %q not found", name))
+			return
+		}
+		h.Logger.Error("failed to update component", slog.String("name", name), slog.String("error", err.Error()))
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	w.WriteHeader(http.StatusOK)
+	_ = json.NewEncoder(w).Encode(comp)
+}
+
 // initRPMTree creates the RPM directory tree under RPMDataRoot for the component.
 // Path structure: {RPMDataRoot}/rpm/{component}/{series}/{os_family}-{arch}/
 func (h *ComponentsHandler) initRPMTree(ctx context.Context, comp *store.Component) error {

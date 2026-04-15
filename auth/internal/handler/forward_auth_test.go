@@ -72,22 +72,29 @@ func basicAuthHeader(key string) string {
 	return "Basic " + base64.StdEncoding.EncodeToString([]byte("subscriber:"+key))
 }
 
+// newTestComponentStore returns a stub with "core" (private) and "minion" (private) pre-seeded.
+func newTestComponentStore() *stubComponentStore {
+	cs := newStubComponentStore()
+	cs.comps["core"] = &store.Component{Name: "core", Visibility: "private"}
+	cs.comps["minion"] = &store.Component{Name: "minion", Visibility: "private"}
+	return cs
+}
+
 func newTestHandler(s store.KeyStore) *ForwardAuthHandler {
 	return &ForwardAuthHandler{
-		Store:            s,
-		Logger:           slog.Default(),
-		ValidComponents:  map[string]bool{"core": true, "minion": true},
-		PublicComponents: map[string]bool{},
+		Store:          s,
+		ComponentStore: newTestComponentStore(),
+		Logger:         slog.Default(),
 	}
 }
 
-func TestNewForwardAuthHandler_NilMapsCoerced(t *testing.T) {
-	h := NewForwardAuthHandler(&mockStore{}, slog.Default(), nil, nil)
-	if h.ValidComponents == nil {
-		t.Error("ValidComponents should not be nil after construction with nil input")
+func TestNewForwardAuthHandler_Constructs(t *testing.T) {
+	h := NewForwardAuthHandler(&mockStore{}, newTestComponentStore(), slog.Default())
+	if h.Store == nil {
+		t.Error("Store should not be nil")
 	}
-	if h.PublicComponents == nil {
-		t.Error("PublicComponents should not be nil after construction with nil input")
+	if h.ComponentStore == nil {
+		t.Error("ComponentStore should not be nil")
 	}
 }
 
@@ -281,13 +288,15 @@ func TestForwardAuth_StoreError(t *testing.T) {
 	}
 }
 
+func newPublicCoreHandler(keyStore store.KeyStore) *ForwardAuthHandler {
+	cs := newStubComponentStore()
+	cs.comps["core"] = &store.Component{Name: "core", Visibility: "public"}
+	cs.comps["minion"] = &store.Component{Name: "minion", Visibility: "private"}
+	return &ForwardAuthHandler{Store: keyStore, ComponentStore: cs, Logger: slog.Default()}
+}
+
 func TestForwardAuth_PublicComponent_NoCreds(t *testing.T) {
-	h := &ForwardAuthHandler{
-		Store:            &mockStore{},
-		Logger:           slog.Default(),
-		ValidComponents:  map[string]bool{"core": true, "minion": true},
-		PublicComponents: map[string]bool{"core": true},
-	}
+	h := newPublicCoreHandler(&mockStore{})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
@@ -299,18 +308,13 @@ func TestForwardAuth_PublicComponent_NoCreds(t *testing.T) {
 }
 
 func TestForwardAuth_PublicComponent_WithCreds(t *testing.T) {
-	// Credentials are present but bypassed entirely — store is never consulted.
-	h := &ForwardAuthHandler{
-		Store: &mockStore{
-			getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
-				t.Fatal("GetByValue should not be called for public component")
-				return nil, nil
-			},
+	// Credentials are present but bypassed entirely — key store is never consulted.
+	h := newPublicCoreHandler(&mockStore{
+		getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
+			t.Fatal("GetByValue should not be called for public component")
+			return nil, nil
 		},
-		Logger:           slog.Default(),
-		ValidComponents:  map[string]bool{"core": true, "minion": true},
-		PublicComponents: map[string]bool{"core": true},
-	}
+	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", basicAuthHeader(validKey))
 	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
@@ -324,17 +328,12 @@ func TestForwardAuth_PublicComponent_WithCreds(t *testing.T) {
 
 func TestForwardAuth_PublicComponent_MalformedAuth(t *testing.T) {
 	// Malformed Authorization header is also bypassed for public components.
-	h := &ForwardAuthHandler{
-		Store: &mockStore{
-			getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
-				t.Fatal("GetByValue should not be called for public component")
-				return nil, nil
-			},
+	h := newPublicCoreHandler(&mockStore{
+		getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
+			t.Fatal("GetByValue should not be called for public component")
+			return nil, nil
 		},
-		Logger:           slog.Default(),
-		ValidComponents:  map[string]bool{"core": true, "minion": true},
-		PublicComponents: map[string]bool{"core": true},
-	}
+	})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("Authorization", "Bearer not-basic-auth")
 	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
@@ -347,12 +346,7 @@ func TestForwardAuth_PublicComponent_MalformedAuth(t *testing.T) {
 }
 
 func TestForwardAuth_PrivateComponent_NoCreds(t *testing.T) {
-	h := &ForwardAuthHandler{
-		Store:            &mockStore{},
-		Logger:           slog.Default(),
-		ValidComponents:  map[string]bool{"core": true, "minion": true},
-		PublicComponents: map[string]bool{"core": true},
-	}
+	h := newPublicCoreHandler(&mockStore{})
 	req := httptest.NewRequest("GET", "/auth", nil)
 	req.Header.Set("X-Forwarded-Uri", "/rpm/minion/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
@@ -364,37 +358,81 @@ func TestForwardAuth_PrivateComponent_NoCreds(t *testing.T) {
 }
 
 func TestForwardAuth_NonexistentComponent(t *testing.T) {
-	// 404 is only visible to authenticated callers — credential check runs first.
-	h := newTestHandler(&mockStore{
-		getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
-			return &store.Key{ID: value, Component: "core", Active: true}, nil
-		},
-	})
-	req := httptest.NewRequest("GET", "/auth", nil)
-	req.Header.Set("Authorization", basicAuthHeader(validKey))
-	req.Header.Set("X-Forwarded-Uri", "/rpm/unknown/2025/el9-x86_64/")
-	w := httptest.NewRecorder()
-	h.ServeHTTP(w, req)
-
-	if w.Code != http.StatusNotFound {
-		t.Errorf("expected 404 for nonexistent component (authenticated), got %d", w.Code)
-	}
-}
-
-func TestForwardAuth_NonexistentComponent_NoCreds(t *testing.T) {
-	// Unauthenticated callers get 401 for unknown components — prevents component enumeration.
+	// Unknown components return 401 regardless of auth state — prevents component enumeration.
+	// (Previously returned 404 for authenticated callers; live DB lookup returns 401 uniformly.)
 	h := newTestHandler(&mockStore{
 		getByValueFn: func(_ context.Context, _ string) (*store.Key, error) {
-			t.Fatal("GetByValue should not be called when no Authorization header")
+			t.Fatal("GetByValue should not be called when component is unknown")
 			return nil, nil
 		},
 	})
+	for _, withAuth := range []bool{true, false} {
+		req := httptest.NewRequest("GET", "/auth", nil)
+		if withAuth {
+			req.Header.Set("Authorization", basicAuthHeader(validKey))
+		}
+		req.Header.Set("X-Forwarded-Uri", "/rpm/unknown/2025/el9-x86_64/")
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("auth=%v: expected 401 for unknown component, got %d", withAuth, w.Code)
+		}
+	}
+}
+
+func TestForwardAuth_ComponentStoreError(t *testing.T) {
+	// A component store error fails closed (503), not open.
+	cs := newStubComponentStore()
+	cs.comps["core"] = &store.Component{Name: "core", Visibility: "private"}
+	// Override GetComponent to simulate a DB error by using a wrapper.
+	errCS := &errComponentStore{inner: cs, errOn: "core"}
+	h := &ForwardAuthHandler{
+		Store:          &mockStore{},
+		ComponentStore: errCS,
+		Logger:         slog.Default(),
+	}
 	req := httptest.NewRequest("GET", "/auth", nil)
-	req.Header.Set("X-Forwarded-Uri", "/rpm/unknown/2025/el9-x86_64/")
+	req.Header.Set("Authorization", basicAuthHeader(validKey))
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)
 
-	if w.Code != http.StatusUnauthorized {
-		t.Errorf("expected 401 for nonexistent component with no creds, got %d", w.Code)
+	if w.Code != http.StatusServiceUnavailable {
+		t.Errorf("expected 503 on component store error, got %d", w.Code)
 	}
+}
+
+// errComponentStore wraps a stubComponentStore and injects an error for a specific component name.
+type errComponentStore struct {
+	inner *stubComponentStore
+	errOn string
+}
+
+func (e *errComponentStore) GetComponent(ctx context.Context, name string) (*store.Component, error) {
+	if name == e.errOn {
+		return nil, errors.New("database connection lost")
+	}
+	return e.inner.GetComponent(ctx, name)
+}
+func (e *errComponentStore) CreateComponent(ctx context.Context, c *store.Component) (*store.Component, error) {
+	return e.inner.CreateComponent(ctx, c)
+}
+func (e *errComponentStore) ListComponents(ctx context.Context) ([]*store.Component, error) {
+	return e.inner.ListComponents(ctx)
+}
+func (e *errComponentStore) DeleteComponent(ctx context.Context, name string) error {
+	return e.inner.DeleteComponent(ctx, name)
+}
+func (e *errComponentStore) RevokeComponentKeys(ctx context.Context, component string) (int64, error) {
+	return e.inner.RevokeComponentKeys(ctx, component)
+}
+func (e *errComponentStore) CountActiveComponentKeys(ctx context.Context, component string) (int64, error) {
+	return e.inner.CountActiveComponentKeys(ctx, component)
+}
+func (e *errComponentStore) DeleteComponentWithRevoke(ctx context.Context, name string) (int64, error) {
+	return e.inner.DeleteComponentWithRevoke(ctx, name)
+}
+func (e *errComponentStore) UpdateComponentVisibility(ctx context.Context, name, vis string) (*store.Component, error) {
+	return e.inner.UpdateComponentVisibility(ctx, name, vis)
 }

@@ -22,13 +22,14 @@ The health endpoint `GET /health` returns 200 when the service is up.
 
 ## Components
 
-Components are provisioned via the admin API and stored in the SQLite database. The auth service loads the component list at startup.
+Components are provisioned via the admin API and stored in the SQLite database. Forward-auth resolves component visibility via a live database lookup on every request; the `GET /api/v1/keys?component=` filter and `component_visibility` field in key responses use a snapshot loaded at startup (restart required to pick up new components in those paths).
 
 | Method | Path | Description |
 |--------|------|-------------|
 | `POST` | `/api/v1/components` | Provision a new component |
 | `GET` | `/api/v1/components` | List all components |
 | `GET` | `/api/v1/components/{name}` | Get a single component |
+| `PATCH` | `/api/v1/components/{name}` | Update component visibility |
 | `DELETE` | `/api/v1/components/{name}` | Deprovision a component (safe-lock) |
 
 A key scoped to `core` grants access only to `/rpm/core/`, `/deb/core/`, and `lts-core` OCI paths. Cross-component access is denied — a `core` key cannot access `/rpm/minion/`. The component name in the key must match the path segment exactly.
@@ -143,15 +144,36 @@ curl -s -X DELETE http://127.0.0.1:8088/api/v1/components/minion?confirm=minion 
 
 RPM directory content is **not** removed — the operator is responsible for archiving packages before deleting the directory.
 
+### Updating a component
+
+`PATCH /api/v1/components/{name}` updates mutable component fields. Currently only `visibility` may be changed. The `visibility` field is **required** — omitting it or sending an empty body returns `400 INVALID_VISIBILITY`. The update is persisted immediately and takes effect on the next subscriber request — no service restart is required.
+
+```bash
+curl -s -X PATCH http://127.0.0.1:8088/api/v1/components/minion \
+  -H 'Content-Type: application/json' \
+  -d '{"visibility": "public"}' | jq .
+```
+
+Returns the updated component object on success.
+
+**Response codes:**
+
+| Code | Condition |
+|------|-----------|
+| `200 OK` | Visibility updated; returns updated component record |
+| `400 Bad Request` | `visibility` is not `"public"` or `"private"` (`INVALID_VISIBILITY`); or body is not valid JSON (`INVALID_REQUEST`) |
+| `404 Not Found` | Component does not exist (`COMPONENT_NOT_FOUND`) |
+| `500 Internal Server Error` | Unexpected store error |
+
 ### Component API error codes
 
 | Code | Returned by | Description |
 |------|-------------|-------------|
-| `INVALID_REQUEST` | POST | `name` is missing, empty, or contains path-unsafe characters; or an array field contains a path-unsafe value |
-| `INVALID_VISIBILITY` | POST | `visibility` is not `"public"` or `"private"` |
+| `INVALID_REQUEST` | POST, PATCH | `name` is missing, empty, or contains path-unsafe characters; or an array field contains a path-unsafe value; or body is not valid JSON |
+| `INVALID_VISIBILITY` | POST, PATCH | `visibility` is not `"public"` or `"private"` |
 | `COMPONENT_EXISTS` | POST | A component with the given name already exists |
 | `RPM_INIT_FAILED` | POST | RPM directory tree creation failed; the component record was rolled back |
-| `COMPONENT_NOT_FOUND` | GET `/{name}`, DELETE | No component with the given name exists |
+| `COMPONENT_NOT_FOUND` | GET `/{name}`, PATCH, DELETE | No component with the given name exists |
 | `CONFIRM_REQUIRED` | DELETE (no confirm) | `?confirm={name}` was absent or did not match; response includes impact preview |
 
 ## Examples

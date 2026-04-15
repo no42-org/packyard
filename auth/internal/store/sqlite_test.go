@@ -414,3 +414,63 @@ func TestLoadComponentSets(t *testing.T) {
 		t.Error("minion should be public")
 	}
 }
+
+func TestUpdateComponentVisibility_Success(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	if _, err := s.CreateComponent(ctx, newTestComponent("core", "private")); err != nil {
+		t.Fatalf("CreateComponent: %v", err)
+	}
+
+	updated, err := s.UpdateComponentVisibility(ctx, "core", "public")
+	if err != nil {
+		t.Fatalf("UpdateComponentVisibility: %v", err)
+	}
+	if updated.Visibility != "public" {
+		t.Errorf("expected visibility public, got %q", updated.Visibility)
+	}
+	if updated.Name != "core" {
+		t.Errorf("expected name core, got %q", updated.Name)
+	}
+
+	// Confirm the change is persisted.
+	got, err := s.GetComponent(ctx, "core")
+	if err != nil {
+		t.Fatalf("GetComponent after update: %v", err)
+	}
+	if got.Visibility != "public" {
+		t.Errorf("persisted visibility: want public, got %q", got.Visibility)
+	}
+}
+
+func TestUpdateComponentVisibility_NotFound(t *testing.T) {
+	s := newTestStore(t)
+	_, err := s.UpdateComponentVisibility(context.Background(), "nonexistent", "public")
+	if err == nil {
+		t.Fatal("expected error, got nil")
+	}
+	if !errors.Is(err, ErrComponentNotFound) {
+		t.Fatalf("expected ErrComponentNotFound, got: %v", err)
+	}
+}
+
+func TestUpdateComponentVisibility_RoundTrip(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+
+	if _, err := s.CreateComponent(ctx, newTestComponent("core", "public")); err != nil {
+		t.Fatalf("CreateComponent: %v", err)
+	}
+
+	// public → private → public
+	for _, vis := range []string{"private", "public"} {
+		got, err := s.UpdateComponentVisibility(ctx, "core", vis)
+		if err != nil {
+			t.Fatalf("UpdateComponentVisibility(%q): %v", vis, err)
+		}
+		if got.Visibility != vis {
+			t.Errorf("returned visibility: want %q, got %q", vis, got.Visibility)
+		}
+	}
+}

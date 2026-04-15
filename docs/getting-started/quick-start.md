@@ -64,11 +64,6 @@ curl -s -X POST http://localhost:8080/api/v1/components \
     "rpm_architectures": ["x86_64"]
   }' | jq .
 
-# The auth service loads its component map at startup — restart to make
-# forward-auth recognise the new component.
-docker compose -f compose.yml -f compose.override.ci.yml restart auth
-until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done
-
 # Create a subscription key scoped to the component
 curl -s -X POST http://localhost:8080/api/v1/keys \
   -H 'Content-Type: application/json' \
@@ -82,9 +77,12 @@ curl -s -X POST http://localhost:8080/api/v1/keys \
   "label": "dev-key",
   "active": true,
   "created_at": "2025-01-01T00:00:00Z",
-  "component_visibility": "public"
+  "component_visibility": "private"
 }
 ```
+
+!!! note
+    `component_visibility` is derived from a startup-loaded snapshot and shows `"private"` (the safe default) for any component provisioned after the service started. This field is cosmetic — forward-auth always reads visibility live from the database, so `core` is publicly accessible immediately without a restart.
 
 ## 4. Make an authenticated request
 

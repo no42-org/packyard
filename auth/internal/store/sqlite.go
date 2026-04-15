@@ -440,6 +440,25 @@ func (s *SQLiteStore) DeleteComponentWithRevoke(ctx context.Context, name string
 	return revoked, nil
 }
 
+// UpdateComponentVisibility sets the visibility field for a component.
+// Returns the updated component record or ErrComponentNotFound if the component does not exist.
+// Uses RETURNING to read back the row in the same statement, avoiding a TOCTOU between
+// the UPDATE and a subsequent SELECT.
+func (s *SQLiteStore) UpdateComponentVisibility(ctx context.Context, name, visibility string) (*Component, error) {
+	row := s.db.QueryRowContext(ctx,
+		`UPDATE components SET visibility = ? WHERE name = ?
+		 RETURNING name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at`,
+		visibility, name)
+	c, err := scanComponent(row)
+	if err == sql.ErrNoRows {
+		return nil, fmt.Errorf("update component visibility: %w", ErrComponentNotFound)
+	}
+	if err != nil {
+		return nil, fmt.Errorf("update component visibility: %w", err)
+	}
+	return c, nil
+}
+
 // LoadComponentSets queries the components table and returns two maps for O(1) lookups:
 //   - validComponents: all component names
 //   - publicComponents: component names with visibility="public"
