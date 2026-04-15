@@ -92,7 +92,7 @@ func (h *KeysHandler) Get(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("failed to get key", slog.String("id", id), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "KEY_GET_FAILED", "failed to get key")
 		return
 	}
 
@@ -130,12 +130,12 @@ func (h *KeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("failed to get key after revoke", slog.String("id", id), slog.String("error", getErr.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "KEY_DELETE_FAILED", "failed to get key after revoke")
 		return
 	}
 
 	h.Logger.Error("failed to revoke key", slog.String("id", id), slog.String("error", err.Error()))
-	w.WriteHeader(http.StatusInternalServerError)
+	writeError(w, http.StatusInternalServerError, "KEY_DELETE_FAILED", "failed to revoke key")
 }
 
 // List handles GET /api/v1/keys — returns all keys, optionally filtered by ?component=.
@@ -150,7 +150,7 @@ func (h *KeysHandler) List(w http.ResponseWriter, r *http.Request) {
 	keys, err := h.Store.ListKeys(r.Context(), component)
 	if err != nil {
 		h.Logger.Error("failed to list keys", slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "KEY_LIST_FAILED", "failed to list keys")
 		return
 	}
 
@@ -180,14 +180,14 @@ func (h *KeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("failed to validate component", slog.String("component", req.Component), slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "KEY_CREATE_FAILED", "failed to validate component")
 		return
 	}
 
 	key, err := h.Store.CreateKey(r.Context(), req.Component, req.Label, req.ExpiresAt)
 	if err != nil {
 		h.Logger.Error("failed to create key", slog.String("error", err.Error()))
-		w.WriteHeader(http.StatusInternalServerError)
+		writeError(w, http.StatusInternalServerError, "KEY_CREATE_FAILED", "failed to create key")
 		return
 	}
 
