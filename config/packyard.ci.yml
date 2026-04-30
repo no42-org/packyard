@@ -1,9 +1,0 @@
-# CI fixture config — mounted by compose.override.ci.yml.
-# Provides a mixed-visibility setup so verify.sh can exercise both code paths:
-#   core:   public  — unauthenticated access allowed (--public-component core)
-#   minion: private — credentials required (--test-component minion)
-components:
-  - name: core
-    visibility: public
-  - name: minion
-    visibility: private
