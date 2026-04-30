@@ -44,7 +44,7 @@ jobs:
 
       - name: Seed CI components
         run: |
-          # Provision components matching the previous packyard.ci.yml fixture:
+          # Provision the CI component set (mixed visibility — exercises both auth code paths):
           #   core:   public  — unauthenticated access allowed
           #   minion: private — credentials required
           # Treat 409 (already exists) as success so re-runs are idempotent.
