@@ -42,8 +42,11 @@ These are set via `compose.yml` and only need overriding when deploying with a n
 
 ## Compose Override Files
 
+Two scenarios are supported for non-production work — pick the override that matches what you're doing.
+
 | File | Purpose |
 |------|---------|
-| `compose.yml` | Base configuration |
-| `compose.override.ci.yml` | Local development — plain HTTP, admin API exposed on `localhost:8080` |
-| `compose.override.arm64.yml` | Apple Silicon — swaps `zot` to the `arm64` image variant |
+| `compose.yml` | Base configuration (production: TLS via Let's Encrypt, no host-port forwarding). |
+| `compose.override.ci.yml` | **Plain-HTTP fast path** for CI runs and casual local development. No TLS; admin API exposed on `localhost:8080`, Prometheus metrics on `localhost:9090`. Used by `verify.sh`, the e2e tests, and the Getting Started walkthrough. |
+| `compose.override.dev.yml` | **TLS-path debugging** override. Keeps the production TLS path with a self-signed fallback (`curl -k` required) and switches routing to PathPrefix-only rules so endpoints are reachable by IP or `localhost` without a real Host header / DNS entry. Use this when you're verifying TLS or Traefik routing behaviour — not for "just run the stack". |
+| `compose.override.arm64.yml` | Apple Silicon — swaps `zot` to the `arm64` image variant. Stack on top of either `.ci.yml` or `.dev.yml`. |
