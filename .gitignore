@@ -12,6 +12,7 @@ _bmad-output/
 .claude/
 .agents/
 .agent/
+.codex/
 .gemini/
 openspec/
 
@@ -39,3 +40,7 @@ site/
 .codeium/
 .tabnine/
 .supermaven/
+.cline/
+.roo/
+.windsurf/
+.zed/
