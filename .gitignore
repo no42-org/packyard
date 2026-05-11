@@ -17,8 +17,10 @@ trivy_scan.txt
 cosign.key
 cosign.pub
 
+node_modules/
+.docusaurus/
+build/
 site/
-.venv/
 
 # Local secrets — never commit
 .env

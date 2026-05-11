@@ -54,11 +54,11 @@ updates:
       - dependencies
       - docker
 
-  # Python — MkDocs docs dependencies
-  - package-ecosystem: pip
-    directory: /docs
+  # npm — Docusaurus docs toolchain
+  - package-ecosystem: npm
+    directory: /
     schedule:
       interval: weekly
     labels:
       - dependencies
-      - python
+      - npm

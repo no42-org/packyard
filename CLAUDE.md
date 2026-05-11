@@ -55,22 +55,22 @@ TEA and many BMM workflows use a **step-file architecture**: strict sequential s
 
 ## Documentation
 
-All user-facing documentation lives in `docs/` and is published via MkDocs + mike to https://no42-org.github.io/packyard/. The GitHub Wiki is retired and must not be used.
+All user-facing documentation lives in `docs/` and is published via Docusaurus to https://no42-org.github.io/packyard/. The landing page (`/`) is a custom React route at `src/pages/index.tsx`. The GitHub Wiki is retired and must not be used.
 
 Structure:
 
 | Path | Section |
 |------|---------|
-| `docs/index.md` | Home page |
+| `src/pages/index.tsx` | Landing page (custom React hero + Terminal) |
 | `docs/getting-started/` | Quick-start and local development guides |
 | `docs/ops/` | Operational runbooks (production deployment, restore procedures) |
 | `docs/reference/` | Architecture, API, configuration, subscriber usage, promotion pipeline, observability |
 
 When adding or updating documentation:
 - Edit the relevant file under `docs/` — do not create Wiki pages
-- New pages must be added to the `nav:` section in `mkdocs.yml`
-- Run `make docs-serve` locally to preview before committing
-- Docs are published automatically on each GitHub release via `docs.yml`
+- New pages must be added to the appropriate sidebar in `sidebars.ts`
+- Run `make docs-serve` locally to preview before committing (requires Node 20 via `.nvmrc`)
+- Docs are published automatically on each push to `main` via `docs.yml`, and rebuilt after each Release workflow completes (so the landing-page version eyebrow picks up new tags)
 
 ## Docker Compose
 
