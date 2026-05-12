@@ -53,7 +53,7 @@ gh release create v1.2.3 \
   --generate-notes
 ```
 
-Publishing the release triggers `docs.yml`, which runs `mike deploy v1.2.3 latest` and pushes the versioned docs to `gh-pages`. Confirm at `https://no42-org.github.io/packyard/`.
+Publishing the release triggers a rebuild of `docs.yml` via the `workflow_run` hook, so the landing-page version eyebrow (resolved from `git describe --tags` in `docusaurus.config.ts`) picks up the new tag. Docs themselves publish on every push to `main`, not on release — so by the time you cut the release, the page text is already live. Confirm at `https://no42-org.github.io/packyard/`.
 
 ## 4. Bump to next development version
 

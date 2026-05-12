@@ -1,3 +1,6 @@
+# macOS
+.DS_Store
+
 # IntelliJ
 .idea/
 
@@ -9,6 +12,7 @@ _bmad-output/
 .claude/
 .agents/
 .agent/
+.codex/
 .gemini/
 openspec/
 
@@ -17,8 +21,10 @@ trivy_scan.txt
 cosign.key
 cosign.pub
 
+node_modules/
+.docusaurus/
+build/
 site/
-.venv/
 
 # Local secrets — never commit
 .env
@@ -34,3 +40,7 @@ site/
 .codeium/
 .tabnine/
 .supermaven/
+.cline/
+.roo/
+.windsurf/
+.zed/

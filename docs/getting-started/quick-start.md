@@ -81,8 +81,9 @@ curl -s -X POST http://localhost:8080/api/v1/keys \
 }
 ```
 
-!!! note
-    `component_visibility` is derived from a startup-loaded snapshot. Because `core` was provisioned after the service started, the snapshot does not include it and the field shows `"private"` (the fallback). This is expected — the field is informational only. Forward-auth reads visibility live from the database on every request, so `core` is publicly accessible immediately without a restart.
+:::note
+`component_visibility` is derived from a startup-loaded snapshot. Because `core` was provisioned after the service started, the snapshot does not include it and the field shows `"private"` (the fallback). This is expected — the field is informational only. Forward-auth reads visibility live from the database on every request, so `core` is publicly accessible immediately without a restart.
+:::
 
 ## 4. Make an authenticated request
 
@@ -123,8 +124,10 @@ docker compose -f compose.yml -f compose.override.ci.yml down -v
 
 ---
 
-!!! note
-    The local stack runs HTTP only — no TLS, no ACME. Port 80 serves public and authenticated routes; the admin API is on `localhost:8080`. Promotion workflows (RPM/DEB/OCI signing) require a running production host with SSH access.
+:::note
+The local stack runs HTTP only — no TLS, no ACME. Port 80 serves public and authenticated routes; the admin API is on `localhost:8080`. Promotion workflows (RPM/DEB/OCI signing) require a running production host with SSH access.
+:::
 
-!!! note "Apple Silicon (arm64)"
-    `zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `compose.override.arm64.yml` to swap it to the `arm64` variant. `aptly` is published as a multi-arch image and selects the correct binary automatically.
+:::note[Apple Silicon (arm64)]
+`zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `compose.override.arm64.yml` to swap it to the `arm64` variant. `aptly` is published as a multi-arch image and selects the correct binary automatically.
+:::

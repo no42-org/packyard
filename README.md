@@ -52,7 +52,7 @@ cd packyard
 bash verify.sh
 ```
 
-See [Getting Started](https://no42-org.github.io/packyard/latest/getting-started/quick-start/) for the full walkthrough.
+See [Getting Started](https://no42-org.github.io/packyard/getting-started/quick-start) for the full walkthrough.
 
 ## Repository Layout
 
