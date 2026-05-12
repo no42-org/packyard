@@ -127,7 +127,7 @@ article h1, article h2, article h3, article h4 {
 .pky-btn--primary { background: var(--pky-accent); color: var(--pky-bg) !important; border-color: var(--pky-accent); }
 .pky-btn--primary:hover { background: color-mix(in oklab, var(--pky-accent) 88%, white); }
 
-.pky-panel { position: relative; background: var(--pky-bg-1); border: 1px solid var(--pky-hair); border-radius: 4px; }
+.pky-panel { position: relative; background: var(--pky-bg-1); border: 1px solid var(--pky-hair); border-radius: 4px; min-width: 0; }
 .pky-panel__hd { display: flex; justify-content: space-between; padding: 10px 14px; border-bottom: 1px solid var(--pky-hair); font-family: var(--ifm-font-family-monospace); font-size: 11px; }
 .pky-panel__title { color: var(--pky-accent); text-transform: uppercase; letter-spacing: 0.04em; }
 .pky-panel__meta { color: var(--pky-fg-mute); }
@@ -168,7 +168,7 @@ article h1, article h2, article h3, article h4 {
 .pky-copy { display: flex; align-items: flex-start; gap: 8px; padding: 10px 12px; background: var(--pky-bg-2); border: 1px solid var(--pky-hair); border-radius: 4px; font-family: var(--ifm-font-family-monospace); font-size: 12px; margin-bottom: 8px; }
 .pky-copy:last-child { margin-bottom: 0; }
 .pky-copy__prompt { color: var(--pky-accent); line-height: 1.5; }
-.pky-copy__text { flex: 1; overflow-x: auto; white-space: pre; color: var(--pky-fg); background: transparent; border: none; padding: 0; line-height: 1.5; }
+.pky-copy__text { flex: 1; min-width: 0; overflow-x: auto; white-space: pre; color: var(--pky-fg); background: transparent; border: none; padding: 0; line-height: 1.5; }
 .pky-copy__btn { font-family: var(--ifm-font-family-monospace); font-size: 10px; text-transform: uppercase; letter-spacing: 0.08em; padding: 3px 8px; background: transparent; color: var(--pky-fg-mute); border: 1px solid var(--pky-hair); border-radius: 4px; cursor: pointer; }
 .pky-copy__btn:hover { color: var(--pky-accent); border-color: var(--pky-accent); }
 
