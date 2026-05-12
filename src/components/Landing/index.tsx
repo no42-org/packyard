@@ -137,7 +137,10 @@ export default function Landing(): JSX.Element {
               <Copyable text="cd packyard" />
             </Panel>
             <Panel title="02 · bring up" meta="docker compose v2">
-              <Copyable text="docker compose -f compose.yml -f compose.override.ci.yml up -d" />
+              <Copyable text={`docker compose \\
+  -f compose.yml \\
+  -f compose.override.ci.yml \\
+  up -d`} />
             </Panel>
             <Panel title="03 · first key" meta="admin API · localhost:8080">
               <Copyable text={`curl -X POST http://localhost:8080/api/v1/keys \\
