@@ -16,8 +16,8 @@ accessLog:
 entryPoints:
   web:
     address: "0.0.0.0:80"
-  admin:
-    address: "127.0.0.1:8088"
+  metrics:
+    address: "127.0.0.1:8082"  # Traefik's own /metrics; loopback-only inside the container, internal only in CI
 
 # No certificatesResolvers — TLS/ACME disabled for CI
 
@@ -28,4 +28,4 @@ providers:
 
 metrics:
   prometheus:
-    entryPoint: admin
+    entryPoint: metrics

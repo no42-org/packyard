@@ -6,12 +6,16 @@
 # This replaces the production dynamic config with PathPrefix-only rules so all
 # package endpoints are reachable by IP or localhost without a Host header or
 # DNS entry. TLS uses Traefik's self-signed fallback — use curl -k in dev.
+# The admin UI lives at https://localhost/admin/ (after § 8 embeds the SPA);
+# admin API + OAuth callbacks at https://localhost/api/v1/*.
 #
-# .env still requires ACME_EMAIL and PKG_DOMAIN (the :? guards in compose.yml
-# are evaluated before the override is applied). Dummy values are fine:
+# .env still requires ACME_EMAIL, PKG_DOMAIN, and ADMIN_DOMAIN (the :? guards
+# in compose.yml are evaluated before the override is applied). Dummy values
+# are fine:
 #
 #   ACME_EMAIL=dev@localhost
 #   PKG_DOMAIN=localhost
+#   ADMIN_DOMAIN=localhost
 
 services:
   traefik:
@@ -19,3 +23,9 @@ services:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic-dev:/etc/traefik/dynamic:ro
       - traefik-certs:/certs
+
+  auth:
+    environment:
+      # In dev the browser hits https://localhost, so CSRF must match that
+      # origin — not whatever ADMIN_DOMAIN is set to in .env.
+      - PACKYARD_ADMIN_HOST=https://localhost

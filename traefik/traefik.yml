@@ -16,8 +16,8 @@ accessLog:
 entryPoints:
   websecure:
     address: "0.0.0.0:443"
-  admin:
-    address: ":8088"  # bind all interfaces inside container; host-side 127.0.0.1:8088:8088 in compose.yml enforces loopback-only
+  metrics:
+    address: "127.0.0.1:8082"  # Traefik's own /metrics for Prometheus. Bound to loopback inside the container so only sidecars sharing the network namespace (or `docker exec`) can scrape — other containers on the proxy network cannot reach it.
 
 certificatesResolvers:
   letsencrypt:
@@ -36,4 +36,4 @@ providers:
 
 metrics:
   prometheus:
-    entryPoint: admin
+    entryPoint: metrics

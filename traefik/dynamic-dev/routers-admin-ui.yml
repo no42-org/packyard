@@ -1,0 +1,19 @@
+http:
+  routers:
+    # Dev override — PathPrefix-only routing on websecure with Traefik's
+    # self-signed fallback. Reach the admin UI at https://localhost/admin/
+    # (curl -k or add the dev cert to your trust store). The /api/v1/ rule
+    # services both the admin API and the OAuth login/callback routes
+    # (/api/v1/auth/*). No Host() header is required.
+    admin-ui:
+      entryPoints:
+        - websecure
+      rule: "PathPrefix(`/admin/`) || PathPrefix(`/api/v1/`)"
+      service: packyard-auth-admin-svc
+      tls: {}
+
+  services:
+    packyard-auth-admin-svc:
+      loadBalancer:
+        servers:
+          - url: "http://auth:8080"
