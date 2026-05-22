@@ -22,21 +22,24 @@
 
 ## 1. DNS Records
 
-All records are on the `example.org` zone. Apply these **before** starting the deployment — Traefik's ACME TLS-ALPN-01 challenge requires `pkg.example.org` to resolve to the VM before it can issue the TLS certificate.
+All records are on the `example.org` zone. Apply these **before** starting the deployment — Traefik's ACME TLS-ALPN-01 challenge requires the hostnames to resolve to the VM before it can issue the TLS certificate.
 
-| Type  | Name              | Value                            | TTL   | Notes |
-|-------|-------------------|----------------------------------|-------|-------|
-| A     | `pkg.example.org`     | `<VM_IPV4>`                      | 300   | Primary package serving endpoint |
-| AAAA  | `pkg.example.org`     | `<VM_IPV6>`                      | 300   | Only if VM has a public IPv6 address |
-| CAA   | `pkg.example.org`     | `0 issue "letsencrypt.org"`      | 3600  | Restricts TLS cert issuance to Let's Encrypt |
-| CAA   | `pkg.example.org`     | `0 iodef "mailto:ops@example.org"`   | 3600  | CAA violation notification address |
+| Type  | Name                       | Value                              | TTL   | Notes |
+|-------|----------------------------|------------------------------------|-------|-------|
+| A     | `pkg.example.org`          | `<VM_IPV4>`                        | 300   | Primary package serving endpoint |
+| AAAA  | `pkg.example.org`          | `<VM_IPV6>`                        | 300   | Only if VM has a public IPv6 address |
+| A     | `admin.pkg.example.org`    | `<VM_IPV4>`                        | 300   | Admin UI + admin API (OAuth-gated) |
+| AAAA  | `admin.pkg.example.org`    | `<VM_IPV6>`                        | 300   | Only if VM has a public IPv6 address |
+| CAA   | `pkg.example.org`          | `0 issue "letsencrypt.org"`        | 3600  | Restricts TLS cert issuance to Let's Encrypt |
+| CAA   | `pkg.example.org`          | `0 iodef "mailto:ops@example.org"` | 3600  | CAA violation notification address |
 
-> **No other subdomains are needed.** The admin API is loopback-only (`127.0.0.1:8088`), reached via SSH tunnel. RPM, DEB, OCI, and GPG key endpoints all share `pkg.example.org`.
+> **Admin host:** `admin.pkg.example.org` is gated by OAuth + operator allowlist (see [Operator onboarding](operator-onboarding.md)). The historical loopback admin entrypoint (`127.0.0.1:8088`) has been retired — the admin API is now exposed over public TLS but requires a valid operator session.
 
 ### DNS propagation check
 
 ```bash
 dig +short pkg.example.org A
+dig +short admin.pkg.example.org A
 dig +short pkg.example.org CAA
 ```
 
@@ -58,7 +61,7 @@ dig +short pkg.example.org CAA
 | Source | Protocol/Port | Purpose |
 |--------|---------------|---------|
 | `0.0.0.0/0` | TCP 443 | Package subscribers + TLS-ALPN-01 cert issuance |
-| operator CIDR | TCP 22 | SSH for admin API access and port-forwards |
+| operator CIDR | TCP 22 | SSH access to the VM (host-level ops; admin API is HTTPS-only) |
 
 > Traefik uses the **TLS-ALPN-01** challenge for Let's Encrypt — port 443 is the only port required. Port 80 does not need to be open.
 
@@ -69,14 +72,40 @@ dig +short pkg.example.org CAA
 ### `.env` file (on VM, never committed)
 
 ```dotenv
-# TLS
+# TLS + hostnames
 ACME_EMAIL=ops@example.org
 PKG_DOMAIN=pkg.example.org
+ADMIN_DOMAIN=admin.pkg.example.org
+
+# Admin bootstrap — the first operator inserted when the operators table is
+# empty. Idempotent: ignored once any operator exists. See the operator
+# onboarding guide for the full flow.
+PACKYARD_BOOTSTRAP_OPERATOR_EMAIL=ops@example.org
+
+# OAuth providers — configure at least one; configure both for redundancy.
+# Every variable in a provider's group must be set together; partial config
+# fails the auth service at startup.
+
+# GitHub
+PACKYARD_GITHUB_CLIENT_ID=<from GitHub OAuth App>
+PACKYARD_GITHUB_CLIENT_SECRET=<from GitHub OAuth App>
+PACKYARD_GITHUB_REDIRECT_URI=https://admin.pkg.example.org/api/v1/auth/callback/github
+PACKYARD_GITHUB_ORG=<github-org-login>
+
+# Microsoft Entra (Azure AD)
+PACKYARD_MICROSOFT_CLIENT_ID=<from Entra app registration>
+PACKYARD_MICROSOFT_CLIENT_SECRET=<from Entra app registration>
+PACKYARD_MICROSOFT_REDIRECT_URI=https://admin.pkg.example.org/api/v1/auth/callback/microsoft
+PACKYARD_MICROSOFT_TENANT_ID=<from Entra directory>
 
 # RustFS staging storage (generate with: openssl rand -hex 20)
 RUSTFS_ACCESS_KEY=<generate>
 RUSTFS_SECRET_KEY=<generate>
 ```
+
+See [Operator onboarding §1](operator-onboarding.md#1-register-the-idp-apps-one-time-per-deployment)
+for how to register the GitHub and Microsoft applications and obtain the
+client id / secret / tenant id values.
 
 ### GitHub Actions secrets
 
@@ -288,27 +317,47 @@ curl -sI -u subscriber:<KEY> https://pkg.example.org/rpm/core/2025/el9-x86_64/re
 curl -sI -u subscriber:<CORE_KEY> https://pkg.example.org/rpm/minion/2025/el9-x86_64/repodata/repomd.xml
 # Expect: HTTP/2 401
 
-# 5. Admin API reachable only via SSH tunnel
-ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
-curl -s http://127.0.0.1:8088/api/v1/keys
-# Expect: JSON array (empty if no keys created yet)
+# 5. Admin host reachable, but unauthenticated /api/v1 returns 401
+curl -sI https://admin.pkg.example.org/api/v1/operators
+# Expect: HTTP/2 401 with `code: "UNAUTHORIZED"` body
+
+# 6. Admin login page renders
+curl -sI https://admin.pkg.example.org/admin/login
+# Expect: HTTP/2 200 with text/html
 ```
 
 ---
 
 ## 9. First Subscriber Onboarding
 
-```bash
-# Open SSH tunnel to admin API
-ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
+The bootstrap operator (see `.env → PACKYARD_BOOTSTRAP_OPERATOR_EMAIL`) signs
+in at `https://admin.pkg.example.org/admin/login` using their IdP, then
+uses the SPA to create a subscriber account and issue its first key.
 
-# Create an API key for a subscriber
-# Replace "core" with a provisioned component name (see GET /api/v1/components)
-curl -s -X POST http://127.0.0.1:8088/api/v1/keys \
+For headless / scripted use, the same flow goes through the API. Capture
+the session cookie from a browser login (DevTools → Application →
+Cookies → `packyard_session`) and pass it via `curl --cookie`:
+
+```bash
+COOKIE="packyard_session=…"
+
+# 1. Create a subscriber account
+ACCOUNT=$(curl -s -X POST https://admin.pkg.example.org/api/v1/accounts \
   -H 'Content-Type: application/json' \
-  -d '{"component": "core", "label": "Acme Corp — Core"}'
-# Response contains the key value — share only this with the subscriber
+  --cookie "$COOKIE" \
+  -d '{"email":"ops@acme.test","org_name":"Acme Corp"}' | jq -r .id)
+
+# 2. Issue a subscription key for the account
+curl -s -X POST "https://admin.pkg.example.org/api/v1/accounts/${ACCOUNT}/keys" \
+  -H 'Content-Type: application/json' \
+  --cookie "$COOKIE" \
+  -d '{"component":"core","label":"Acme — Core"}' | jq .
+# Response includes `secret` — share this once with the subscriber; it is
+# never returned again.
 ```
+
+See [Operator onboarding](operator-onboarding.md) for how to allowlist
+additional admins or auditor-style readonly operators.
 
 Example subscriber `yum.repos.d` entry:
 
@@ -369,4 +418,4 @@ The remote mode covers: public GPG endpoints, forwardAuth allow/deny, scope enfo
 | TLS cert expiry | Alert at ≤ 30 days remaining | — |
 | Auth service health | Traefik health check (auto; returns 503 on failure) | Fail-closed |
 
-Prometheus metrics are available at `http://auth:9090/metrics` (internal Docker network only). Expose to an internal monitoring stack via SSH tunnel or a separate Traefik route on the admin entrypoint.
+Prometheus metrics are available at `http://auth:9090/metrics` (internal Docker network only). Traefik's own metrics are at `http://traefik:8082/metrics` on the internal `metrics` entrypoint. Expose either to an internal monitoring stack by adding a Prometheus container on the `proxy` Docker network, or scrape over SSH if a stack is hosted elsewhere.

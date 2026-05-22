@@ -21,6 +21,8 @@ const sidebars: SidebarsConfig = {
       collapsed: false,
       items: [
         'ops/production-deployment',
+        'ops/operator-onboarding',
+        'ops/admin-migration-runbook',
         'ops/release-runbook',
         'ops/restore-keystore',
         'ops/manual-test-plan',

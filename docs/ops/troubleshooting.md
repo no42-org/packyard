@@ -8,7 +8,9 @@
 | Subscribers getting `401` on a key that should work | Key scope mismatch, revoked key, or auth service down | [Subscribers getting 401](#subscribers-getting-401) |
 | Subscribers getting `404` on a path that should exist | Component name in URL not provisioned via the components API | [Subscribers getting 401](#subscribers-getting-401) |
 | All requests returning `503` | Auth service is down (fail-closed by design) | [All requests returning 503](#all-requests-returning-503) |
-| Admin API returns connection refused / `000` | SSH tunnel not open | [Admin API unreachable](#admin-api-unreachable) |
+| Admin login redirects back to /login with error | OAuth / allowlist / org / role failure | [Operator login fails](#operator-login-fails) |
+| Admin API returns `401 UNAUTHORIZED` to the browser | Session expired or missing | [Admin API rejects the SPA](#admin-api-rejects-the-spa) |
+| `https://admin.pkg.example.org/` does not resolve | DNS / TLS / Traefik routing | [Admin host unreachable](#admin-host-unreachable) |
 | Container shows `unhealthy` or `exited` | Crash loop, disk full, or DB permissions | [Container unhealthy or crashing](#container-unhealthy-or-crashing) |
 | Promotion workflow fails at GPG step | `lts.asc` is still a placeholder, or secrets not set | [Promotion pipeline failures](#promotion-pipeline-failures) |
 
@@ -76,37 +78,54 @@ If the state is `unhealthy` or `exited`, see [Container unhealthy or crashing](#
 
 **Step 2 — Does the key exist and is it active?**
 
-Open an SSH tunnel to the admin API, then look up the key:
+Sign in at `https://admin.pkg.example.org/admin/` and find the subscriber's
+account; the keys table on the account-detail page shows id, component,
+active, and revoked rows. For CLI use, capture the session cookie from a
+browser login and query the API:
 
 ```bash
-ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
-curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | select(.id == "<KEY>")'
+COOKIE="packyard_session=…"
+curl -s "https://admin.pkg.example.org/api/v1/keys?account=${ACCOUNT_ID}" \
+  --cookie "$COOKIE" | jq '.[] | {id, component, label, active}'
 ```
 
-If the key is absent, it was created after the last backup and lost during a keystore restore. Re-provision it:
+If the key is absent, it was created after the last backup and lost during
+a keystore restore. Re-issue it via the SPA's "Issue key" action on the
+account, or via the API:
 
 ```bash
-curl -s -X POST http://127.0.0.1:8088/api/v1/keys \
+curl -s -X POST "https://admin.pkg.example.org/api/v1/accounts/${ACCOUNT_ID}/keys" \
   -H 'Content-Type: application/json' \
-  -d '{"component": "core", "label": "re-provisioned"}'
+  --cookie "$COOKIE" \
+  -d '{"component":"core","label":"re-provisioned"}' | jq .
 ```
 
-If the key is present but `"active": false`, it has been revoked. Issue a new key.
+If the key is present but `"active": false`, it has been revoked. Issue a
+new key.
 
 **Step 3 — Is the key scoped to the right component?**
 
-Each key is scoped to a single component. A `core` key cannot access `/rpm/minion/` — that is the expected behaviour, not a bug. Confirm the subscriber is using a key whose `component` matches the path they are requesting.
+Each key is scoped to a single component. A `core` key cannot access
+`/rpm/minion/` — that is the expected behaviour, not a bug. The account
+detail page shows the `component` column; in CLI form:
 
 ```bash
-curl -s http://127.0.0.1:8088/api/v1/keys | jq '.[] | {id, component, label, active}'
+curl -s "https://admin.pkg.example.org/api/v1/keys?account=${ACCOUNT_ID}" \
+  --cookie "$COOKIE" | jq '.[] | {id, component, active}'
 ```
 
 **Step 4 — Is the component marked public?**
 
-If a component has `visibility: public` (as set via `POST /api/v1/components` or updated via `PATCH /api/v1/components/{name}`), the auth service allows requests to its paths without inspecting credentials. Forward-auth reads visibility from the database on every request — changes take effect immediately without a restart. If a subscriber reports getting `401` on a public component path, confirm the component's current visibility:
+If a component has `visibility: public` (set via `POST /api/v1/components` or
+updated via `PATCH /api/v1/components/{name}`), the auth service allows
+requests to its paths without inspecting credentials. Forward-auth reads
+visibility from the database on every request — changes take effect
+immediately without a restart. If a subscriber reports getting `401` on a
+public component path, confirm the component's current visibility:
 
 ```bash
-curl -s http://127.0.0.1:8088/api/v1/components/core | jq .visibility
+curl -s "https://admin.pkg.example.org/api/v1/components/core" \
+  --cookie "$COOKIE" | jq .visibility
 ```
 
 **Restart semantics — when a restart is and is not required:**
@@ -156,27 +175,95 @@ Common causes:
 
 ---
 
-## Admin API unreachable
+## Admin host unreachable
 
-The admin API listens on `127.0.0.1:8088` (loopback only). It is not reachable from outside the VM without an SSH tunnel.
+The admin UI + API live at `https://admin.pkg.example.org/` (or whatever
+`ADMIN_DOMAIN` you set). The historical loopback admin entrypoint
+(`127.0.0.1:8088`) has been retired — there is no SSH tunnel any more.
 
-**Open the tunnel:**
-
-```bash
-ssh -L 8088:127.0.0.1:8088 deploy@pkg.example.org -N &
-```
-
-**Verify:**
+**Step 1 — DNS for the admin host?**
 
 ```bash
-curl -s http://127.0.0.1:8088/api/v1/keys
-# Expected: JSON array (empty if no keys)
-# Connection refused → tunnel not open, or auth service down
+dig +short admin.pkg.example.org A
+# must return the VM's public IP
 ```
 
-Note: port 8088 serves plain HTTP (not HTTPS) — do not use `-k` or `https://`.
+If empty, add the record (see [§1 of the deployment guide](production-deployment.md#1-dns-records))
+and wait for propagation.
 
-If the admin API returns `404` on port 443 (the public entrypoint), that is correct — the admin route is intentionally not exposed publicly.
+**Step 2 — TLS cert covers `admin.*`?**
+
+Traefik's ACME resolver issues a separate cert for `admin.pkg.example.org`.
+Successful issuance log line:
+
+```
+msg="Certificate obtained successfully" domain=admin.pkg.example.org
+```
+
+Same Let's Encrypt rate-limit caveats apply as for the primary host —
+don't restart Traefik in a loop.
+
+**Step 3 — `ADMIN_DOMAIN` env var set?**
+
+The Traefik router templates `{{ env "ADMIN_DOMAIN" }}` into its `Host()`
+rule. Missing env → compose-up fails with a clear error; mismatched env →
+404 because the rule does not match the request.
+
+```bash
+docker compose exec traefik env | grep ADMIN_DOMAIN
+```
+
+**Step 4 — Auth service healthy?**
+
+The admin host routes to `http://auth:8080`. If `auth` is unhealthy
+Traefik returns `503`, not 404.
+
+```bash
+docker compose ps auth
+docker compose logs auth --tail=50
+```
+
+## Operator login fails
+
+The browser ends up at `/admin/login?error=CODE` after an unsuccessful OAuth
+round-trip. The `CODE` query parameter names the failure mode:
+
+| Code                       | Meaning                                                                                         | Fix                                                              |
+|----------------------------|-------------------------------------------------------------------------------------------------|------------------------------------------------------------------|
+| `OPERATOR_NOT_ALLOWED`     | The OAuth identity's verified email is not in the `operators` allowlist                          | Allowlist the email (see [operator onboarding](operator-onboarding.md)) |
+| `OPERATOR_DISABLED`        | Email is allowlisted but the row has `status='disabled'`                                         | PATCH `{"status":"active"}` via the SPA or API                   |
+| `ORG_MEMBERSHIP_REQUIRED`  | GitHub user is not an active member of `PACKYARD_GITHUB_ORG`                                     | Add the user to the org, or use the other provider               |
+| `EMAIL_NOT_VERIFIED`       | IdP returned an unverified email                                                                 | Operator verifies their email at the IdP, then retries           |
+| `INVALID_OAUTH_STATE`      | OAuth state cookie missing / mismatched (browser stripped cookies, or callback hit twice)        | Retry the login                                                  |
+| `OAUTH_EXCHANGE_FAILED`    | IdP rejected our token request (bad client secret, missing scope, SAML SSO challenge unfulfilled) | Verify env-var values; for GitHub, ensure `read:org` is approved |
+| `UNKNOWN_PROVIDER`         | `/login/{provider}` path named a provider not configured at startup                              | Verify the provider's env vars are set as a complete set         |
+| `RATE_LIMITED`             | Source IP exceeded the OAuth bucket (10 req capacity, 1/6s refill)                               | Wait a minute; investigate the source if persistent              |
+
+Server-side log lines (`docker compose logs auth`) carry richer context —
+e.g. the `login.failure` audit row includes the IdP-reported email even when
+the request is rejected, which is the fastest path to identifying the
+mis-allowlisted address.
+
+## Admin API rejects the SPA
+
+A successful login lands the operator in the SPA, but a subsequent admin
+action returns `401 UNAUTHORIZED` or `401 SESSION_EXPIRED`. Both surface in
+the SPA's red error banner.
+
+- **`UNAUTHORIZED`**: the session cookie is missing — usually because the
+  browser dropped it (cleared cookies, switched profile) or it never landed
+  (Traefik routed `/admin/` to the SPA without first servicing the OAuth
+  callback). The SPA detects this and redirects to `/admin/login`.
+- **`SESSION_EXPIRED`**: the session row exists but exceeded the 8-hour
+  idle timeout or the 24-hour absolute lifetime. Re-login fixes it.
+- **`CSRF_DENIED`** on a mutating request: the `Origin`/`Referer` header
+  does not match `PACKYARD_ADMIN_HOST`. Cause is almost always a
+  proxy/header-rewriting layer in front of the deployment, or a stale
+  bookmark that uses a different hostname. Verify the operator is on
+  `https://admin.pkg.example.org/`.
+- **`ROLE_DENIED`** on the Operators page (e.g.): the operator is `readonly`
+  and tried a mutating action. The SPA hides the page entirely from
+  readonly operators — if they reached it, they bookmarked the URL.
 
 ---
 
