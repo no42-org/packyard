@@ -14,6 +14,7 @@ import (
 	"time"
 
 	"github.com/go-chi/chi/v5"
+	"github.com/no42-org/packyard-auth/internal/audit"
 	"github.com/no42-org/packyard-auth/internal/store"
 )
 
@@ -64,11 +65,11 @@ func postKeys(h *KeysHandler, body string) *httptest.ResponseRecorder {
 // TestCreate_ValidCore — AC1, AC3: valid core component returns 201 with Key JSON.
 func TestCreate_ValidCore(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		createKeyFn: func(_ context.Context, component, label string, _ *time.Time) (*store.Key, error) {
+		createKeyFn: func(_ context.Context, _, component, label string, _ *time.Time) (*store.Key, error) {
 			return makeKey(component, label), nil
 		},
 	})
-	w := postKeys(h, `{"component":"core","label":"Acme Corp - Core","expires_at":null}`)
+	w := postKeys(h, `{"account_id":"acct-test","component":"core","label":"Acme Corp - Core","expires_at":null}`)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("expected 201, got %d", w.Code)
@@ -91,11 +92,11 @@ func TestCreate_ValidCore(t *testing.T) {
 // TestCreate_ValidMinion — AC3: minion component accepted.
 func TestCreate_ValidMinion(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		createKeyFn: func(_ context.Context, component, label string, _ *time.Time) (*store.Key, error) {
+		createKeyFn: func(_ context.Context, _, component, label string, _ *time.Time) (*store.Key, error) {
 			return makeKey(component, label), nil
 		},
 	})
-	w := postKeys(h, `{"component":"minion","label":"Minion Sub"}`)
+	w := postKeys(h, `{"account_id":"acct-test","component":"minion","label":"Minion Sub"}`)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("expected 201, got %d", w.Code)
@@ -112,11 +113,11 @@ func TestCreate_ValidMinion(t *testing.T) {
 // TestCreate_ValidSentinel — AC3: sentinel component accepted.
 func TestCreate_ValidSentinel(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		createKeyFn: func(_ context.Context, component, label string, _ *time.Time) (*store.Key, error) {
+		createKeyFn: func(_ context.Context, _, component, label string, _ *time.Time) (*store.Key, error) {
 			return makeKey(component, label), nil
 		},
 	})
-	w := postKeys(h, `{"component":"sentinel","label":"Sentinel Sub"}`)
+	w := postKeys(h, `{"account_id":"acct-test","component":"sentinel","label":"Sentinel Sub"}`)
 
 	if w.Code != http.StatusCreated {
 		t.Errorf("expected 201, got %d", w.Code)
@@ -126,12 +127,12 @@ func TestCreate_ValidSentinel(t *testing.T) {
 // TestCreate_InvalidComponent — AC2: unknown component returns 400 INVALID_COMPONENT.
 func TestCreate_InvalidComponent(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		createKeyFn: func(_ context.Context, _, _ string, _ *time.Time) (*store.Key, error) {
+		createKeyFn: func(_ context.Context, _, _, _ string, _ *time.Time) (*store.Key, error) {
 			t.Fatal("CreateKey must not be called for invalid component")
 			return nil, nil
 		},
 	})
-	w := postKeys(h, `{"component":"invalid","label":"test"}`)
+	w := postKeys(h, `{"account_id":"acct-test","component":"invalid","label":"test"}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
@@ -151,12 +152,12 @@ func TestCreate_InvalidComponent(t *testing.T) {
 // TestCreate_EmptyComponent — AC2: empty string is not a valid component.
 func TestCreate_EmptyComponent(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		createKeyFn: func(_ context.Context, _, _ string, _ *time.Time) (*store.Key, error) {
+		createKeyFn: func(_ context.Context, _, _, _ string, _ *time.Time) (*store.Key, error) {
 			t.Fatal("CreateKey must not be called for empty component")
 			return nil, nil
 		},
 	})
-	w := postKeys(h, `{"component":"","label":"test"}`)
+	w := postKeys(h, `{"account_id":"acct-test","component":"","label":"test"}`)
 
 	if w.Code != http.StatusBadRequest {
 		t.Errorf("expected 400, got %d", w.Code)
@@ -174,11 +175,11 @@ func TestCreate_EmptyComponent(t *testing.T) {
 func TestCreate_LabelStored(t *testing.T) {
 	const wantLabel = "Acme Corporation — Core Subscription"
 	h := newTestKeysHandler(&mockStore{
-		createKeyFn: func(_ context.Context, component, label string, _ *time.Time) (*store.Key, error) {
+		createKeyFn: func(_ context.Context, _, component, label string, _ *time.Time) (*store.Key, error) {
 			return makeKey(component, label), nil
 		},
 	})
-	body, _ := json.Marshal(map[string]any{"component": "core", "label": wantLabel})
+	body, _ := json.Marshal(map[string]any{"account_id": "acct-test", "component": "core", "label": wantLabel})
 	w := postKeys(h, string(body))
 
 	if w.Code != http.StatusCreated {
@@ -196,11 +197,11 @@ func TestCreate_LabelStored(t *testing.T) {
 // TestCreate_StoreError — store failure returns 500 with empty body.
 func TestCreate_StoreError(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		createKeyFn: func(_ context.Context, _, _ string, _ *time.Time) (*store.Key, error) {
+		createKeyFn: func(_ context.Context, _, _, _ string, _ *time.Time) (*store.Key, error) {
 			return nil, errors.New("database locked")
 		},
 	})
-	w := postKeys(h, `{"component":"core","label":"test"}`)
+	w := postKeys(h, `{"account_id":"acct-test","component":"core","label":"test"}`)
 
 	if w.Code != http.StatusInternalServerError {
 		t.Errorf("expected 500, got %d", w.Code)
@@ -224,7 +225,7 @@ func getKeys(h *KeysHandler, query string) *httptest.ResponseRecorder {
 func TestList_NoFilter(t *testing.T) {
 	want := []*store.Key{makeKey("core", "A"), makeKey("minion", "B")}
 	h := newTestKeysHandler(&mockStore{
-		listKeysFn: func(_ context.Context, component string) ([]*store.Key, error) {
+		listKeysFn: func(_ context.Context, component, _ string, _, _ int) ([]*store.Key, error) {
 			if component != "" {
 				t.Errorf("expected empty component, got %q", component)
 			}
@@ -248,7 +249,7 @@ func TestList_NoFilter(t *testing.T) {
 // TestList_FilterCore — AC2: ?component=core passes filter to store, returns 200.
 func TestList_FilterCore(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		listKeysFn: func(_ context.Context, component string) ([]*store.Key, error) {
+		listKeysFn: func(_ context.Context, component, _ string, _, _ int) ([]*store.Key, error) {
 			if component != "core" {
 				t.Errorf("expected component=core, got %q", component)
 			}
@@ -272,7 +273,7 @@ func TestList_FilterCore(t *testing.T) {
 // TestList_FilterInvalid — AC3: invalid component returns 400 INVALID_COMPONENT; store not called.
 func TestList_FilterInvalid(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		listKeysFn: func(_ context.Context, _ string) ([]*store.Key, error) {
+		listKeysFn: func(_ context.Context, _, _ string, _, _ int) ([]*store.Key, error) {
 			t.Fatal("ListKeys must not be called for invalid component")
 			return nil, nil
 		},
@@ -294,7 +295,7 @@ func TestList_FilterInvalid(t *testing.T) {
 // TestList_Empty — AC4: nil slice from store encodes as [] not null.
 func TestList_Empty(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		listKeysFn: func(_ context.Context, _ string) ([]*store.Key, error) {
+		listKeysFn: func(_ context.Context, _, _ string, _, _ int) ([]*store.Key, error) {
 			return nil, nil
 		},
 	})
@@ -319,7 +320,7 @@ func TestList_IncludesRevoked(t *testing.T) {
 		CreatedAt: time.Now().UTC(),
 	}
 	h := newTestKeysHandler(&mockStore{
-		listKeysFn: func(_ context.Context, _ string) ([]*store.Key, error) {
+		listKeysFn: func(_ context.Context, _, _ string, _, _ int) ([]*store.Key, error) {
 			return []*store.Key{revoked}, nil
 		},
 	})
@@ -343,7 +344,7 @@ func TestList_IncludesRevoked(t *testing.T) {
 // TestList_StoreError — store failure returns 500 with empty body.
 func TestList_StoreError(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		listKeysFn: func(_ context.Context, _ string) ([]*store.Key, error) {
+		listKeysFn: func(_ context.Context, _, _ string, _, _ int) ([]*store.Key, error) {
 			return nil, errors.New("database locked")
 		},
 	})
@@ -627,11 +628,11 @@ type keyWithVisibility struct {
 // TestCreate_ComponentVisibility_Public — Create for a public component includes component_visibility="public".
 func TestCreate_ComponentVisibility_Public(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		createKeyFn: func(_ context.Context, component, label string, _ *time.Time) (*store.Key, error) {
+		createKeyFn: func(_ context.Context, _, component, label string, _ *time.Time) (*store.Key, error) {
 			return makeKey(component, label), nil
 		},
 	})
-	w := postKeys(h, `{"component":"core","label":"test"}`)
+	w := postKeys(h, `{"account_id":"acct-test","component":"core","label":"test"}`)
 	if w.Code != http.StatusCreated {
 		t.Fatalf("expected 201, got %d", w.Code)
 	}
@@ -667,7 +668,7 @@ func TestGet_ComponentVisibility_Private(t *testing.T) {
 // TestList_ComponentVisibility — List returns correct visibility for each key's component.
 func TestList_ComponentVisibility(t *testing.T) {
 	h := newTestKeysHandler(&mockStore{
-		listKeysFn: func(_ context.Context, _ string) ([]*store.Key, error) {
+		listKeysFn: func(_ context.Context, _, _ string, _, _ int) ([]*store.Key, error) {
 			return []*store.Key{makeKey("core", "A"), makeKey("minion", "B")}, nil
 		},
 	})
@@ -719,5 +720,293 @@ func TestGet_ComponentVisibility_RemovedComponent(t *testing.T) {
 	}
 	if got.ComponentVisibility != "private" {
 		t.Errorf("removed component: expected component_visibility=private, got %q", got.ComponentVisibility)
+	}
+}
+
+// ─── Section 3 — account_id wiring on the keys handler ──────────────────────
+
+// stubAccountStore satisfies store.AccountStore for handler tests; only the
+// methods exercised by keys.go are implemented (GetAccount). The rest panic
+// to surface accidental use.
+type stubAccountStore struct {
+	getAccountFn func(ctx context.Context, id string) (*store.Account, error)
+}
+
+func (s *stubAccountStore) GetAccount(ctx context.Context, id string) (*store.Account, error) {
+	if s.getAccountFn != nil {
+		return s.getAccountFn(ctx, id)
+	}
+	return nil, store.ErrAccountNotFound
+}
+func (s *stubAccountStore) CreateAccount(context.Context, store.AccountInput, string) (*store.Account, error) {
+	panic("stubAccountStore.CreateAccount called unexpectedly")
+}
+func (s *stubAccountStore) ListAccounts(context.Context, store.AccountStatus, int, int) ([]*store.Account, error) {
+	panic("stubAccountStore.ListAccounts called unexpectedly")
+}
+func (s *stubAccountStore) UpdateAccount(context.Context, string, store.AccountUpdate) (*store.Account, error) {
+	panic("stubAccountStore.UpdateAccount called unexpectedly")
+}
+func (s *stubAccountStore) DeleteAccountWithCascade(context.Context, string) (int64, error) {
+	panic("stubAccountStore.DeleteAccountWithCascade called unexpectedly")
+}
+func (s *stubAccountStore) CountActiveAccountKeys(context.Context, string) (int64, error) {
+	panic("stubAccountStore.CountActiveAccountKeys called unexpectedly")
+}
+func (s *stubAccountStore) ListAccountKeys(context.Context, string, int, int) ([]*store.Key, error) {
+	panic("stubAccountStore.ListAccountKeys called unexpectedly")
+}
+func (s *stubAccountStore) CreateKeyForAccount(context.Context, string, string, string, *time.Time) (*store.Key, error) {
+	panic("stubAccountStore.CreateKeyForAccount called unexpectedly")
+}
+
+// newKeysHandlerWithAccountStore wires a KeysHandler with the supplied
+// AccountStore so the new section-3 paths can be exercised.
+func newKeysHandlerWithAccountStore(ks store.KeyStore, as store.AccountStore) *KeysHandler {
+	h := newTestKeysHandler(ks)
+	h.AccountStore = as
+	return h
+}
+
+// TestCreate_MissingAccountID — § 3.1: body without account_id returns 400.
+func TestCreate_MissingAccountID(t *testing.T) {
+	h := newTestKeysHandler(&mockStore{
+		createKeyFn: func(_ context.Context, _, _, _ string, _ *time.Time) (*store.Key, error) {
+			t.Fatal("CreateKey must not be called when account_id is missing")
+			return nil, nil
+		},
+	})
+	w := postKeys(h, `{"component":"core","label":"x"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", w.Code)
+	}
+	var ae apiError
+	json.NewDecoder(w.Body).Decode(&ae)
+	if ae.Code != "MISSING_ACCOUNT_ID" {
+		t.Errorf("want MISSING_ACCOUNT_ID, got %q", ae.Code)
+	}
+}
+
+// TestCreate_EmptyAccountID — explicit "" same as missing.
+func TestCreate_EmptyAccountID(t *testing.T) {
+	h := newTestKeysHandler(&mockStore{})
+	w := postKeys(h, `{"account_id":"","component":"core","label":"x"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", w.Code)
+	}
+	var ae apiError
+	json.NewDecoder(w.Body).Decode(&ae)
+	if ae.Code != "MISSING_ACCOUNT_ID" {
+		t.Errorf("want MISSING_ACCOUNT_ID, got %q", ae.Code)
+	}
+}
+
+// TestCreate_UnknownAccount — § 3.1 + spec keys-api-response-codes:
+// unknown account_id returns 400 ACCOUNT_NOT_FOUND (the deleted case is
+// already hidden by GetAccount returning ErrAccountNotFound).
+func TestCreate_UnknownAccount(t *testing.T) {
+	ks := &mockStore{
+		createKeyFn: func(_ context.Context, _, _, _ string, _ *time.Time) (*store.Key, error) {
+			t.Fatal("CreateKey must not be called when account does not exist")
+			return nil, nil
+		},
+	}
+	as := &stubAccountStore{
+		getAccountFn: func(_ context.Context, _ string) (*store.Account, error) {
+			return nil, store.ErrAccountNotFound
+		},
+	}
+	h := newKeysHandlerWithAccountStore(ks, as)
+	w := postKeys(h, `{"account_id":"ghost","component":"core","label":"x"}`)
+	if w.Code != http.StatusBadRequest {
+		t.Fatalf("want 400, got %d", w.Code)
+	}
+	var ae apiError
+	json.NewDecoder(w.Body).Decode(&ae)
+	if ae.Code != "ACCOUNT_NOT_FOUND" {
+		t.Errorf("want ACCOUNT_NOT_FOUND, got %q", ae.Code)
+	}
+}
+
+// TestCreate_KnownAccount — § 3.1: known account flows through to CreateKey
+// and the response payload includes account_id (§ 3.2).
+func TestCreate_KnownAccount(t *testing.T) {
+	const wantAccountID = "acct-known"
+	ks := &mockStore{
+		createKeyFn: func(_ context.Context, accountID, component, label string, _ *time.Time) (*store.Key, error) {
+			if accountID != wantAccountID {
+				t.Errorf("CreateKey accountID: want %q, got %q", wantAccountID, accountID)
+			}
+			k := makeKey(component, label)
+			k.AccountID = accountID
+			return k, nil
+		},
+	}
+	as := &stubAccountStore{
+		getAccountFn: func(_ context.Context, id string) (*store.Account, error) {
+			if id != wantAccountID {
+				t.Errorf("GetAccount id: want %q, got %q", wantAccountID, id)
+			}
+			return &store.Account{ID: id, Status: store.AccountStatusActive}, nil
+		},
+	}
+	h := newKeysHandlerWithAccountStore(ks, as)
+
+	body := fmt.Sprintf(`{"account_id":%q,"component":"core","label":"x"}`, wantAccountID)
+	w := postKeys(h, body)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d: %s", w.Code, w.Body.String())
+	}
+
+	// § 3.2: response must include account_id.
+	var raw map[string]any
+	if err := json.NewDecoder(w.Body).Decode(&raw); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if got, _ := raw["account_id"].(string); got != wantAccountID {
+		t.Errorf("response.account_id: want %q, got %v", wantAccountID, raw["account_id"])
+	}
+}
+
+// TestList_FilterByAccount — § 3.3: ?account= reaches the store filter.
+func TestList_FilterByAccount(t *testing.T) {
+	const wantAccount = "acct-filter"
+	h := newTestKeysHandler(&mockStore{
+		listKeysFn: func(_ context.Context, componentFilter, accountFilter string, _, _ int) ([]*store.Key, error) {
+			if componentFilter != "" {
+				t.Errorf("componentFilter: want empty, got %q", componentFilter)
+			}
+			if accountFilter != wantAccount {
+				t.Errorf("accountFilter: want %q, got %q", wantAccount, accountFilter)
+			}
+			k := makeKey("core", "scoped")
+			k.AccountID = wantAccount
+			return []*store.Key{k}, nil
+		},
+	})
+	w := getKeys(h, "?account="+wantAccount)
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+	var got []map[string]any
+	json.NewDecoder(w.Body).Decode(&got)
+	if len(got) != 1 || got[0]["account_id"] != wantAccount {
+		t.Errorf("want one key with account_id=%q, got %v", wantAccount, got)
+	}
+}
+
+// TestList_FilterByComponentAndAccount — § 3.3: both filters combine.
+func TestList_FilterByComponentAndAccount(t *testing.T) {
+	h := newTestKeysHandler(&mockStore{
+		listKeysFn: func(_ context.Context, componentFilter, accountFilter string, _, _ int) ([]*store.Key, error) {
+			if componentFilter != "core" || accountFilter != "acct-x" {
+				t.Errorf("filters: want (core,acct-x), got (%q,%q)", componentFilter, accountFilter)
+			}
+			return []*store.Key{}, nil
+		},
+	})
+	w := getKeys(h, "?component=core&account=acct-x")
+	if w.Code != http.StatusOK {
+		t.Fatalf("want 200, got %d", w.Code)
+	}
+}
+
+// ─── Audit wiring (§ 6 review CRITICAL fix) ─────────────────────────────────
+
+// keysAuditRecorder is a minimal audit.Auditor for tests that captures
+// emitted entries so assertions can verify key.issue / key.revoke firing.
+type keysAuditRecorder struct{ entries []audit.Entry }
+
+func (k *keysAuditRecorder) Write(_ context.Context, e audit.Entry) {
+	k.entries = append(k.entries, e)
+}
+
+// newKeysHandlerWithAudit returns a KeysHandler whose Auditor is the supplied
+// recorder so tests can assert audit emission. KeyStore is the supplied mock.
+func newKeysHandlerWithAudit(ks store.KeyStore, rec audit.Auditor) *KeysHandler {
+	h := newTestKeysHandler(ks)
+	h.Auditor = rec
+	return h
+}
+
+// TestCreate_EmitsKeyIssueAudit verifies POST /api/v1/keys persists a
+// `key.issue` audit row per spec § "Audit log coverage".
+func TestCreate_EmitsKeyIssueAudit(t *testing.T) {
+	rec := &keysAuditRecorder{}
+	ks := &mockStore{
+		createKeyFn: func(_ context.Context, accountID, component, label string, _ *time.Time) (*store.Key, error) {
+			k := makeKey(component, label)
+			k.AccountID = accountID
+			return k, nil
+		},
+	}
+	as := &stubAccountStore{
+		getAccountFn: func(_ context.Context, id string) (*store.Account, error) {
+			return &store.Account{ID: id, Status: store.AccountStatusActive}, nil
+		},
+	}
+	h := newKeysHandlerWithAudit(ks, rec)
+	h.AccountStore = as
+
+	w := postKeys(h, `{"account_id":"acct-1","component":"core","label":"x"}`)
+	if w.Code != http.StatusCreated {
+		t.Fatalf("want 201, got %d: %s", w.Code, w.Body.String())
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != "key.issue" {
+		t.Errorf("want one key.issue audit row, got %+v", rec.entries)
+	}
+	if rec.entries[0].TargetType != "key" {
+		t.Errorf("target_type: want 'key', got %q", rec.entries[0].TargetType)
+	}
+}
+
+// TestDelete_EmitsKeyRevokeAudit verifies DELETE /api/v1/keys/{id} persists
+// a `key.revoke` audit row on successful revocation.
+func TestDelete_EmitsKeyRevokeAudit(t *testing.T) {
+	rec := &keysAuditRecorder{}
+	ks := &mockStore{
+		revokeKeyFn: func(_ context.Context, _ string) error { return nil },
+	}
+	h := newKeysHandlerWithAudit(ks, rec)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/keys/"+testKeyID, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", testKeyID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+	h.Delete(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("want 204, got %d", w.Code)
+	}
+	if len(rec.entries) != 1 || rec.entries[0].Action != "key.revoke" {
+		t.Errorf("want one key.revoke audit row, got %+v", rec.entries)
+	}
+}
+
+// TestDelete_AlreadyRevokedNoAudit — idempotent re-delete must NOT emit a
+// duplicate audit row (the call had no effect).
+func TestDelete_AlreadyRevokedNoAudit(t *testing.T) {
+	rec := &keysAuditRecorder{}
+	ks := &mockStore{
+		revokeKeyFn: func(_ context.Context, _ string) error { return store.ErrNotFound },
+		getByIDFn: func(_ context.Context, _ string) (*store.Key, error) {
+			return makeKey("core", "revoked"), nil // exists, so already-revoked path
+		},
+	}
+	h := newKeysHandlerWithAudit(ks, rec)
+
+	req := httptest.NewRequest(http.MethodDelete, "/api/v1/keys/"+testKeyID, nil)
+	rctx := chi.NewRouteContext()
+	rctx.URLParams.Add("id", testKeyID)
+	req = req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
+	w := httptest.NewRecorder()
+	h.Delete(w, req)
+
+	if w.Code != http.StatusNoContent {
+		t.Fatalf("want 204, got %d", w.Code)
+	}
+	if len(rec.entries) != 0 {
+		t.Errorf("already-revoked re-delete should NOT audit; got %+v", rec.entries)
 	}
 }

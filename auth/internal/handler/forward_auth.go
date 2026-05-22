@@ -16,17 +16,28 @@ import (
 // GET /auth — returns 200 (allow), 401 (deny), or 503 (error/fail-closed).
 // Component visibility is resolved via a live DB lookup on every request so that
 // visibility changes take effect immediately without a service restart.
+//
+// Per change 2026-05-21-admin-ui-account-lifecycle § 2.5/D11, a suspended or
+// deleted owning account also denies the request without mutating the key row,
+// so reactivation restores subscriber access immediately.
 type ForwardAuthHandler struct {
 	Store          store.KeyStore
 	ComponentStore store.ComponentStore
+	AccountStore   store.AccountStore
 	Logger         *slog.Logger
 }
 
 // NewForwardAuthHandler returns a ForwardAuthHandler backed by the given stores.
-func NewForwardAuthHandler(st store.KeyStore, cs store.ComponentStore, logger *slog.Logger) *ForwardAuthHandler {
+// AccountStore is required — it carries the D11 suspended/deleted-account gate;
+// a nil arg would silently re-open access for suspended subscribers.
+func NewForwardAuthHandler(st store.KeyStore, cs store.ComponentStore, as store.AccountStore, logger *slog.Logger) *ForwardAuthHandler {
+	if as == nil {
+		panic("handler: NewForwardAuthHandler requires a non-nil AccountStore (D11 gate)")
+	}
 	return &ForwardAuthHandler{
 		Store:          st,
 		ComponentStore: cs,
+		AccountStore:   as,
 		Logger:         logger,
 	}
 }
@@ -103,6 +114,33 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		metrics.RequestsTotal.WithLabelValues("denied").Inc()
 		w.WriteHeader(http.StatusUnauthorized)
 		return
+	}
+
+	// Account-level gate (D11): suspended or deleted accounts deny subscriber
+	// access without touching the key row, so reactivation restores access
+	// immediately and no subscriber redeployment is needed.
+	if h.AccountStore != nil {
+		account, err := h.AccountStore.GetAccount(r.Context(), key.AccountID)
+		if err != nil {
+			if errors.Is(err, store.ErrAccountNotFound) {
+				// Covers both missing and soft-deleted accounts.
+				metrics.RequestsTotal.WithLabelValues("denied").Inc()
+				w.WriteHeader(http.StatusUnauthorized)
+				return
+			}
+			h.Logger.Error("store error resolving account",
+				slog.String("account_id", key.AccountID),
+				slog.String("error", err.Error()),
+			)
+			metrics.RequestsTotal.WithLabelValues("error").Inc()
+			w.WriteHeader(http.StatusServiceUnavailable)
+			return
+		}
+		if account.Status != store.AccountStatusActive {
+			metrics.RequestsTotal.WithLabelValues("denied").Inc()
+			w.WriteHeader(http.StatusUnauthorized)
+			return
+		}
 	}
 
 	// Increment usage counter — fire-and-forget, never deny request on failure.

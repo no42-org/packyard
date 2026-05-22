@@ -20,8 +20,8 @@ import (
 type mockStore struct {
 	getByValueFn     func(ctx context.Context, value string) (*store.Key, error)
 	incrementUsageFn func(ctx context.Context, id string) error
-	createKeyFn      func(ctx context.Context, component, label string, expiresAt *time.Time) (*store.Key, error)
-	listKeysFn       func(ctx context.Context, component string) ([]*store.Key, error)
+	createKeyFn      func(ctx context.Context, accountID, component, label string, expiresAt *time.Time) (*store.Key, error)
+	listKeysFn       func(ctx context.Context, componentFilter, accountFilter string, offset, limit int) ([]*store.Key, error)
 	getByIDFn        func(ctx context.Context, id string) (*store.Key, error)
 	revokeKeyFn      func(ctx context.Context, id string) error
 }
@@ -37,16 +37,16 @@ func (m *mockStore) IncrementUsage(ctx context.Context, id string) error {
 	return nil
 }
 
-func (m *mockStore) CreateKey(ctx context.Context, component, label string, expiresAt *time.Time) (*store.Key, error) {
+func (m *mockStore) CreateKey(ctx context.Context, accountID, component, label string, expiresAt *time.Time) (*store.Key, error) {
 	if m.createKeyFn != nil {
-		return m.createKeyFn(ctx, component, label, expiresAt)
+		return m.createKeyFn(ctx, accountID, component, label, expiresAt)
 	}
 	return nil, errors.New("not implemented")
 }
 
-func (m *mockStore) ListKeys(ctx context.Context, component string) ([]*store.Key, error) {
+func (m *mockStore) ListKeys(ctx context.Context, componentFilter, accountFilter string, offset, limit int) ([]*store.Key, error) {
 	if m.listKeysFn != nil {
-		return m.listKeysFn(ctx, component)
+		return m.listKeysFn(ctx, componentFilter, accountFilter, offset, limit)
 	}
 	return nil, errors.New("not implemented")
 }
@@ -89,13 +89,54 @@ func newTestHandler(s store.KeyStore) *ForwardAuthHandler {
 }
 
 func TestNewForwardAuthHandler_Constructs(t *testing.T) {
-	h := NewForwardAuthHandler(&mockStore{}, newTestComponentStore(), slog.Default())
+	h := NewForwardAuthHandler(&mockStore{}, newTestComponentStore(), &fwdAuthStubAccountStore{}, slog.Default())
 	if h.Store == nil {
 		t.Error("Store should not be nil")
 	}
 	if h.ComponentStore == nil {
 		t.Error("ComponentStore should not be nil")
 	}
+	if h.AccountStore == nil {
+		t.Error("AccountStore should not be nil")
+	}
+}
+
+func TestNewForwardAuthHandler_NilAccountStorePanics(t *testing.T) {
+	defer func() {
+		if r := recover(); r == nil {
+			t.Fatal("expected panic when AccountStore is nil; got none")
+		}
+	}()
+	_ = NewForwardAuthHandler(&mockStore{}, newTestComponentStore(), nil, slog.Default())
+}
+
+// fwdAuthStubAccountStore is a minimal AccountStore for forward-auth tests
+// that only need the gate constructed; methods panic if unexpectedly called.
+type fwdAuthStubAccountStore struct{}
+
+func (fwdAuthStubAccountStore) CreateAccount(context.Context, store.AccountInput, string) (*store.Account, error) {
+	panic("unexpected")
+}
+func (fwdAuthStubAccountStore) GetAccount(context.Context, string) (*store.Account, error) {
+	return &store.Account{Status: store.AccountStatusActive}, nil
+}
+func (fwdAuthStubAccountStore) ListAccounts(context.Context, store.AccountStatus, int, int) ([]*store.Account, error) {
+	panic("unexpected")
+}
+func (fwdAuthStubAccountStore) UpdateAccount(context.Context, string, store.AccountUpdate) (*store.Account, error) {
+	panic("unexpected")
+}
+func (fwdAuthStubAccountStore) DeleteAccountWithCascade(context.Context, string) (int64, error) {
+	panic("unexpected")
+}
+func (fwdAuthStubAccountStore) CountActiveAccountKeys(context.Context, string) (int64, error) {
+	panic("unexpected")
+}
+func (fwdAuthStubAccountStore) ListAccountKeys(context.Context, string, int, int) ([]*store.Key, error) {
+	panic("unexpected")
+}
+func (fwdAuthStubAccountStore) CreateKeyForAccount(context.Context, string, string, string, *time.Time) (*store.Key, error) {
+	panic("unexpected")
 }
 
 func TestForwardAuth_ValidKey(t *testing.T) {

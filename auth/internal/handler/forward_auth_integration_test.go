@@ -32,7 +32,7 @@ func TestForwardAuthIntegration_PrivateToPublic(t *testing.T) {
 
 	// Wire both handlers to the same store instance.
 	compHandler := NewComponentsHandler(s, logger, t.TempDir())
-	authHandler := NewForwardAuthHandler(s, s, logger)
+	authHandler := NewForwardAuthHandler(s, s, s, logger)
 
 	// --- Step 1: Provision "core" as private via ComponentsHandler ---
 	createBody, _ := json.Marshal(createComponentRequest{
@@ -87,7 +87,7 @@ func TestForwardAuthIntegration_PublicToPrivate(t *testing.T) {
 
 	// Wire both handlers to the same store instance.
 	compHandler := NewComponentsHandler(s, logger, t.TempDir())
-	authHandler := NewForwardAuthHandler(s, s, logger)
+	authHandler := NewForwardAuthHandler(s, s, s, logger)
 
 	// --- Step 1: Provision "core" as public via ComponentsHandler ---
 	createBody, _ := json.Marshal(createComponentRequest{
@@ -141,7 +141,7 @@ func TestForwardAuthIntegration_DeletedComponent(t *testing.T) {
 	logger := slog.Default()
 
 	compHandler := NewComponentsHandler(s, logger, t.TempDir())
-	authHandler := NewForwardAuthHandler(s, s, logger)
+	authHandler := NewForwardAuthHandler(s, s, s, logger)
 
 	// --- Step 1: Provision "core" as public ---
 	createBody, _ := json.Marshal(createComponentRequest{
