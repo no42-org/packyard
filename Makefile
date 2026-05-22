@@ -1,12 +1,18 @@
 # Docs toolchain (Docusaurus). Contributors install Node dependencies into
 # ./node_modules via `npm ci`; Node version is pinned in .nvmrc.
 NPM ?= npm
+GO ?= go
+
+ADMIN_UI_DIR := auth/internal/admin-ui
+ADMIN_UI_DIST := auth/internal/adminui/dist
 
 UNAME_S := $(shell uname -s)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help docs-install docs-serve docs-build docs-clean check-node
+.PHONY: help docs-install docs-serve docs-build docs-clean check-node \
+        admin-ui admin-ui-install admin-ui-dev admin-ui-clean \
+        build build-clean
 
 ## help: Show this help
 help:
@@ -43,3 +49,34 @@ check-node:
 	  echo "       or 'brew install node@20' / the installer at https://nodejs.org/."; \
 	  exit 1; \
 	}
+
+## admin-ui-install: Install the admin SPA toolchain via npm ci
+admin-ui-install: check-node $(ADMIN_UI_DIR)/node_modules/.package-lock.json
+
+$(ADMIN_UI_DIR)/node_modules/.package-lock.json: $(ADMIN_UI_DIR)/package-lock.json | check-node
+	cd $(ADMIN_UI_DIR) && $(NPM) ci
+
+## admin-ui: Build the admin SPA bundle into the Go embed directory
+admin-ui: $(ADMIN_UI_DIR)/node_modules/.package-lock.json
+	cd $(ADMIN_UI_DIR) && $(NPM) run build
+	@rm -rf $(ADMIN_UI_DIST)
+	@mkdir -p $(ADMIN_UI_DIST)
+	cp -r $(ADMIN_UI_DIR)/dist/. $(ADMIN_UI_DIST)/
+	@touch $(ADMIN_UI_DIST)/.gitkeep
+
+## admin-ui-dev: Run the Vite dev server (live-reload) against the auth API
+admin-ui-dev: $(ADMIN_UI_DIR)/node_modules/.package-lock.json
+	cd $(ADMIN_UI_DIR) && $(NPM) run dev
+
+## admin-ui-clean: Remove the SPA build output and installed Node modules
+admin-ui-clean:
+	rm -rf $(ADMIN_UI_DIR)/dist $(ADMIN_UI_DIR)/node_modules
+	@find $(ADMIN_UI_DIST) -mindepth 1 ! -name .gitkeep -delete 2>/dev/null || true
+
+## build: Build the auth binary with the embedded SPA (depends on admin-ui)
+build: admin-ui
+	cd auth && $(GO) build -o ../bin/auth ./cmd/server
+
+## build-clean: Remove built binaries
+build-clean:
+	rm -rf bin/
