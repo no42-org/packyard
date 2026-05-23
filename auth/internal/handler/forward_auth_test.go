@@ -459,8 +459,8 @@ func (e *errComponentStore) GetComponent(ctx context.Context, name string) (*sto
 func (e *errComponentStore) CreateComponent(ctx context.Context, c *store.Component) (*store.Component, error) {
 	return e.inner.CreateComponent(ctx, c)
 }
-func (e *errComponentStore) ListComponents(ctx context.Context) ([]*store.Component, error) {
-	return e.inner.ListComponents(ctx)
+func (e *errComponentStore) ListComponents(ctx context.Context, offset, limit int) ([]*store.Component, error) {
+	return e.inner.ListComponents(ctx, offset, limit)
 }
 func (e *errComponentStore) DeleteComponent(ctx context.Context, name string) error {
 	return e.inner.DeleteComponent(ctx, name)

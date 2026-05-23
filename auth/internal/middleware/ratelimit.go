@@ -9,6 +9,7 @@ import (
 	"sync"
 	"time"
 
+	"github.com/go-chi/chi/v5"
 	"github.com/no42-org/packyard-auth/internal/audit"
 )
 
@@ -93,14 +94,24 @@ func (rl *RateLimiter) Middleware(next http.Handler) http.Handler {
 			return
 		}
 		if shouldAudit && rl.auditor != nil {
+			details := map[string]any{
+				"ip":   ip,
+				"path": truncate(r.URL.Path, auditPathMaxLen),
+			}
+			// Carry the chi `{provider}` URL param into the audit row when
+			// it's present so forensic investigation can distinguish login-spam
+			// from callback-spam at the provider level instead of having to
+			// regex the truncated path field.
+			if rctx := chi.RouteContext(r.Context()); rctx != nil {
+				if p := rctx.URLParam("provider"); p != "" {
+					details["provider"] = p
+				}
+			}
 			audit.WriteFromRequest(r.Context(), rl.auditor, r, audit.Entry{
 				Action:     "auth.rate_limited",
 				TargetType: "ip",
 				TargetID:   ip,
-				Details: map[string]any{
-					"ip":   ip,
-					"path": truncate(r.URL.Path, auditPathMaxLen),
-				},
+				Details:    details,
 			})
 		}
 		writeError(w, http.StatusTooManyRequests, "RATE_LIMITED",
@@ -159,10 +170,14 @@ func (rl *RateLimiter) check(ip string) (allowed, shouldAudit bool) {
 // Exported (lowercase) within the package; handlers that emit audit details
 // for attacker-controllable strings call TruncateAuditField directly.
 func truncate(s string, maxLen int) string {
-	if maxLen <= 0 || len(s) <= maxLen {
+	if maxLen <= 0 {
 		return s
 	}
-	return s[:maxLen] + "…"
+	runes := []rune(s)
+	if len(runes) <= maxLen {
+		return s
+	}
+	return string(runes[:maxLen]) + "…"
 }
 
 // AuditFieldMaxLen is the max length any operator-controllable string field
@@ -216,11 +231,17 @@ func (rl *RateLimiter) WithClock(now func() time.Time) {
 }
 
 // ClientIP returns the source IP for r, preferring the leftmost X-Forwarded-For
-// token (RFC 7239 §5.2) when present. If the leftmost token is empty or
-// whitespace (`X-Forwarded-For: , 10.0.0.1` — attacker-controllable), the
-// header is ignored and the function falls through to RemoteAddr. The port
-// is stripped from RemoteAddr so a single client behind NAT doesn't get a
-// fresh rate-limit bucket per TCP connection.
+// token (RFC 7239 §5.2) when present. If the leftmost token is empty,
+// whitespace, or not a valid IP literal (`X-Forwarded-For: , 10.0.0.1` or
+// `X-Forwarded-For: notanip,10.0.0.1` — attacker-controllable), the header is
+// ignored and the function falls through to RemoteAddr. The port is stripped
+// from RemoteAddr so a single client behind NAT doesn't get a fresh
+// rate-limit bucket per TCP connection.
+//
+// Validating that the leftmost token parses as an IP literal bounds the
+// rate-limit bucket key space — without this guard an attacker could rotate
+// XFF values to grow the bucket map unbounded (the reaper only collects
+// buckets that have fully refilled, which warm-attacker buckets never do).
 //
 // This is the shared helper for the middleware layer; audit/log.go has a
 // near-identical copy to avoid an import cycle. Keep the two in sync.
@@ -231,10 +252,10 @@ func ClientIP(r *http.Request) string {
 			token = xff[:i]
 		}
 		token = strings.TrimSpace(token)
-		if token != "" {
+		if token != "" && net.ParseIP(token) != nil {
 			return token
 		}
-		// Empty/whitespace leftmost: header was malformed or
+		// Empty/whitespace/non-IP leftmost: header was malformed or
 		// attacker-crafted; fall through to RemoteAddr.
 	}
 	if host, _, err := net.SplitHostPort(r.RemoteAddr); err == nil {

@@ -226,11 +226,11 @@ func (h *KeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 		account, err := h.AccountStore.GetAccount(r.Context(), req.AccountID)
 		if err != nil {
 			if errors.Is(err, store.ErrAccountNotFound) {
-				// Spec § keys-api-response-codes distinguishes unknown
-				// (400 ACCOUNT_NOT_FOUND) from deleted; since the store
-				// hides deleted via GetAccount, every ErrAccountNotFound
-				// here means the account is unknown to the API surface.
-				writeError(w, http.StatusBadRequest, "ACCOUNT_NOT_FOUND",
+				// Canonical mapping: ACCOUNT_NOT_FOUND is 404 across all
+				// admin endpoints (admin-api-error-responses spec). The
+				// store hides deleted accounts via GetAccount, so every
+				// ErrAccountNotFound here means the account is unknown.
+				writeError(w, http.StatusNotFound, "ACCOUNT_NOT_FOUND",
 					fmt.Sprintf("account %q not found", req.AccountID))
 				return
 			}

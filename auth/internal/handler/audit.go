@@ -73,10 +73,13 @@ func (h *AuditHandler) List(w http.ResponseWriter, r *http.Request) {
 		filter.Until = &t
 	}
 	// Mistyped windows (since after until) silently return [] without
-	// validation; surface the bug at the API edge instead.
-	if filter.Since != nil && filter.Until != nil && filter.Since.After(*filter.Until) {
+	// validation; surface the bug at the API edge instead. Reject equal
+	// bounds too — the SQL clause is `ts < until` so `since == until`
+	// returns zero rows, contradicting the handler-doc `[Since, Until)`
+	// contract for any honest caller.
+	if filter.Since != nil && filter.Until != nil && !filter.Since.Before(*filter.Until) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST",
-			"since must be <= until")
+			"since must be < until (window must contain at least one second)")
 		return
 	}
 

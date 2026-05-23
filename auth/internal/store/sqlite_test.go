@@ -270,7 +270,7 @@ func TestGetComponent_RoundTrip(t *testing.T) {
 
 func TestListComponents_Empty(t *testing.T) {
 	s := newTestStore(t)
-	comps, err := s.ListComponents(context.Background())
+	comps, err := s.ListComponents(context.Background(), 0, 50)
 	if err != nil {
 		t.Fatalf("ListComponents: %v", err)
 	}
@@ -289,7 +289,7 @@ func TestListComponents_Ordered(t *testing.T) {
 		}
 	}
 
-	comps, err := s.ListComponents(ctx)
+	comps, err := s.ListComponents(ctx, 0, 50)
 	if err != nil {
 		t.Fatalf("ListComponents: %v", err)
 	}

@@ -67,6 +67,20 @@ func (s *SQLiteStore) Write(ctx context.Context, e audit.Entry) {
 			detailsJSON = b
 		}
 	}
+	// Hard cap on the marshalled JSON to bound audit_log row size against
+	// caller bugs that forget to truncate operator-controllable values
+	// (label, org_name, paths). Without this cap, a single forgotten
+	// TruncateAuditField call site can grow audit rows to 1 MiB+. The
+	// 4 KiB cap is well above legitimate detail payloads (~hundreds of
+	// bytes for the call sites in this PR) and replaces the body with a
+	// sentinel so the forensic timeline still records the event.
+	if len(detailsJSON) > auditDetailsMaxBytes {
+		sentinel, _ := json.Marshal(map[string]any{
+			"_truncated": true,
+			"size":       len(detailsJSON),
+		})
+		detailsJSON = sentinel
+	}
 
 	// Use the row's ts default (strftime now) — letting SQLite stamp the
 	// timestamp keeps it monotonic with other rows even if the Go clock
@@ -83,6 +97,11 @@ func (s *SQLiteStore) Write(ctx context.Context, e audit.Entry) {
 
 // errAuditEmptyAction signals a caller bug to logAuditFailure.
 var errAuditEmptyAction = fmt.Errorf("audit entry has empty Action")
+
+// auditDetailsMaxBytes bounds the size of the marshalled JSON written to
+// audit_log.details. Forgotten-truncate call sites would otherwise let an
+// attacker-controllable string field grow the row arbitrarily.
+const auditDetailsMaxBytes = 4 * 1024
 
 // WarnEmptyOperator implements audit.EmptyOperatorWarner so the empty-
 // operator-id warning fires in production (not just for the NoopAuditor).

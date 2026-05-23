@@ -20,6 +20,8 @@ type originParts struct {
 // parseOrigin returns the normalised parts of an origin string. ok is false
 // when the input is missing a scheme or host (which a real browser Origin
 // never is — sandboxed iframes send "null" which we also reject here).
+// Path/query/fragment on the input are tolerated and stripped — Referer
+// (which we fall back to when Origin is absent) legitimately carries them.
 func parseOrigin(s string) (originParts, bool) {
 	if s == "" || s == "null" {
 		return originParts{}, false
@@ -39,6 +41,27 @@ func parseOrigin(s string) (originParts, bool) {
 	return originParts{scheme: scheme, host: host, port: port}, true
 }
 
+// parseAdminHostStrict is the startup-only variant of parseOrigin. It
+// additionally rejects values that carry a non-trivial path, query, or
+// fragment, since a configured admin host of
+// "https://admin.example.com/admin/" is a misconfiguration that would
+// silently corrupt CSRF semantics. A bare-root trailing slash
+// (`https://admin.example.com/`) is tolerated and normalised away — that
+// shape is common in shell-pasted env values. main.go's validAdminHost
+// also rejects path-bearing values; this is defense in depth.
+func parseAdminHostStrict(s string) (originParts, bool) {
+	parts, ok := parseOrigin(s)
+	if !ok {
+		return originParts{}, false
+	}
+	if u, err := url.Parse(s); err == nil {
+		if (u.Path != "" && u.Path != "/") || u.RawQuery != "" || u.Fragment != "" {
+			return originParts{}, false
+		}
+	}
+	return parts, true
+}
+
 // CSRFGuard returns middleware that rejects mutating requests (POST/PUT/
 // PATCH/DELETE) whose Origin header — or Referer, when Origin is absent —
 // does not match adminHost. Per D15 this is a defense-in-depth layer on top
@@ -56,9 +79,9 @@ func CSRFGuard(adminHost string) func(http.Handler) http.Handler {
 	if adminHost == "" {
 		panic("middleware.CSRFGuard: adminHost is required (D15)")
 	}
-	expected, ok := parseOrigin(adminHost)
+	expected, ok := parseAdminHostStrict(adminHost)
 	if !ok {
-		panic("middleware.CSRFGuard: adminHost must be a scheme://host URL, got " + adminHost)
+		panic("middleware.CSRFGuard: adminHost must be a bare scheme://host URL (no path/query/fragment), got " + adminHost)
 	}
 
 	return func(next http.Handler) http.Handler {

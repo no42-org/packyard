@@ -325,6 +325,23 @@ func rebuildSubscriptionKeyNotNull(db *sql.DB) (err error) {
 	if err := tx.Commit(); err != nil {
 		return fmt.Errorf("commit rebuild: %w", err)
 	}
+
+	// Defense in depth: with foreign_keys = OFF an INSERT-SELECT bug that
+	// produced a row referencing a non-existent account would commit silently
+	// and only surface on the next mutation. PRAGMA foreign_key_check returns
+	// one row per violation; any rows here mean the rebuild produced a corrupt
+	// table and we must refuse to re-enable enforcement against it.
+	rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("foreign_key_check: %w", err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return fmt.Errorf("rebuild subscription_key: foreign_key_check reported violations after rebuild — refusing to re-enable FK enforcement")
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("foreign_key_check rows: %w", err)
+	}
 	return nil
 }
 
@@ -571,11 +588,12 @@ func (s *SQLiteStore) GetComponent(ctx context.Context, name string) (*Component
 	return c, nil
 }
 
-// ListComponents returns all components ordered by name ascending.
-func (s *SQLiteStore) ListComponents(ctx context.Context) ([]*Component, error) {
+// ListComponents returns components ordered by name ascending, sliced by
+// offset/limit. Caller clamps offset/limit to D23 bounds.
+func (s *SQLiteStore) ListComponents(ctx context.Context, offset, limit int) ([]*Component, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at
-		 FROM components ORDER BY name ASC`)
+		 FROM components ORDER BY name ASC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list components: %w", err)
 	}

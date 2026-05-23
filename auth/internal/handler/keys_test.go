@@ -802,8 +802,9 @@ func TestCreate_EmptyAccountID(t *testing.T) {
 }
 
 // TestCreate_UnknownAccount — § 3.1 + spec keys-api-response-codes:
-// unknown account_id returns 400 ACCOUNT_NOT_FOUND (the deleted case is
-// already hidden by GetAccount returning ErrAccountNotFound).
+// unknown account_id returns 404 ACCOUNT_NOT_FOUND (canonical mapping per
+// admin-api-error-responses). The store hides deleted accounts via
+// GetAccount returning ErrAccountNotFound, so this path covers both.
 func TestCreate_UnknownAccount(t *testing.T) {
 	ks := &mockStore{
 		createKeyFn: func(_ context.Context, _, _, _ string, _ *time.Time) (*store.Key, error) {
@@ -818,8 +819,8 @@ func TestCreate_UnknownAccount(t *testing.T) {
 	}
 	h := newKeysHandlerWithAccountStore(ks, as)
 	w := postKeys(h, `{"account_id":"ghost","component":"core","label":"x"}`)
-	if w.Code != http.StatusBadRequest {
-		t.Fatalf("want 400, got %d", w.Code)
+	if w.Code != http.StatusNotFound {
+		t.Fatalf("want 404, got %d", w.Code)
 	}
 	var ae apiError
 	json.NewDecoder(w.Body).Decode(&ae)

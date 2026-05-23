@@ -165,11 +165,23 @@ func (p *Provider) validateClaims(c *idTokenClaims) error {
 		return fmt.Errorf("%w: id_token issuer %q does not match expected %q",
 			auth.ErrTokenExchange, c.Issuer, expectedIssuer)
 	}
+	// RFC 7519 §4.1.4 lists `exp` as REQUIRED-when-present and forbids
+	// processing past expiry. After JSON-decode into int64 we cannot
+	// distinguish "claim omitted" from "claim was literally 0"; either case
+	// must be treated as invalid, not as "skip the expiry check". The same
+	// reasoning applies to `nbf`: a missing/zero value must fail closed
+	// rather than admit the token unconditionally.
+	if c.ExpiresAt <= 0 {
+		return fmt.Errorf("%w: id_token is missing or has invalid exp claim", auth.ErrTokenExchange)
+	}
 	now := time.Now().Unix()
-	if c.ExpiresAt != 0 && now > c.ExpiresAt {
+	if now > c.ExpiresAt {
 		return fmt.Errorf("%w: id_token is expired", auth.ErrTokenExchange)
 	}
-	if c.NotBefore != 0 && now < c.NotBefore {
+	if c.NotBefore < 0 {
+		return fmt.Errorf("%w: id_token has invalid nbf claim", auth.ErrTokenExchange)
+	}
+	if c.NotBefore > 0 && now < c.NotBefore {
 		return fmt.Errorf("%w: id_token is not yet valid", auth.ErrTokenExchange)
 	}
 	return nil

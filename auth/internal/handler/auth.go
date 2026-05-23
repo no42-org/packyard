@@ -118,8 +118,14 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	providerName := chi.URLParam(r, "provider")
 	provider, ok := h.Providers[providerName]
 	if !ok {
-		// No handle cookie has been issued yet for this request, but a stale
-		// one from a prior aborted flow could be present — clear it anyway.
+		// A stale handle cookie from a prior aborted flow could be present;
+		// clear both the cookie AND consume the matching state entry so the
+		// two paths stay symmetric. Otherwise the state entry would sit in
+		// the memstore for the full 15-minute TTL while the cookie is gone —
+		// an asymmetry an attacker could exploit by reinjecting the handle.
+		if c, err := r.Cookie(oauthHandleCookieName); err == nil && c.Value != "" {
+			_, _ = h.State.Consume(c.Value)
+		}
 		clearOAuthHandleCookie(w)
 		writeError(w, http.StatusNotFound, "UNKNOWN_PROVIDER",
 			fmt.Sprintf("oauth provider %q is not configured", providerName))
@@ -363,17 +369,14 @@ func (h *AuthHandler) Whoami(w http.ResponseWriter, r *http.Request) {
 	}
 	// Look up the full operator row so the SPA can render `status` and other
 	// fields the context doesn't carry. Session middleware already validated
-	// the operator exists + is active, so this is just a cheap read.
+	// the operator exists + is active, so a failure here is a transient store
+	// error — surface it as 500 so the SPA can back off, rather than returning
+	// 200 with a partial shape that the client can't distinguish from intent.
 	full, err := h.Operators.GetOperator(r.Context(), op.ID)
 	if err != nil {
 		h.Logger.Warn("whoami lookup failed", slog.String("operator_id", op.ID), slog.String("error", err.Error()))
-		w.Header().Set("Content-Type", "application/json")
-		w.WriteHeader(http.StatusOK)
-		_ = json.NewEncoder(w).Encode(map[string]any{
-			"id":    op.ID,
-			"email": op.Email,
-			"role":  string(op.Role),
-		})
+		writeError(w, http.StatusInternalServerError, "SESSION_LOOKUP_FAILED",
+			"failed to resolve operator for current session")
 		return
 	}
 	w.Header().Set("Content-Type", "application/json")
@@ -392,13 +395,17 @@ func (h *AuthHandler) Whoami(w http.ResponseWriter, r *http.Request) {
 // a row) returns 204 without polluting the audit log with an unattributed
 // "logout" entry.
 func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
-	op, _ := auth.OperatorFromContext(r.Context())
+	op, opOK := auth.OperatorFromContext(r.Context())
 
-	var sessionDeleted bool
+	var (
+		sessionDeleted bool
+		deleteErr      error
+	)
 	if c, err := r.Cookie(middleware.SessionCookieName); err == nil && c.Value != "" {
 		if err := h.Sessions.DeleteSession(r.Context(), c.Value); err != nil {
 			h.Logger.Warn("delete session on logout failed",
 				slog.String("error", err.Error()))
+			deleteErr = err
 		} else {
 			sessionDeleted = true
 		}
@@ -415,11 +422,26 @@ func (h *AuthHandler) Logout(w http.ResponseWriter, r *http.Request) {
 		SameSite: http.SameSiteStrictMode,
 	})
 
-	if sessionDeleted {
+	// Audit the logout intent whenever an authenticated operator was on the
+	// request, regardless of whether DeleteSession actually removed a row.
+	// Recording failure too means a flaky DB doesn't drop the audit trail of
+	// an operator who tried to sign out. Gate on `opOK` so handler-test paths
+	// that bypass the session middleware don't trigger a "missing operator"
+	// audit warning.
+	if opOK {
+		outcome := "failure"
+		if sessionDeleted {
+			outcome = "success"
+		}
+		details := map[string]any{"outcome": outcome}
+		if deleteErr != nil {
+			details["error"] = deleteErr.Error()
+		}
 		audit.WriteFromRequest(r.Context(), h.Auditor, r, audit.Entry{
 			OperatorID: op.ID,
 			Action:     "logout",
 			TargetType: "session",
+			Details:    details,
 		})
 	}
 

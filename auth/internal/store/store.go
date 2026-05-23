@@ -86,7 +86,7 @@ type Component struct {
 type ComponentStore interface {
 	CreateComponent(ctx context.Context, comp *Component) (*Component, error)
 	GetComponent(ctx context.Context, name string) (*Component, error)
-	ListComponents(ctx context.Context) ([]*Component, error)
+	ListComponents(ctx context.Context, offset, limit int) ([]*Component, error)
 	DeleteComponent(ctx context.Context, name string) error
 	RevokeComponentKeys(ctx context.Context, component string) (int64, error)
 	CountActiveComponentKeys(ctx context.Context, component string) (int64, error)

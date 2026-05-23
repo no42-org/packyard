@@ -7,6 +7,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"net/mail"
 	"time"
 )
 
@@ -266,11 +267,21 @@ func (s *SQLiteStore) UpdateOperatorAtomically(ctx context.Context, id string,
 }
 
 // UpdateLastLogin records the operator's most recent OAuth login success.
-// Called from the OAuth callback handler after session insertion.
+// Called from the OAuth callback handler after session insertion. Only
+// advances last_login_at forward — a backward clock step (NTP rollback,
+// leap-smear correction) must not surface in the operator-management UI as
+// a regression that looks like tampering. Mirrors TouchSession's monotonic
+// guard. The query is still RowsAffected-comparable: when the operator row
+// exists, the WHERE matches; the predicate fails only when `ts` does not
+// move the column forward, which is a no-op (not an error).
 func (s *SQLiteStore) UpdateLastLogin(ctx context.Context, id string, ts time.Time) error {
+	tsStr := ts.UTC().Format(time.RFC3339)
 	res, err := s.db.ExecContext(ctx,
-		`UPDATE operators SET last_login_at = ? WHERE id = ?`,
-		ts.UTC().Format(time.RFC3339), id)
+		`UPDATE operators
+		 SET last_login_at = ?
+		 WHERE id = ?
+		   AND (last_login_at IS NULL OR last_login_at < ?)`,
+		tsStr, id, tsStr)
 	if err != nil {
 		return fmt.Errorf("update last_login_at: %w", err)
 	}
@@ -279,7 +290,19 @@ func (s *SQLiteStore) UpdateLastLogin(ctx context.Context, id string, ts time.Ti
 		return fmt.Errorf("update last_login_at rows affected: %w", err)
 	}
 	if n == 0 {
-		return fmt.Errorf("update last_login_at: %w", ErrOperatorNotFound)
+		// Either the operator row doesn't exist OR the stored timestamp is
+		// already >= ts (monotonic no-op). Distinguish with a follow-up
+		// existence probe so the caller still gets ErrOperatorNotFound when
+		// it matters.
+		var exists int
+		if err := s.db.QueryRowContext(ctx,
+			`SELECT 1 FROM operators WHERE id = ?`, id).Scan(&exists); err != nil {
+			if errors.Is(err, sql.ErrNoRows) {
+				return fmt.Errorf("update last_login_at: %w", ErrOperatorNotFound)
+			}
+			return fmt.Errorf("update last_login_at existence probe: %w", err)
+		}
+		// Operator exists but ts didn't move the column forward — no-op.
 	}
 	return nil
 }
@@ -336,6 +359,14 @@ func (s *SQLiteStore) OperatorCount(ctx context.Context) (int64, error) {
 func (s *SQLiteStore) BootstrapOperatorFromEnv(ctx context.Context, email string) (*Operator, error) {
 	if email == "" {
 		return nil, nil
+	}
+	// Validate the env-var value parses as an RFC 5322 mailbox before insert.
+	// The CHECK constraint on the column is just `LIKE '%_@_%'`, which lets
+	// through near-useless values like `a@b` — those would consume the first
+	// admin slot and require a direct DB edit to recover from. Surface the
+	// typo at startup instead.
+	if _, err := mail.ParseAddress(email); err != nil {
+		return nil, fmt.Errorf("bootstrap operator: %w (got %q)", ErrOperatorInvalid, email)
 	}
 
 	tx, err := s.db.BeginTx(ctx, &sql.TxOptions{Isolation: sql.LevelSerializable})

@@ -140,11 +140,18 @@ func RequireSession(cfg SessionConfig) func(http.Handler) http.Handler {
 			})
 
 			// Capture the downstream response status so we only touch
-			// last_seen_at on accepted requests (D17 wording).
+			// last_seen_at on accepted requests (D17 wording). The tracking
+			// writer treats an implicit-200 (Write called without
+			// WriteHeader) the same as an unfinished response — we only
+			// slide the idle window when the handler explicitly committed
+			// to a 2xx/3xx via WriteHeader. Otherwise a handler that
+			// json-encodes an error body without first calling
+			// WriteHeader(4xx) would silently extend the session it should
+			// have refused.
 			tw := &touchTrackingWriter{ResponseWriter: w}
 			next.ServeHTTP(tw, r.WithContext(ctx))
 
-			if tw.status >= 200 && tw.status < 400 {
+			if tw.explicitlySet && tw.status >= 200 && tw.status < 400 {
 				if err := cfg.Sessions.TouchSession(r.Context(), sess.ID, nowTime); err != nil {
 					cfg.Logger.Warn("touch session failed",
 						slog.String("session_id_prefix", sessionIDLogPrefix(sess.ID)),
@@ -157,17 +164,23 @@ func RequireSession(cfg SessionConfig) func(http.Handler) http.Handler {
 
 // touchTrackingWriter records the response status so the session middleware
 // can decide whether the request was "accepted" before touching last_seen_at.
-// Defaults to 200 when no explicit WriteHeader is called (net/http convention).
+// explicitlySet is the trust signal — it flips only when WriteHeader is
+// called. A Write without a prior WriteHeader is net/http convention for an
+// implicit 200, but the convention is exactly what makes "json-encode an
+// error body" silently look like success here, so the session middleware
+// only touches when the handler explicitly committed to a status.
 type touchTrackingWriter struct {
 	http.ResponseWriter
-	status      int
-	wroteHeader bool
+	status        int
+	wroteHeader   bool
+	explicitlySet bool
 }
 
 func (t *touchTrackingWriter) WriteHeader(code int) {
 	if !t.wroteHeader {
 		t.status = code
 		t.wroteHeader = true
+		t.explicitlySet = true
 	}
 	t.ResponseWriter.WriteHeader(code)
 }
@@ -176,6 +189,8 @@ func (t *touchTrackingWriter) Write(b []byte) (int, error) {
 	if !t.wroteHeader {
 		t.status = http.StatusOK
 		t.wroteHeader = true
+		// Implicit 200 — do NOT set explicitlySet; the session middleware
+		// will refuse to slide the idle window for this path.
 	}
 	return t.ResponseWriter.Write(b)
 }

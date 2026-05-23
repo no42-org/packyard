@@ -86,13 +86,13 @@ func (s *SQLiteStore) ListAccounts(ctx context.Context, statusFilter AccountStat
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT `+cols+`
 			 FROM accounts WHERE status != 'deleted'
-			 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 			limit, offset)
 	} else {
 		rows, err = s.db.QueryContext(ctx,
 			`SELECT `+cols+`
 			 FROM accounts WHERE status = ?
-			 ORDER BY created_at DESC LIMIT ? OFFSET ?`,
+			 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`,
 			string(statusFilter), limit, offset)
 	}
 	if err != nil {
@@ -131,9 +131,17 @@ func (s *SQLiteStore) UpdateAccount(ctx context.Context, id string, upd AccountU
 	if upd.Status != nil && *upd.Status == AccountStatusDeleted {
 		return nil, fmt.Errorf("update account: %w", ErrInvalidStatusTransition)
 	}
-	// Legacy account is protected from suspend (would deny every legacy key).
-	if id == legacyAccountID && upd.Status != nil && *upd.Status != AccountStatusActive {
-		return nil, fmt.Errorf("update account: %w", ErrLegacyAccountProtected)
+	// Legacy account is protected from suspend (would deny every legacy key)
+	// and from email/org_name renames (a rename would let an operator collide
+	// the legacy id with a real customer's email, defeating uniqueness checks
+	// invisibly).
+	if id == legacyAccountID {
+		if upd.Status != nil && *upd.Status != AccountStatusActive {
+			return nil, fmt.Errorf("update account: %w", ErrLegacyAccountProtected)
+		}
+		if upd.Email != nil || upd.OrgName != nil {
+			return nil, fmt.Errorf("update account: %w", ErrLegacyAccountProtected)
+		}
 	}
 
 	const sqlText = `
@@ -239,7 +247,7 @@ func (s *SQLiteStore) ListAccountKeys(ctx context.Context, id string, offset, li
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT id, component, label, active, created_at, expires_at, usage_count, account_id
 		 FROM subscription_key WHERE account_id = ?
-		 ORDER BY created_at DESC LIMIT ? OFFSET ?`, id, limit, offset)
+		 ORDER BY created_at DESC, id DESC LIMIT ? OFFSET ?`, id, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list account keys: %w", err)
 	}
