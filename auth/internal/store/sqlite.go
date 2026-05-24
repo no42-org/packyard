@@ -8,13 +8,78 @@ import (
 	"encoding/json"
 	"errors"
 	"fmt"
+	"log/slog"
 	"strings"
+	"sync"
 	"time"
 
 	_ "modernc.org/sqlite"
 )
 
+// legacyAccountID is the synthetic account assigned to keys that existed before
+// the account aggregate was introduced. Pre-existing keys are backfilled to this
+// account by the migration in NewSQLiteStore. Per design D13 (admin-ui-account-lifecycle),
+// keys do not transfer between accounts; legacy-owned keys phase out naturally
+// as operators issue replacement keys under proper customer accounts.
+const legacyAccountID = "legacy"
+
 const schema = `
+CREATE TABLE IF NOT EXISTS accounts (
+	id                     TEXT PRIMARY KEY,
+	email                  TEXT NOT NULL
+	                       CHECK (email <> '' AND email = lower(email) AND email LIKE '%_@_%'),
+	org_name               TEXT,
+	status                 TEXT NOT NULL DEFAULT 'active'
+	                       CHECK (status IN ('active', 'suspended', 'deleted')),
+	created_at             DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+	created_by_operator_id TEXT NOT NULL
+);
+CREATE UNIQUE INDEX IF NOT EXISTS idx_accounts_email ON accounts(email);
+
+CREATE TABLE IF NOT EXISTS operators (
+	id                  TEXT PRIMARY KEY,
+	email               TEXT NOT NULL UNIQUE
+	                    CHECK (email <> '' AND email = lower(email) AND email LIKE '%_@_%'),
+	role                TEXT NOT NULL DEFAULT 'admin'
+	                    CHECK (role IN ('admin', 'readonly')),
+	status              TEXT NOT NULL DEFAULT 'active'
+	                    CHECK (status IN ('active', 'disabled')),
+	allowlisted_at      DATETIME NOT NULL,
+	allowlisted_by      TEXT,
+	last_login_at       DATETIME,
+	github_username     TEXT,
+	microsoft_upn       TEXT,
+	first_seen_provider TEXT CHECK (first_seen_provider IN ('github', 'microsoft'))
+);
+
+CREATE TABLE IF NOT EXISTS sessions (
+	id            TEXT PRIMARY KEY,
+	operator_id   TEXT NOT NULL REFERENCES operators(id) ON DELETE CASCADE,
+	created_at    DATETIME NOT NULL,
+	last_seen_at  DATETIME NOT NULL,
+	expires_at    DATETIME NOT NULL,
+	ip            TEXT,
+	user_agent    TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_sessions_operator_id ON sessions(operator_id);
+CREATE INDEX IF NOT EXISTS idx_sessions_expires_at ON sessions(expires_at);
+
+CREATE TABLE IF NOT EXISTS audit_log (
+	id          INTEGER PRIMARY KEY AUTOINCREMENT,
+	ts          DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+	operator_id TEXT,
+	action      TEXT NOT NULL,
+	target_type TEXT,
+	target_id   TEXT,
+	details     TEXT,
+	ip          TEXT,
+	user_agent  TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_audit_log_ts ON audit_log(ts);
+CREATE INDEX IF NOT EXISTS idx_audit_log_operator_id ON audit_log(operator_id);
+CREATE INDEX IF NOT EXISTS idx_audit_log_action ON audit_log(action);
+
+-- The 'keys' table in spec terms; named subscription_key in the schema.
 CREATE TABLE IF NOT EXISTS subscription_key (
 	id          TEXT PRIMARY KEY,
 	component   TEXT NOT NULL,
@@ -22,9 +87,9 @@ CREATE TABLE IF NOT EXISTS subscription_key (
 	active      INTEGER NOT NULL DEFAULT 1,
 	created_at  DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
 	expires_at  DATETIME,
-	usage_count INTEGER NOT NULL DEFAULT 0
+	usage_count INTEGER NOT NULL DEFAULT 0,
+	account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT
 );
-
 CREATE INDEX IF NOT EXISTS idx_subscription_key_component ON subscription_key(component);
 
 CREATE TABLE IF NOT EXISTS components (
@@ -41,6 +106,12 @@ CREATE TABLE IF NOT EXISTS components (
 // SQLiteStore implements KeyStore using modernc.org/sqlite (pure Go, no CGo).
 type SQLiteStore struct {
 	db *sql.DB
+	// auditLogger is the logger used by the audit Write path for fire-and-
+	// forget failure reporting. Per-store rather than package-global so
+	// test parallelism and any future multi-instance scenario don't share
+	// state. Defaults to slog.Default() via currentAuditLogger.
+	auditMu     sync.Mutex
+	auditLogger *slog.Logger
 }
 
 // NewSQLiteStore opens a SQLite database at the given path (or ":memory:" for tests),
@@ -72,7 +143,206 @@ func NewSQLiteStore(path string) (*SQLiteStore, error) {
 		return nil, fmt.Errorf("create schema: %w", err)
 	}
 
+	if err := seedLegacyAccount(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
+	if err := migrateSubscriptionKeyAccountID(db); err != nil {
+		db.Close()
+		return nil, err
+	}
+
 	return &SQLiteStore{db: db}, nil
+}
+
+// seedLegacyAccount inserts the synthetic 'legacy' account used as the FK target
+// for pre-existing keys (and for any new key created before the handler layer
+// plumbs account_id through). Idempotent via INSERT OR IGNORE.
+func seedLegacyAccount(db *sql.DB) error {
+	_, err := db.Exec(
+		`INSERT OR IGNORE INTO accounts (id, email, org_name, status, created_by_operator_id)
+		 VALUES (?, ?, ?, 'active', 'bootstrap')`,
+		legacyAccountID, "legacy@packyard.internal", "Pre-account keys",
+	)
+	if err != nil {
+		return fmt.Errorf("seed legacy account: %w", err)
+	}
+	return nil
+}
+
+// migrateSubscriptionKeyAccountID brings legacy subscription_key tables forward
+// to the post-account schema. For fresh installs the table already has the right
+// shape and this is a no-op. For existing installs it:
+//
+//  1. Adds the account_id column (NULLable, with FK) if missing.
+//  2. Backfills NULL rows to the legacy account.
+//  3. Rebuilds the table with NOT NULL on account_id (task 1.8). The rebuild
+//     follows SQLite's recommended sequence for schema changes that NOT NULL'ing
+//     a column requires: rename, recreate, copy, drop old.
+func migrateSubscriptionKeyAccountID(db *sql.DB) error {
+	colExists, colNotNull, err := subscriptionKeyAccountIDColumn(db)
+	if err != nil {
+		return err
+	}
+
+	if !colExists {
+		if _, err := db.Exec(
+			`ALTER TABLE subscription_key
+			 ADD COLUMN account_id TEXT REFERENCES accounts(id) ON DELETE RESTRICT`,
+		); err != nil {
+			return fmt.Errorf("add account_id column: %w", err)
+		}
+	}
+
+	// Idempotent index creation — covers both fresh installs (schema string
+	// omits this index because existing installs hit it before ADD COLUMN) and
+	// the post-ALTER-TABLE path here.
+	if _, err := db.Exec(
+		`CREATE INDEX IF NOT EXISTS idx_subscription_key_account_id ON subscription_key(account_id)`,
+	); err != nil {
+		return fmt.Errorf("create account_id index: %w", err)
+	}
+
+	if _, err := db.Exec(
+		`UPDATE subscription_key SET account_id = ? WHERE account_id IS NULL`,
+		legacyAccountID,
+	); err != nil {
+		return fmt.Errorf("backfill legacy account: %w", err)
+	}
+
+	// Rebuild when we either just added the column (it's NULLable by ALTER TABLE
+	// semantics — no default, can't be added as NOT NULL) or the column existed
+	// but was NULLable. Skip when the column already had NOT NULL (fresh install
+	// from the schema string).
+	if !colExists || !colNotNull {
+		if err := rebuildSubscriptionKeyNotNull(db); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+// subscriptionKeyAccountIDColumn returns whether the account_id column exists
+// on subscription_key and whether it carries a NOT NULL constraint.
+func subscriptionKeyAccountIDColumn(db *sql.DB) (exists, notNull bool, err error) {
+	rows, err := db.Query(`PRAGMA table_info(subscription_key)`)
+	if err != nil {
+		return false, false, fmt.Errorf("table_info: %w", err)
+	}
+	defer rows.Close()
+
+	for rows.Next() {
+		var (
+			cid       int
+			name      string
+			typ       string
+			nn        int
+			dfltValue sql.NullString
+			pk        int
+		)
+		if err := rows.Scan(&cid, &name, &typ, &nn, &dfltValue, &pk); err != nil {
+			return false, false, fmt.Errorf("scan table_info: %w", err)
+		}
+		if name == "account_id" {
+			return true, nn == 1, nil
+		}
+	}
+	if err := rows.Err(); err != nil {
+		return false, false, fmt.Errorf("table_info rows: %w", err)
+	}
+	return false, false, nil
+}
+
+// rebuildSubscriptionKeyNotNull rebuilds subscription_key with NOT NULL on
+// account_id. PRAGMA foreign_keys must be toggled off around the rebuild
+// because cross-table FK references would otherwise reject the rename step.
+// The PRAGMA cannot be set inside a transaction.
+//
+// The entire sequence (pragma, transaction, pragma restore) runs on a single
+// pinned *sql.Conn because PRAGMA foreign_keys is per-connection; with the
+// default *sql.DB pool a subsequent statement could land on a different
+// connection where FK enforcement is still ON.
+//
+// Recovery: a leftover subscription_key_old from a prior crashed run (e.g.
+// fs-level interruption between rename and drop) is dropped up front so the
+// rebuild can re-run idempotently.
+func rebuildSubscriptionKeyNotNull(db *sql.DB) (err error) {
+	ctx := context.Background()
+
+	conn, err := db.Conn(ctx)
+	if err != nil {
+		return fmt.Errorf("acquire conn: %w", err)
+	}
+	defer conn.Close()
+
+	if _, err := conn.ExecContext(ctx, `PRAGMA foreign_keys = OFF`); err != nil {
+		return fmt.Errorf("disable fk: %w", err)
+	}
+	// Re-enable foreign keys on the same connection. If the re-enable itself
+	// fails and the primary work succeeded, surface that error — silently
+	// returning would leave FK enforcement disabled for the lifetime of this
+	// connection (which is the only connection when MaxOpenConns=1).
+	defer func() {
+		if _, reEnableErr := conn.ExecContext(ctx, `PRAGMA foreign_keys = ON`); reEnableErr != nil && err == nil {
+			err = fmt.Errorf("re-enable fk: %w", reEnableErr)
+		}
+	}()
+
+	tx, err := conn.BeginTx(ctx, nil)
+	if err != nil {
+		return fmt.Errorf("begin rebuild tx: %w", err)
+	}
+	defer tx.Rollback() //nolint:errcheck
+
+	stmts := []string{
+		`DROP TABLE IF EXISTS subscription_key_old`,
+		`ALTER TABLE subscription_key RENAME TO subscription_key_old`,
+		`CREATE TABLE subscription_key (
+			id          TEXT PRIMARY KEY,
+			component   TEXT NOT NULL,
+			label       TEXT NOT NULL,
+			active      INTEGER NOT NULL DEFAULT 1,
+			created_at  DATETIME NOT NULL DEFAULT (strftime('%Y-%m-%dT%H:%M:%SZ', 'now')),
+			expires_at  DATETIME,
+			usage_count INTEGER NOT NULL DEFAULT 0,
+			account_id  TEXT NOT NULL REFERENCES accounts(id) ON DELETE RESTRICT
+		)`,
+		`INSERT INTO subscription_key (id, component, label, active, created_at, expires_at, usage_count, account_id)
+		 SELECT id, component, label, active, created_at, expires_at, usage_count, account_id
+		 FROM subscription_key_old`,
+		`DROP TABLE subscription_key_old`,
+		`CREATE INDEX IF NOT EXISTS idx_subscription_key_component ON subscription_key(component)`,
+		`CREATE INDEX IF NOT EXISTS idx_subscription_key_account_id ON subscription_key(account_id)`,
+	}
+	for _, s := range stmts {
+		if _, err := tx.ExecContext(ctx, s); err != nil {
+			return fmt.Errorf("rebuild subscription_key: %w", err)
+		}
+	}
+
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("commit rebuild: %w", err)
+	}
+
+	// Defense in depth: with foreign_keys = OFF an INSERT-SELECT bug that
+	// produced a row referencing a non-existent account would commit silently
+	// and only surface on the next mutation. PRAGMA foreign_key_check returns
+	// one row per violation; any rows here mean the rebuild produced a corrupt
+	// table and we must refuse to re-enable enforcement against it.
+	rows, err := conn.QueryContext(ctx, `PRAGMA foreign_key_check`)
+	if err != nil {
+		return fmt.Errorf("foreign_key_check: %w", err)
+	}
+	defer rows.Close()
+	if rows.Next() {
+		return fmt.Errorf("rebuild subscription_key: foreign_key_check reported violations after rebuild — refusing to re-enable FK enforcement")
+	}
+	if err := rows.Err(); err != nil {
+		return fmt.Errorf("foreign_key_check rows: %w", err)
+	}
+	return nil
 }
 
 // Close releases the database connection.
@@ -80,39 +350,18 @@ func (s *SQLiteStore) Close() error {
 	return s.db.Close()
 }
 
-// CreateKey generates a new subscription key and persists it.
-func (s *SQLiteStore) CreateKey(ctx context.Context, component, label string, expiresAt *time.Time) (*Key, error) {
-	id, err := generateKeyValue()
-	if err != nil {
-		return nil, fmt.Errorf("generate key: %w", err)
-	}
-
-	now := time.Now().UTC()
-	_, err = s.db.ExecContext(ctx,
-		`INSERT INTO subscription_key (id, component, label, active, created_at, expires_at, usage_count)
-		 VALUES (?, ?, ?, 1, ?, ?, 0)`,
-		id, component, label, now.Format(time.RFC3339), formatNullTime(expiresAt),
-	)
-	if err != nil {
-		return nil, fmt.Errorf("insert key: %w", err)
-	}
-
-	return &Key{
-		ID:         id,
-		Component:  component,
-		Label:      label,
-		Active:     true,
-		CreatedAt:  now,
-		ExpiresAt:  expiresAt,
-		UsageCount: 0,
-	}, nil
+// CreateKey generates a new subscription key under the given account and
+// persists it. It is an alias for CreateKeyForAccount kept on KeyStore so the
+// keys handler can take a single store dependency.
+func (s *SQLiteStore) CreateKey(ctx context.Context, accountID, component, label string, expiresAt *time.Time) (*Key, error) {
+	return s.CreateKeyForAccount(ctx, accountID, component, label, expiresAt)
 }
 
 // GetByValue retrieves a key by its value (id column).
 // Returns ErrNotFound if the key does not exist, ErrRevoked if active=0.
 func (s *SQLiteStore) GetByValue(ctx context.Context, value string) (*Key, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, component, label, active, created_at, expires_at, usage_count
+		`SELECT id, component, label, active, created_at, expires_at, usage_count, account_id
 		 FROM subscription_key WHERE id = ?`, value)
 
 	k, err := scanKey(row)
@@ -135,7 +384,7 @@ func (s *SQLiteStore) GetByValue(ctx context.Context, value string) (*Key, error
 // Unlike GetByValue, revoked keys (active=0) are returned without error.
 func (s *SQLiteStore) GetByID(ctx context.Context, id string) (*Key, error) {
 	row := s.db.QueryRowContext(ctx,
-		`SELECT id, component, label, active, created_at, expires_at, usage_count
+		`SELECT id, component, label, active, created_at, expires_at, usage_count, account_id
 		 FROM subscription_key WHERE id = ?`, id)
 
 	k, err := scanKey(row)
@@ -149,22 +398,29 @@ func (s *SQLiteStore) GetByID(ctx context.Context, id string) (*Key, error) {
 	return k, nil // no Active check — returns revoked keys too
 }
 
-// ListKeys returns all keys, optionally filtered by component (empty string = all).
-func (s *SQLiteStore) ListKeys(ctx context.Context, component string) ([]*Key, error) {
-	var (
-		rows *sql.Rows
-		err  error
-	)
-
-	if component == "" {
-		rows, err = s.db.QueryContext(ctx,
-			`SELECT id, component, label, active, created_at, expires_at, usage_count
-			 FROM subscription_key ORDER BY created_at DESC`)
-	} else {
-		rows, err = s.db.QueryContext(ctx,
-			`SELECT id, component, label, active, created_at, expires_at, usage_count
-			 FROM subscription_key WHERE component = ? ORDER BY created_at DESC`, component)
+// ListKeys returns all keys, optionally filtered by component and/or account.
+// Empty filter strings disable the corresponding filter; both may be combined.
+// offset/limit follow D23 (caller clamps; the store passes through).
+func (s *SQLiteStore) ListKeys(ctx context.Context, componentFilter, accountFilter string, offset, limit int) ([]*Key, error) {
+	const cols = `id, component, label, active, created_at, expires_at, usage_count, account_id`
+	query := `SELECT ` + cols + ` FROM subscription_key`
+	args := make([]any, 0, 4)
+	clauses := make([]string, 0, 2)
+	if componentFilter != "" {
+		clauses = append(clauses, `component = ?`)
+		args = append(args, componentFilter)
 	}
+	if accountFilter != "" {
+		clauses = append(clauses, `account_id = ?`)
+		args = append(args, accountFilter)
+	}
+	if len(clauses) > 0 {
+		query += ` WHERE ` + strings.Join(clauses, ` AND `)
+	}
+	query += ` ORDER BY created_at DESC LIMIT ? OFFSET ?`
+	args = append(args, limit, offset)
+
+	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("list keys: %w", err)
 	}
@@ -231,7 +487,7 @@ func scanKey(s scanner) (*Key, error) {
 		createdStr string
 		expiresStr sql.NullString
 	)
-	err := s.Scan(&k.ID, &k.Component, &k.Label, &activeInt, &createdStr, &expiresStr, &k.UsageCount)
+	err := s.Scan(&k.ID, &k.Component, &k.Label, &activeInt, &createdStr, &expiresStr, &k.UsageCount, &k.AccountID)
 	if err != nil {
 		return nil, err
 	}
@@ -332,11 +588,12 @@ func (s *SQLiteStore) GetComponent(ctx context.Context, name string) (*Component
 	return c, nil
 }
 
-// ListComponents returns all components ordered by name ascending.
-func (s *SQLiteStore) ListComponents(ctx context.Context) ([]*Component, error) {
+// ListComponents returns components ordered by name ascending, sliced by
+// offset/limit. Caller clamps offset/limit to D23 bounds.
+func (s *SQLiteStore) ListComponents(ctx context.Context, offset, limit int) ([]*Component, error) {
 	rows, err := s.db.QueryContext(ctx,
 		`SELECT name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at
-		 FROM components ORDER BY name ASC`)
+		 FROM components ORDER BY name ASC LIMIT ? OFFSET ?`, limit, offset)
 	if err != nil {
 		return nil, fmt.Errorf("list components: %w", err)
 	}

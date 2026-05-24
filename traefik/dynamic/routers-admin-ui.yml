@@ -1,0 +1,21 @@
+http:
+  routers:
+    # Admin UI + admin API on the public web entrypoint per change
+    # 2026-05-21-admin-ui-account-lifecycle § 7. Replaces the prior
+    # 127.0.0.1:8088 loopback router — admin access is now OAuth-gated and
+    # exposed over public TLS at admin.${PKG_DOMAIN} (or a dedicated
+    # ADMIN_DOMAIN). Session middleware + CSRF guard + rate limit live in the
+    # auth service.
+    admin-ui:
+      entryPoints:
+        - websecure
+      rule: 'Host(`{{ env "ADMIN_DOMAIN" }}`)'
+      service: packyard-auth-admin-svc
+      tls:
+        certResolver: letsencrypt
+
+  services:
+    packyard-auth-admin-svc:
+      loadBalancer:
+        servers:
+          - url: "http://auth:8080"

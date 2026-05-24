@@ -14,7 +14,6 @@ services:
       - /tmp                    # Go runtime scratch
     ports:
       - "443:443"
-      - "127.0.0.1:8088:8088"
     volumes:
       - ./traefik/traefik.yml:/etc/traefik/traefik.yml:ro
       - ./traefik/dynamic:/etc/traefik/dynamic:ro
@@ -24,6 +23,10 @@ services:
       - TRAEFIK_CERTIFICATESRESOLVERS_LETSENCRYPT_ACME_EMAIL=${ACME_EMAIL:?ACME_EMAIL must be set in .env}
       # Passed into file-provider Go templates via {{ env "PKG_DOMAIN" }} in dynamic/*.yml
       - PKG_DOMAIN=${PKG_DOMAIN:?PKG_DOMAIN must be set in .env}
+      # Admin UI host — Traefik routes Host(${ADMIN_DOMAIN}) to the auth service
+      # over public TLS. ACME issues a cert for this name; ops sets it in .env.
+      # The auth service uses the SAME value via PACKYARD_ADMIN_HOST for CSRF.
+      - ADMIN_DOMAIN=${ADMIN_DOMAIN:?ADMIN_DOMAIN must be set in .env}
     networks:
       - proxy
 
@@ -40,6 +43,10 @@ services:
       - "9090"  # Prometheus metrics — internal Docker network only, not published to host
     environment:
       - RPM_DATA_ROOT=/data/rpm
+      # § 7 / D15 — admin host the browser uses for the SPA. Used by the CSRF
+      # guard to enforce same-origin on /api/v1/* mutations. Derived from
+      # ADMIN_DOMAIN so prod stays a single source of truth.
+      - PACKYARD_ADMIN_HOST=https://${ADMIN_DOMAIN:?ADMIN_DOMAIN must be set in .env}
     volumes:
       - auth-db:/data/db
       - auth-backup:/data/backup
@@ -51,8 +58,14 @@ services:
       retries: 3
       start_period: 5s
     networks:
-      - proxy    # receives forwardAuth calls from Traefik; admin API routed via Traefik admin entrypoint
+      - proxy    # receives forwardAuth calls from Traefik; admin UI + API routed via the websecure entrypoint by Host(ADMIN_DOMAIN) rule
       - backend  # promotion pipeline access (Epic 4); placed here now to complete isolation topology
+    # KNOWN GAP: admin and subscriber traffic share the same listen socket
+    # (`auth:8080`). The auth handler distinguishes them by Host/path. A
+    # future hardening pass should add a second listener (e.g. :8081) bound
+    # to a dedicated admin network so a compromised subscriber-serving
+    # container cannot reach admin endpoints at the network layer. Tracked
+    # in deferred-work.md (PR #101 round 2, D2-4).
 
   aptly:
     image: ghcr.io/no42-org/packyard-aptly:1.6.2

@@ -1,0 +1,17 @@
+http:
+  routers:
+    # CI override — admin UI and admin API on the public `web` entrypoint
+    # (plaintext HTTP). PathPrefix-only routing; tests reach the service via
+    # http://traefik/admin/ and http://traefik/api/v1/.
+    admin-ui:
+      entryPoints:
+        - web
+      rule: "PathPrefix(`/admin/`) || PathPrefix(`/api/v1/`)"
+      service: packyard-auth-admin-svc
+      # No tls: — CI uses plaintext HTTP
+
+  services:
+    packyard-auth-admin-svc:
+      loadBalancer:
+        servers:
+          - url: "http://auth:8080"

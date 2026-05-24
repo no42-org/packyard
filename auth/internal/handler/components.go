@@ -146,15 +146,26 @@ func (h *ComponentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(created)
 }
 
-// List handles GET /api/v1/components.
+// List handles GET /api/v1/components with D23 pagination.
 func (h *ComponentsHandler) List(w http.ResponseWriter, r *http.Request) {
-	comps, err := h.Store.ListComponents(r.Context())
+	offset, limit, ok := parsePagination(w, r)
+	if !ok {
+		return
+	}
+
+	// Fetch limit+1 to detect more pages without a count query.
+	comps, err := h.Store.ListComponents(r.Context(), offset, limit+1)
 	if err != nil {
 		h.Logger.Error("failed to list components", slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "COMPONENT_LIST_FAILED", "failed to list components")
 		return
 	}
+	hasMore := len(comps) > limit
+	if hasMore {
+		comps = comps[:limit]
+	}
 
+	writePaginationLinks(w, r, hasMore, offset, limit)
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
 	_ = json.NewEncoder(w).Encode(comps)

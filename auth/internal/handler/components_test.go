@@ -60,10 +60,17 @@ func (s *stubComponentStore) GetComponent(_ context.Context, name string) (*stor
 	return c, nil
 }
 
-func (s *stubComponentStore) ListComponents(_ context.Context) ([]*store.Component, error) {
+func (s *stubComponentStore) ListComponents(_ context.Context, offset, limit int) ([]*store.Component, error) {
 	out := make([]*store.Component, 0, len(s.comps))
 	for _, c := range s.comps {
 		out = append(out, c)
+	}
+	if offset >= len(out) {
+		return []*store.Component{}, nil
+	}
+	out = out[offset:]
+	if limit > 0 && len(out) > limit {
+		out = out[:limit]
 	}
 	return out, nil
 }

@@ -1,0 +1,4 @@
+# This directory holds the Vite-built SPA bundle. Embedded via go:embed
+# all:dist in adminui.go. The .gitkeep file keeps the directory present in
+# source checkouts so `go build` succeeds before the first `make admin-ui`
+# run; the handler serves a clear "not built" placeholder in that state.
