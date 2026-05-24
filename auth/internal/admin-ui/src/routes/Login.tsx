@@ -42,8 +42,15 @@ export function Login() {
         )}
 
         <div className="login-providers">
-          <a href="/api/v1/auth/login/github">Sign in with GitHub</a>
-          <a href="/api/v1/auth/login/microsoft">Sign in with Microsoft</a>
+          {/* rel="nofollow" so browser link prefetchers / chat-app unfurl
+              bots don't consume token-bucket rate-limit slots and leave
+              dangling OAuth state rows. */}
+          <a href="/api/v1/auth/login/github" rel="nofollow">
+            Sign in with GitHub
+          </a>
+          <a href="/api/v1/auth/login/microsoft" rel="nofollow">
+            Sign in with Microsoft
+          </a>
         </div>
       </div>
     </div>

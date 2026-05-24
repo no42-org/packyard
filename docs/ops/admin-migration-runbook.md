@@ -55,21 +55,29 @@ plausible count finishes well inside the deploy's restart window.
 ## 2. Verify the implementation
 
 The migration is already coded — these steps confirm it's present on the
-release tag you are about to deploy.
+release tag you are about to deploy. Verify observable behaviour rather
+than source-internal symbol names (which a future refactor can rename
+without changing the runtime contract):
 
 ```bash
-# 1. The legacy-account backfill lives in store/sqlite.go.
-grep -n "rebuildSubscriptionKeyNotNull\|legacy" auth/internal/store/sqlite.go | head -10
+# 1. The auth binary advertises the migration on `--version`.
+docker compose run --rm auth --version
+# Expect: build metadata including the release tag you're deploying.
 
-# 2. The /admin/* handler is wired in main.go.
-grep -n 'r.Route("/admin"' auth/cmd/server/main.go
+# 2. The /admin/login route serves the SPA shell over the admin host.
+curl -sSI "https://admin.pkg.example.org/admin/login" | head -1
+# Expect: HTTP/2 200.
 
-# 3. The Dockerfile multi-stage SPA build is present.
-grep -n "FROM node" auth/Dockerfile
+# 3. The /api/v1/accounts surface responds (401 is correct here — no
+#    operator session yet; the goal is to confirm the route exists,
+#    not to call it authenticated).
+curl -sSI "https://admin.pkg.example.org/api/v1/accounts" | head -1
+# Expect: HTTP/2 401  (NOT 404 — 404 would indicate routing regression).
 ```
 
-All three greps must return matches. If any are empty, the release tag is
-stale — rebuild from `main`.
+If any check returns a different status, the release tag is stale or
+the deploy hasn't fully picked up the new container — rebuild from
+`main` and redeploy before continuing.
 
 ---
 
@@ -297,8 +305,12 @@ git checkout <previous-release-tag>
 docker compose pull
 docker compose stop auth
 # Restore the snapshot taken in §3.
+# NOTE: the auth image is distroless (no shell). `docker compose exec auth
+# sh` will fail — use a one-shot alpine container against the named volume
+# for any file operations on the DB volume.
 TS_BACKUP=<filename from §3>
-docker compose exec -T auth sh -c "rm -f /data/db/auth.db /data/db/auth.db-wal /data/db/auth.db-shm"
+docker run --rm -v packyard_auth-db:/db alpine \
+  rm -f /db/auth.db /db/auth.db-wal /db/auth.db-shm
 docker run --rm -v packyard_auth-db:/db -v packyard_auth-backup:/backup alpine \
   cp /backup/${TS_BACKUP} /db/auth.db
 docker compose up -d --remove-orphans

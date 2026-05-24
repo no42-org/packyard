@@ -8,10 +8,44 @@ import { Pagination } from "../components/Pagination";
 const FILTER_KEYS = ["operator", "action", "target_type", "target_id", "since", "until"] as const;
 type FilterKey = (typeof FILTER_KEYS)[number];
 
+// AUDIT_ACTIONS is the documented vocabulary the backend filters against
+// (exact match in audit.go). Free-form input lets operators type "key" and
+// see "no matches" because the backend only accepts the full literal
+// "key.issue" / "key.revoke". A select prevents that false negative.
+const AUDIT_ACTIONS = [
+  "account.create",
+  "account.update",
+  "account.suspend",
+  "account.reactivate",
+  "account.delete",
+  "key.issue",
+  "key.revoke",
+  "operator.allowlist",
+  "operator.update",
+  "operator.disable",
+  "login.success",
+  "login.failure",
+  "logout",
+  "auth.rate_limited",
+  "audit.role_denied",
+  "component.create",
+  "component.update",
+  "component.delete",
+] as const;
+
+function clampNonNeg(raw: string | null, dflt: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : dflt;
+}
+function clampPos(raw: string | null, dflt: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : dflt;
+}
+
 export function Audit() {
   const [params, setParams] = useSearchParams();
-  const offset = Number(params.get("offset") || 0);
-  const limit = Number(params.get("limit") || 50);
+  const offset = clampNonNeg(params.get("offset"), 0);
+  const limit = clampPos(params.get("limit"), 50);
 
   const filters = {
     operator: params.get("operator") || undefined,
@@ -70,15 +104,30 @@ export function Audit() {
       </div>
 
       <div className="filters">
-        {FILTER_KEYS.map((k) => (
-          <input
-            key={k}
-            type="text"
-            placeholder={k}
-            value={draft[k]}
-            onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
-          />
-        ))}
+        {FILTER_KEYS.map((k) =>
+          k === "action" ? (
+            <select
+              key={k}
+              value={draft[k]}
+              onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+            >
+              <option value="">— action —</option>
+              {AUDIT_ACTIONS.map((a) => (
+                <option key={a} value={a}>
+                  {a}
+                </option>
+              ))}
+            </select>
+          ) : (
+            <input
+              key={k}
+              type="text"
+              placeholder={k}
+              value={draft[k]}
+              onChange={(e) => setDraft((d) => ({ ...d, [k]: e.target.value }))}
+            />
+          ),
+        )}
       </div>
 
       <ErrorBanner error={list.error} />
@@ -134,13 +183,39 @@ function AuditRow({ e }: { e: AuditEntry }) {
       </td>
       <td>{e.ip || <span className="muted">—</span>}</td>
       <td>
-        {e.details ? (
-          <code style={{ fontSize: 11 }}>{JSON.stringify(e.details)}</code>
-        ) : (
-          <span className="muted">—</span>
-        )}
+        {e.details ? <AuditDetailsCell details={e.details} /> : <span className="muted">—</span>}
       </td>
     </tr>
+  );
+}
+
+// AuditDetailsCell renders the details payload as a one-line summary with
+// click-to-expand. The backend caps the JSON at 4 KiB (round-1 P4), but
+// rendering a full 4 KiB blob inline would still wreck a row's column
+// height and let a single bad actor degrade the page for every peer.
+function AuditDetailsCell({ details }: { details: Record<string, unknown> }) {
+  const [open, setOpen] = useState(false);
+  const json = JSON.stringify(details);
+  const truncated = json.length > 120;
+  if (!truncated || open) {
+    return (
+      <code className="audit-details">
+        {json}
+        {truncated && (
+          <button type="button" className="btn-link" onClick={() => setOpen(false)}>
+            collapse
+          </button>
+        )}
+      </code>
+    );
+  }
+  return (
+    <code className="audit-details">
+      {json.slice(0, 120)}…{" "}
+      <button type="button" className="btn-link" onClick={() => setOpen(true)}>
+        expand
+      </button>
+    </code>
   );
 }
 

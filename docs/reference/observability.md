@@ -33,23 +33,35 @@ container on that network can scrape `http://auth:9090/metrics` by DNS.
 
 Traefik's own `metrics` entrypoint binds **loopback inside the container**
 (`127.0.0.1:8082`), so other containers on the `proxy` network cannot
-reach it. To scrape Traefik, run Prometheus in the same network namespace
-as the Traefik container:
+reach it. To scrape Traefik, attach Prometheus to the `proxy` network
+and bind Traefik's metrics entrypoint to all interfaces inside the
+container so it is reachable by service name:
 
 ```yaml
 # compose.override.metrics.yml
 services:
+  traefik:
+    environment:
+      # Override the static-config bind so metrics are reachable from
+      # other containers on the proxy network. The host port mapping is
+      # NOT added — metrics stay internal to the compose project.
+      - TRAEFIK_METRICS_PROMETHEUS_ENTRYPOINT=metrics
+      - TRAEFIK_ENTRYPOINTS_METRICS_ADDRESS=:8082
   prometheus:
     image: prom/prometheus:latest
-    network_mode: service:traefik   # shares Traefik's network namespace
     volumes:
       - ./prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    networks:
+      - proxy
     # Scrape targets in prometheus.yml:
-    #   - http://localhost:8082/metrics  (Traefik — same netns, so loopback works)
-    # Auth metrics are reachable via auth:9090 from the proxy network even
-    # without netns sharing — run a second Prometheus on the proxy network
-    # if you want everything in one container.
+    #   - http://traefik:8082/metrics  (reachable on the proxy network)
+    #   - http://auth:9090/metrics     (also on the proxy network)
 ```
+
+`network_mode: service:traefik` was previously documented here but does
+not work alongside the `networks:` aliases Traefik already declares —
+compose v2 rejects the mix. The pattern above keeps each service on its
+own network alias and lets Prometheus discover both by name.
 
 For ad-hoc inspection without deploying Prometheus, SSH into the VM and
 exec into the relevant container as shown in the "locally" section above.

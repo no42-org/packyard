@@ -3,7 +3,6 @@ package handler
 import (
 	"encoding/json"
 	"errors"
-	"fmt"
 	"log/slog"
 	"net/http"
 
@@ -58,30 +57,26 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	providerName := chi.URLParam(r, "provider")
 	provider, ok := h.Providers[providerName]
 	if !ok {
-		writeError(w, http.StatusNotFound, "UNKNOWN_PROVIDER",
-			fmt.Sprintf("oauth provider %q is not configured", providerName))
+		redirectLoginError(w, r, "UNKNOWN_PROVIDER")
 		return
 	}
 
 	state, err := auth.RandomHex(32)
 	if err != nil {
 		h.Logger.Error("generate state failed", slog.String("error", err.Error()))
-		writeError(w, http.StatusInternalServerError, "LOGIN_INIT_FAILED",
-			"failed to initiate login flow")
+		redirectLoginError(w, r, "LOGIN_INIT_FAILED")
 		return
 	}
 	verifier, err := auth.RandomHex(32)
 	if err != nil {
 		h.Logger.Error("generate verifier failed", slog.String("error", err.Error()))
-		writeError(w, http.StatusInternalServerError, "LOGIN_INIT_FAILED",
-			"failed to initiate login flow")
+		redirectLoginError(w, r, "LOGIN_INIT_FAILED")
 		return
 	}
 	handle, err := auth.RandomHex(16)
 	if err != nil {
 		h.Logger.Error("generate handle failed", slog.String("error", err.Error()))
-		writeError(w, http.StatusInternalServerError, "LOGIN_INIT_FAILED",
-			"failed to initiate login flow")
+		redirectLoginError(w, r, "LOGIN_INIT_FAILED")
 		return
 	}
 
@@ -127,8 +122,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 			_, _ = h.State.Consume(c.Value)
 		}
 		clearOAuthHandleCookie(w)
-		writeError(w, http.StatusNotFound, "UNKNOWN_PROVIDER",
-			fmt.Sprintf("oauth provider %q is not configured", providerName))
+		redirectLoginError(w, r, "UNKNOWN_PROVIDER")
 		return
 	}
 
@@ -279,22 +273,28 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 	http.Redirect(w, r, dest, http.StatusFound)
 }
 
-// failCallback clears the transient handle cookie, writes an error response,
-// and records a `login.failure` audit row capturing the failure mode.
-// operatorEmail and provider are best-effort; either may be empty when the
-// failure occurred before the relevant value was determined.
+// failCallback clears the transient handle cookie, redirects the browser to
+// /admin/login?error=CODE, and records a `login.failure` audit row capturing
+// the failure mode. operatorEmail and provider are best-effort; either may
+// be empty when the failure occurred before the relevant value was
+// determined. The `status` and `message` arguments are retained for audit
+// context (logged) but no longer surface to the browser — the SPA's Login
+// route reads `?error=CODE` and renders a friendlier message.
 //
-// Cookie hygiene: clearOAuthHandleCookie MUST run before writeError so the
-// Set-Cookie header lands in the response (writeError calls WriteHeader, after
-// which header mutations are silently dropped).
+// Cookie hygiene: clearOAuthHandleCookie MUST run before http.Redirect so
+// the Set-Cookie header lands in the response.
 func (h *AuthHandler) failCallback(w http.ResponseWriter, r *http.Request,
 	operatorEmail, providerName string,
 	status int, code, message, reason string) {
 
 	clearOAuthHandleCookie(w)
-	writeError(w, status, code, message)
+	redirectLoginError(w, r, code)
 
-	details := map[string]any{"reason": reason}
+	details := map[string]any{
+		"reason":      reason,
+		"http_status": status,
+		"message":     message,
+	}
 	if operatorEmail != "" {
 		details["email"] = operatorEmail
 	}
@@ -306,6 +306,15 @@ func (h *AuthHandler) failCallback(w http.ResponseWriter, r *http.Request,
 		TargetType: "session",
 		Details:    details,
 	})
+}
+
+// redirectLoginError sends the browser back to the SPA login route with an
+// error code in the query string. The SPA's `KNOWN_ERROR_MESSAGES` map
+// renders a human-readable banner. Non-browser callers (curl, scripts) see
+// a 302 with an empty body — still recoverable; for fully-headless callers
+// the audit log is the authoritative record.
+func redirectLoginError(w http.ResponseWriter, r *http.Request, code string) {
+	http.Redirect(w, r, "/admin/login?error="+code, http.StatusFound)
 }
 
 // clientIP returns the request's source IP, parsing the leftmost XFF token

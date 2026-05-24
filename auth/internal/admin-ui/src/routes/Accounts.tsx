@@ -17,8 +17,8 @@ export function Accounts() {
   const [params, setParams] = useSearchParams();
   const status = (params.get("status") || undefined) as AccountStatus | undefined;
   const search = params.get("q") || "";
-  const offset = Number(params.get("offset") || 0);
-  const limit = Number(params.get("limit") || 50);
+  const offset = clampNonNeg(params.get("offset"), 0);
+  const limit = clampPos(params.get("limit"), 50);
 
   const { data, error, isLoading } = useAccounts({ status, offset, limit });
   const [createOpen, setCreateOpen] = useState(false);
@@ -249,4 +249,17 @@ function updateParam(
   else next.set(key, value);
   next.delete("offset"); // reset pagination on filter change
   setParams(next);
+}
+
+// clampNonNeg / clampPos coerce a tampered URL param back to a sane default
+// so `?limit=NaN` or `?offset=-1` self-heals instead of forwarding garbage
+// to the backend (which would return 400 INVALID_REQUEST). Defaults match
+// the backend's D23 contract.
+function clampNonNeg(raw: string | null, dflt: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n >= 0 ? n : dflt;
+}
+function clampPos(raw: string | null, dflt: number): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? n : dflt;
 }

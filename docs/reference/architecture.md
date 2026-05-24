@@ -113,7 +113,7 @@ investigation.
 | `aptly` | `ghcr.io/no42-org/packyard-aptly:1.6.2` | DEB repo management and signing (multi-arch: amd64 + arm64) |
 | `rustfs` | `rustfs/rustfs:latest` | S3-compatible staging storage for promotion pipeline |
 | `static` | `nginx:alpine` | Public GPG/cosign key hosting |
-| `backup` | `keinos/sqlite3:latest` | Daily SQLite backup of the key store |
+| `backup` | `ghcr.io/no42-org/packyard-backup:3.48.0` | Daily SQLite backup of the key store |
 
 The auth service binary embeds the React + TypeScript SPA via `go:embed`,
 so the admin UI ships in the same single artifact as the admin API and the

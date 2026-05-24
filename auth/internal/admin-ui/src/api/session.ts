@@ -12,6 +12,11 @@ export interface CurrentOperator {
 // useCurrentOperator hits /api/v1/auth/whoami once at App mount. A 401 is
 // treated as "logged out" — surfaced via `error` so App can redirect to the
 // /login route without dragging React Router redirects into every hook.
+//
+// staleTime: 0 + refetchOnWindowFocus: true so a disabled-by-admin operator
+// is force-logged-out on the next window focus event rather than continuing
+// to see admin chrome served from cache for up to 60s. Spec
+// (operator-onboarding.md) promises immediate effect of admin disable.
 export function useCurrentOperator() {
   return useQuery<CurrentOperator>({
     queryKey: ["session", "whoami"],
@@ -22,6 +27,7 @@ export function useCurrentOperator() {
       }
       return failureCount < 2;
     },
-    staleTime: 60_000,
+    staleTime: 0,
+    refetchOnWindowFocus: true,
   });
 }

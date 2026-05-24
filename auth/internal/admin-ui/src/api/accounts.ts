@@ -95,7 +95,7 @@ export function useDeleteAccount() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: ({ id, confirm }: { id: string; confirm: string }) =>
-      apiFetch<{ revoked_keys: number }>(
+      apiFetch<{ keys_revoked: number }>(
         `/api/v1/accounts/${encodeURIComponent(id)}?confirm=${encodeURIComponent(confirm)}`,
         { method: "DELETE" },
       ),

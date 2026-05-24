@@ -2,7 +2,6 @@ package handler
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"log/slog"
 	"net/http"
@@ -141,14 +140,12 @@ func chiProviderReq(req *http.Request, providerName string) *http.Request {
 	return req.WithContext(context.WithValue(req.Context(), chi.RouteCtxKey, rctx))
 }
 
-func TestAuth_Login_UnknownProviderReturns404(t *testing.T) {
+func TestAuth_Login_UnknownProviderRedirectsToLoginError(t *testing.T) {
 	h, _, _ := newAuthHandlerWithProvider(t, &fakeProvider{name: "github"})
 	req := chiProviderReq(httptest.NewRequest(http.MethodGet, "/api/v1/auth/login/unknown", nil), "unknown")
 	w := httptest.NewRecorder()
 	h.Login(w, req)
-	if w.Code != http.StatusNotFound {
-		t.Errorf("want 404, got %d", w.Code)
-	}
+	assertLoginRedirect(t, w, "UNKNOWN_PROVIDER")
 }
 
 func TestAuth_Login_SetsHandleCookieAndRedirects(t *testing.T) {
@@ -304,6 +301,21 @@ func TestAuth_Callback_CapturesFirstSeenProvider(t *testing.T) {
 	}
 }
 
+// assertLoginRedirect verifies the response is a 302 redirect to
+// /admin/login?error=<wantCode>. Failure callbacks no longer render JSON —
+// the browser is sent back to the SPA, which reads ?error= and renders a
+// friendly banner. (ECH2-C1)
+func assertLoginRedirect(t *testing.T, rec *httptest.ResponseRecorder, wantCode string) {
+	t.Helper()
+	if rec.Code != http.StatusFound {
+		t.Fatalf("want 302 redirect, got %d body=%s", rec.Code, rec.Body.String())
+	}
+	loc := rec.Header().Get("Location")
+	if loc != "/admin/login?error="+wantCode {
+		t.Errorf("Location header: want /admin/login?error=%s, got %q", wantCode, loc)
+	}
+}
+
 func TestAuth_Callback_NotOnAllowlist(t *testing.T) {
 	prov := &fakeProvider{
 		name: "github",
@@ -314,14 +326,7 @@ func TestAuth_Callback_NotOnAllowlist(t *testing.T) {
 	h, _, rec := newAuthHandlerWithProvider(t, prov)
 
 	cbRec := runCallback(t, h, prov, "code-1")
-	if cbRec.Code != http.StatusForbidden {
-		t.Fatalf("want 403, got %d", cbRec.Code)
-	}
-	var ae apiError
-	json.NewDecoder(cbRec.Body).Decode(&ae)
-	if ae.Code != "OPERATOR_NOT_ALLOWED" {
-		t.Errorf("want OPERATOR_NOT_ALLOWED, got %q", ae.Code)
-	}
+	assertLoginRedirect(t, cbRec, "OPERATOR_NOT_ALLOWED")
 	if len(rec.entries) != 1 || rec.entries[0].Action != "login.failure" {
 		t.Errorf("want one login.failure audit row, got %+v", rec.entries)
 	}
@@ -339,14 +344,7 @@ func TestAuth_Callback_DisabledOperator(t *testing.T) {
 	_ = s.DisableOperator(context.Background(), op.ID)
 
 	cbRec := runCallback(t, h, prov, "code-1")
-	if cbRec.Code != http.StatusForbidden {
-		t.Fatalf("want 403, got %d", cbRec.Code)
-	}
-	var ae apiError
-	json.NewDecoder(cbRec.Body).Decode(&ae)
-	if ae.Code != "OPERATOR_DISABLED" {
-		t.Errorf("want OPERATOR_DISABLED, got %q", ae.Code)
-	}
+	assertLoginRedirect(t, cbRec, "OPERATOR_DISABLED")
 }
 
 func TestAuth_Callback_UnverifiedEmail(t *testing.T) {
@@ -359,14 +357,7 @@ func TestAuth_Callback_UnverifiedEmail(t *testing.T) {
 	h, _, _ := newAuthHandlerWithProvider(t, prov)
 
 	cbRec := runCallback(t, h, prov, "code-1")
-	if cbRec.Code != http.StatusForbidden {
-		t.Fatalf("want 403, got %d", cbRec.Code)
-	}
-	var ae apiError
-	json.NewDecoder(cbRec.Body).Decode(&ae)
-	if ae.Code != "EMAIL_NOT_VERIFIED" {
-		t.Errorf("want EMAIL_NOT_VERIFIED, got %q", ae.Code)
-	}
+	assertLoginRedirect(t, cbRec, "EMAIL_NOT_VERIFIED")
 }
 
 func TestAuth_Callback_NotOrgMember(t *testing.T) {
@@ -379,14 +370,7 @@ func TestAuth_Callback_NotOrgMember(t *testing.T) {
 	h, _, _ := newAuthHandlerWithProvider(t, prov)
 
 	cbRec := runCallback(t, h, prov, "code-1")
-	if cbRec.Code != http.StatusForbidden {
-		t.Fatalf("want 403, got %d", cbRec.Code)
-	}
-	var ae apiError
-	json.NewDecoder(cbRec.Body).Decode(&ae)
-	if ae.Code != "ORG_MEMBERSHIP_REQUIRED" {
-		t.Errorf("want ORG_MEMBERSHIP_REQUIRED, got %q", ae.Code)
-	}
+	assertLoginRedirect(t, cbRec, "ORG_MEMBERSHIP_REQUIRED")
 }
 
 func TestAuth_Callback_StateMismatch(t *testing.T) {
@@ -414,14 +398,7 @@ func TestAuth_Callback_StateMismatch(t *testing.T) {
 	}
 	cbRec := httptest.NewRecorder()
 	h.Callback(cbRec, cbReq)
-	if cbRec.Code != http.StatusBadRequest {
-		t.Fatalf("want 400, got %d", cbRec.Code)
-	}
-	var ae apiError
-	json.NewDecoder(cbRec.Body).Decode(&ae)
-	if ae.Code != "INVALID_OAUTH_STATE" {
-		t.Errorf("want INVALID_OAUTH_STATE, got %q", ae.Code)
-	}
+	assertLoginRedirect(t, cbRec, "INVALID_OAUTH_STATE")
 }
 
 func TestAuth_Callback_MissingHandleCookie(t *testing.T) {
@@ -434,9 +411,7 @@ func TestAuth_Callback_MissingHandleCookie(t *testing.T) {
 	)
 	cbRec := httptest.NewRecorder()
 	h.Callback(cbRec, cbReq)
-	if cbRec.Code != http.StatusBadRequest {
-		t.Fatalf("want 400, got %d", cbRec.Code)
-	}
+	assertLoginRedirect(t, cbRec, "INVALID_OAUTH_STATE")
 }
 
 // TestAuth_Callback_FailurePathsClearHandleCookie verifies the patched
@@ -452,8 +427,8 @@ func TestAuth_Callback_FailurePathsClearHandleCookie(t *testing.T) {
 	}
 	h, _, _ := newAuthHandlerWithProvider(t, prov)
 	cbRec := runCallback(t, h, prov, "code-1")
-	if cbRec.Code != http.StatusForbidden {
-		t.Fatalf("want 403, got %d", cbRec.Code)
+	if cbRec.Code != http.StatusFound {
+		t.Fatalf("want 302 redirect, got %d", cbRec.Code)
 	}
 	var cleared bool
 	for _, c := range cbRec.Result().Cookies() {
@@ -483,9 +458,7 @@ func TestAuth_Callback_CreateSessionFailureAudits(t *testing.T) {
 	h.Sessions = failingCreateSessionStore{base: s}
 
 	cbRec := runCallback(t, h, prov, "code-1")
-	if cbRec.Code != http.StatusInternalServerError {
-		t.Fatalf("want 500, got %d: %s", cbRec.Code, cbRec.Body.String())
-	}
+	assertLoginRedirect(t, cbRec, "SESSION_CREATE_FAILED")
 	if len(rec.entries) != 1 || rec.entries[0].Action != "login.failure" {
 		t.Errorf("expected one login.failure audit row, got %+v", rec.entries)
 	}

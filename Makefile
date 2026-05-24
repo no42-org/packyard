@@ -6,6 +6,11 @@ GO ?= go
 ADMIN_UI_DIR := auth/internal/admin-ui
 ADMIN_UI_DIST := auth/internal/adminui/dist
 
+# --warn-undefined-variables surfaces typo'd Makefile vars (e.g. a missing
+# underscore in $(ADMIN_UIDIR) that would silently expand to "" and `cd` to
+# the project root) instead of letting the broken command run.
+MAKEFLAGS += --warn-undefined-variables
+
 UNAME_S := $(shell uname -s)
 
 .DEFAULT_GOAL := help
@@ -64,14 +69,15 @@ admin-ui: $(ADMIN_UI_DIR)/node_modules/.package-lock.json
 	cp -r $(ADMIN_UI_DIR)/dist/. $(ADMIN_UI_DIST)/
 	@touch $(ADMIN_UI_DIST)/.gitkeep
 
-## admin-ui-dev: Run the Vite dev server (live-reload) against the auth API
+## admin-ui-dev: Run the Vite dev server for SPA hot-reload (NOT for end-to-end OAuth — see admin-ui/README.md)
 admin-ui-dev: $(ADMIN_UI_DIR)/node_modules/.package-lock.json
 	cd $(ADMIN_UI_DIR) && $(NPM) run dev
 
 ## admin-ui-clean: Remove the SPA build output and installed Node modules
 admin-ui-clean:
 	rm -rf $(ADMIN_UI_DIR)/dist $(ADMIN_UI_DIR)/node_modules
-	@find $(ADMIN_UI_DIST) -mindepth 1 ! -name .gitkeep -delete 2>/dev/null || true
+	@test -n "$(ADMIN_UI_DIST)" || { echo "ADMIN_UI_DIST is empty — refusing to find -delete"; exit 1; }
+	@find $(ADMIN_UI_DIST) -mindepth 1 ! -name .gitkeep -delete
 
 ## build: Build the auth binary with the embedded SPA (depends on admin-ui)
 build: admin-ui

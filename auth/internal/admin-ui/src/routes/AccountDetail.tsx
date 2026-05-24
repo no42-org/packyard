@@ -27,7 +27,17 @@ export function AccountDetail() {
           <Link to="/accounts">Accounts</Link> /{" "}
           {acct.data ? acct.data.email : <span className="muted">…</span>}
         </h1>
-        <button onClick={() => setIssueOpen(true)}>+ Issue key</button>
+        <button
+          onClick={() => setIssueOpen(true)}
+          disabled={acct.data?.status !== "active"}
+          title={
+            acct.data && acct.data.status !== "active"
+              ? `Cannot issue keys while account is ${acct.data.status}`
+              : undefined
+          }
+        >
+          + Issue key
+        </button>
       </div>
 
       <ErrorBanner error={acct.error} />
@@ -249,15 +259,16 @@ function IssueKeyModal({
   );
 }
 
-// isValidRFC3339 checks that a string parses as a Date AND, when reformatted
-// via toISOString(), produces a value that round-trips. The backend's
-// `*time.Time` JSON unmarshal uses `time.Parse(time.RFC3339, …)`, which
-// requires the explicit time-of-day and zone designator — Date-only inputs
-// like "2027-01-01" parse via JavaScript's Date constructor but get
-// rejected server-side. This guard surfaces the typo before the request.
+// isValidRFC3339 checks that a string is in the strict form Go's
+// time.Parse(time.RFC3339, …) accepts: full date + 'T' + hh:mm:ss + zone
+// designator (Z or ±hh[:]mm). The Go parser requires seconds; without this
+// guard the SPA would let `2027-01-01T00:00Z` (no seconds) through and the
+// backend would reject it. Date.parse-only validation isn't sufficient — JS
+// is far more permissive than Go.
 function isValidRFC3339(s: string): boolean {
-  // Require a 'T' separator and a zone designator (Z or ±hh:mm).
-  if (!/T/.test(s) || !/(Z|[+-]\d{2}:?\d{2})$/.test(s)) return false;
+  if (!/^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d+)?(Z|[+-]\d{2}:?\d{2})$/.test(s)) {
+    return false;
+  }
   const t = Date.parse(s);
   return !Number.isNaN(t);
 }
@@ -276,11 +287,13 @@ function IssuedSecretModal({ secret, onClose }: { secret: string | null; onClose
       }
     >
       <p>
-        Copy this secret now. It will not be shown again. The user must paste it into their package
-        manager configuration verbatim.
+        Copy this key now and share it with the subscriber. The same value is also
+        the key&rsquo;s identifier in the table below — it is not secret-by-obscurity,
+        but rotation requires revoking and issuing a fresh one. Paste verbatim into
+        the package manager configuration.
       </p>
       <div className="field">
-        <label>Secret</label>
+        <label>Key</label>
         <textarea readOnly rows={3} value={secret} onFocus={(e) => e.target.select()} />
       </div>
     </Modal>

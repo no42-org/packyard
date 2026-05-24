@@ -112,12 +112,12 @@ curl -s -X POST https://admin.pkg.example.org/api/v1/accounts \
 
 ```json
 {
-  "id": "01J4Y…",
+  "id": "01J4Y8K7M3Q5RXY2N9P4VWZB6T",
   "email": "ops@acme.test",
   "org_name": "Acme Corp",
   "status": "active",
   "created_at": "2026-05-22T12:00:00Z",
-  "created_by_operator_id": "9f…"
+  "created_by_operator_id": "9f3c2a8b1d4e5f60"
 }
 ```
 
@@ -132,14 +132,14 @@ curl -s -X POST "https://admin.pkg.example.org/api/v1/accounts/${ACCOUNT_ID}/key
 
 ```json
 {
-  "id": "abc123…",
+  "id": "abc123def4567890abcdef1234567890abcdef1234567890abcdef1234567890",
   "component": "core",
   "active": true,
   "label": "prod",
   "created_at": "2026-05-22T12:00:00Z",
   "expires_at": null,
   "usage_count": 0,
-  "account_id": "01J4Y…",
+  "account_id": "01J4Y8K7M3Q5RXY2N9P4VWZB6T",
   "component_visibility": "private"
 }
 ```
@@ -163,8 +163,8 @@ curl -s -X DELETE "https://admin.pkg.example.org/api/v1/accounts/${ACCOUNT_ID}" 
 ```json
 {
   "code": "CONFIRM_REQUIRED",
-  "message": "Confirmation required",
-  "impact": { "active_keys": 3 }
+  "message": "repeat the request with ?confirm=<id> to proceed",
+  "impact": { "keys_revoked": 3 }
 }
 ```
 
@@ -173,7 +173,7 @@ Re-issue with `?confirm={id}` to proceed:
 ```bash
 curl -s -X DELETE "https://admin.pkg.example.org/api/v1/accounts/${ACCOUNT_ID}?confirm=${ACCOUNT_ID}" \
   --cookie "$COOKIE" | jq .
-# { "revoked_keys": 3 }
+# { "keys_revoked": 3 }
 ```
 
 ## Subscription keys
@@ -359,6 +359,8 @@ rejection).
 | Code                           | HTTP | When                                                       |
 |--------------------------------|------|------------------------------------------------------------|
 | `ACCOUNT_NOT_FOUND`            | 404  | No account with the requested id                           |
+| `ACCOUNT_RESERVED`             | 403  | Mutation rejected because the target is the synthetic legacy account |
+| `ACCOUNT_SUSPENDED`            | 409  | Key issuance rejected because the owning account is suspended |
 | `ACCOUNT_EMAIL_EXISTS`         | 409  | Account email collides with an existing record             |
 | `MISSING_ACCOUNT_ID`           | 400  | `POST /api/v1/keys` called without `account_id`            |
 | `INVALID_STATUS_TRANSITION`    | 400  | Attempted PATCH to/from `deleted`                          |

@@ -59,14 +59,18 @@ export async function apiFetch<T = unknown>(
   path: string,
   init: RequestInit = {},
 ): Promise<T> {
+  // Spread caller-supplied init FIRST, then apply our credentials/header
+  // policy. The earlier order let a caller's `init.headers` silently replace
+  // the Accept + Content-Type defaults, which would surface as backend
+  // INVALID_REQUEST the moment any new caller actually set custom headers.
   const res = await fetch(path, {
+    ...init,
     credentials: "include",
     headers: {
       Accept: "application/json",
       ...(init.body ? { "Content-Type": "application/json" } : {}),
       ...(init.headers ?? {}),
     },
-    ...init,
   });
 
   if (res.status === 204) {
@@ -124,8 +128,9 @@ function parseLinkHeader(header: string | null): { prev?: string; next?: string 
   if (!header) return {};
   const out: { prev?: string; next?: string } = {};
   // RFC 5988: link-value = "<" URI-Reference ">" *( ";" link-param )
-  // We only care about rel="prev" and rel="next".
-  for (const part of header.split(",")) {
+  // We only care about rel="prev" and rel="next". Split on ",(?=\s*<)" so a
+  // comma inside a URI reference (legal per RFC 3986) doesn't split mid-URL.
+  for (const part of header.split(/,(?=\s*<)/)) {
     const m = part.trim().match(/^<([^>]+)>\s*;\s*rel="?(\w+)"?/);
     if (!m) continue;
     const [, url, rel] = m;

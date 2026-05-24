@@ -364,3 +364,13 @@ textarea:focus {
   color: var(--c-text-dim);
   font-size: 13px;
 }
+
+/* Audit details cell — kept small + click-to-expand so a single 4 KiB
+   row doesn't blow out the table height for every other row. */
+.audit-details {
+  font-size: 11px;
+}
+.audit-details .btn-link {
+  font-size: 11px;
+  margin-left: 4px;
+}

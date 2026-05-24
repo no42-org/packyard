@@ -60,6 +60,12 @@ services:
     networks:
       - proxy    # receives forwardAuth calls from Traefik; admin UI + API routed via the websecure entrypoint by Host(ADMIN_DOMAIN) rule
       - backend  # promotion pipeline access (Epic 4); placed here now to complete isolation topology
+    # KNOWN GAP: admin and subscriber traffic share the same listen socket
+    # (`auth:8080`). The auth handler distinguishes them by Host/path. A
+    # future hardening pass should add a second listener (e.g. :8081) bound
+    # to a dedicated admin network so a compromised subscriber-serving
+    # container cannot reach admin endpoints at the network layer. Tracked
+    # in deferred-work.md (PR #101 round 2, D2-4).
 
   aptly:
     image: ghcr.io/no42-org/packyard-aptly:1.6.2

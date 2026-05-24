@@ -1,3 +1,4 @@
+import { useQueryClient } from "@tanstack/react-query";
 import { NavLink, Navigate, Route, Routes } from "react-router-dom";
 
 import { Accounts } from "./routes/Accounts";
@@ -68,6 +69,7 @@ export function App() {
 }
 
 function LogoutButton() {
+  const qc = useQueryClient();
   return (
     <button
       type="button"
@@ -79,7 +81,12 @@ function LogoutButton() {
             credentials: "include",
           });
         } finally {
-          window.location.href = "/admin/login";
+          // Clear React Query so cached whoami / accounts / keys data
+          // doesn't survive the redirect into the next operator's session
+          // on a shared workstation (bfcache especially).
+          qc.clear();
+          // Use replace so Back doesn't re-mount the now-stale SPA.
+          window.location.replace("/admin/login");
         }
       }}
     >

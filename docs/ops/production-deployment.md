@@ -352,8 +352,10 @@ curl -s -X POST "https://admin.pkg.example.org/api/v1/accounts/${ACCOUNT}/keys" 
   -H 'Content-Type: application/json' \
   --cookie "$COOKIE" \
   -d '{"component":"core","label":"Acme — Core"}' | jq .
-# Response includes `secret` — share this once with the subscriber; it is
-# never returned again.
+# The `id` field IS the subscription key — there is no separate `secret`
+# field. Share `id` with the subscriber verbatim; rotation requires
+# revoking this key and issuing a fresh one. See docs/reference/api.md
+# § Subscription keys for the full schema.
 ```
 
 See [Operator onboarding](operator-onboarding.md) for how to allowlist
