@@ -34,8 +34,7 @@ on:
     types: [completed]
   workflow_dispatch:
 
-permissions:
-  contents: write
+permissions: {}
 
 concurrency:
   group: docs-${{ github.ref }}
@@ -48,6 +47,8 @@ jobs:
     # When triggered by the Release workflow, only proceed if that run
     # succeeded. On direct pushes and manual dispatches this is trivially true.
     if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    permissions:
+      contents: write
 
     steps:
       - name: Checkout
