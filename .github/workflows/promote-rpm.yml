@@ -47,17 +47,17 @@ jobs:
 
       - name: Download from RustFS staging
         env:
+          AWS_ACCESS_KEY_ID: ${{ secrets.RUSTFS_ACCESS_KEY }}
+          AWS_SECRET_ACCESS_KEY: ${{ secrets.RUSTFS_SECRET_KEY }}
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
           OS: ${{ inputs.os }}
         run: |
           mkdir -p ./staging
-          AWS_ACCESS_KEY_ID=${{ secrets.RUSTFS_ACCESS_KEY }} \
-          AWS_SECRET_ACCESS_KEY=${{ secrets.RUSTFS_SECRET_KEY }} \
-            aws s3 sync \
-              "s3://staging/$COMPONENT/$SERIES/rpm/$OS/" \
-              ./staging/ \
-              --endpoint-url "$RUSTFS_ENDPOINT"
+          aws s3 sync \
+            "s3://staging/$COMPONENT/$SERIES/rpm/$OS/" \
+            ./staging/ \
+            --endpoint-url "$RUSTFS_ENDPOINT"
 
       - name: Verify checksums
         run: |
