@@ -19,7 +19,7 @@ COPY internal/admin-ui/ ./
 RUN npm run build
 
 # Stage 2: Go build — embeds the freshly-built SPA bundle.
-FROM golang:1.26.3-alpine AS builder
+FROM golang:1.26.6-alpine AS builder
 WORKDIR /build
 COPY go.mod go.sum ./
 RUN go mod download
