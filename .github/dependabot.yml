@@ -64,6 +64,10 @@ updates:
       - npm
     # react and react-dom must be the exact same version; keep them in one PR
     groups:
+      # all @docusaurus/* packages must be the exact same version
+      docusaurus:
+        patterns:
+          - "@docusaurus/*"
       react:
         patterns:
           - react
