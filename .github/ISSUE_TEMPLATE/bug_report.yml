@@ -1,0 +1,54 @@
+name: Bug report
+description: Something does not work as documented
+labels: [bug, triage]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Do not report security vulnerabilities here. Use private reporting instead: https://github.com/no42-org/packyard/security/advisories/new
+  - type: input
+    id: version
+    attributes:
+      label: Packyard version
+      description: Release tag or image tag, for example `0.3.0` or `0.3.1-rc`.
+    validations:
+      required: true
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options:
+        - auth service
+        - admin UI
+        - RPM serving
+        - DEB serving (Aptly)
+        - OCI registry (Zot)
+        - promotion workflows
+        - Compose / Traefik
+        - documentation
+        - other
+    validations:
+      required: true
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened
+      description: What you did, what you expected, what you saw instead.
+    validations:
+      required: true
+  - type: textarea
+    id: repro
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. docker compose up -d
+        2. curl -u subscriber:<key> https://pkg.example.org/rpm/...
+        3. ...
+    validations:
+      required: true
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs and configuration
+      description: Relevant `docker compose logs` output and the affected part of `compose.yml` or `.env`. Remove secrets and keys.
+      render: shell
