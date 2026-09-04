@@ -62,3 +62,11 @@ updates:
     labels:
       - dependencies
       - npm
+    # react and react-dom must be the exact same version; keep them in one PR
+    groups:
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
