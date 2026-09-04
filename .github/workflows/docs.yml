@@ -26,12 +26,9 @@ on:
       - 'tsconfig.json'
       - '.github/workflows/docs.yml'
       - 'Makefile'
-  # Rebuild the site after a release so the landing-page hero eyebrow
-  # (version/license/Go version — resolved at build time in
+  # The Release workflow dispatches this workflow after publishing images so
+  # the landing-page hero eyebrow (version resolved at build time in
   # docusaurus.config.ts) picks up the newly pushed tag.
-  workflow_run:
-    workflows: ['Release']
-    types: [completed]
   workflow_dispatch:
 
 permissions: {}
@@ -43,10 +40,8 @@ concurrency:
 jobs:
   build-and-deploy:
     name: Build & deploy
-    runs-on: ubuntu-latest
-    # When triggered by the Release workflow, only proceed if that run
-    # succeeded. On direct pushes and manual dispatches this is trivially true.
-    if: ${{ github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
     permissions:
       contents: write
 
@@ -54,6 +49,7 @@ jobs:
       - name: Checkout
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
+          persist-credentials: false
           fetch-depth: 0  # deploy action needs history to push to gh-pages
 
       - name: Set up Node

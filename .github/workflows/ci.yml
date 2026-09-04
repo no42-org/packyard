@@ -3,92 +3,18 @@ name: CI
 on:
   push:
     branches: [main]
-    tags-ignore:
-      - '**'
   pull_request:
 
+permissions:
+  contents: read
+
+# Supersede in-flight runs for the same ref so a force-push does not leave
+# stale jobs consuming runners.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
-
-  changes:
-    name: Detect changed paths
-    runs-on: ubuntu-latest
-    outputs:
-      auth: ${{ steps.filter.outputs.auth }}
-      rpm:  ${{ steps.filter.outputs.rpm }}
-      docs: ${{ steps.filter.outputs.docs }}
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
-        id: filter
-        with:
-          filters: |
-            auth:
-              - 'auth/**'
-            rpm:
-              - 'rpm/**'
-            docs:
-              - 'docs/**'
-              - 'docusaurus.config.ts'
-              - 'sidebars.ts'
-              - 'src/**'
-              - 'static/**'
-              - 'package.json'
-              - 'package-lock.json'
-              - '.nvmrc'
-              - 'tsconfig.json'
-              - 'Makefile'
-
-  test-auth:
-    name: Auth unit tests
-    needs: changes
-    if: needs.changes.outputs.auth == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
-      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
-        with:
-          go-version-file: auth/go.mod
-          cache-dependency-path: auth/go.sum
-
-      - name: Run tests
-        working-directory: auth
-        run: go test ./...
-
-  build-docs:
-    name: Build docs
-    needs: changes
-    if: needs.changes.outputs.docs == 'true'
-    runs-on: ubuntu-latest
-    timeout-minutes: 5
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
-      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
-        with:
-          node-version-file: .nvmrc
-          cache: npm
-          cache-dependency-path: package-lock.json
-
-      - run: make docs-install
-      - run: make docs-build
-
-  build-images:
-    name: Build Docker images
-    needs: [changes, test-auth]
-    if: |
-      (needs.changes.outputs.auth == 'true' || needs.changes.outputs.rpm == 'true') &&
-      (needs.test-auth.result == 'success' || needs.test-auth.result == 'skipped')
-    runs-on: ubuntu-latest
-    timeout-minutes: 10
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
-
-      - name: Build auth image
-        if: needs.changes.outputs.auth == 'true'
-        run: docker build ./auth
-
-      - name: Build rpm image
-        if: needs.changes.outputs.rpm == 'true'
-        run: docker build ./rpm
+  gates:
+    # actionlint 1.7.12 does not yet accept the `$/` self-repository syntax.
+    uses: ./.github/workflows/quality-gates.yml # zizmor: ignore[self-repository]

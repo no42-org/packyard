@@ -17,7 +17,7 @@ UNAME_S := $(shell uname -s)
 
 .PHONY: help docs-install docs-serve docs-build docs-clean check-node \
         admin-ui admin-ui-install admin-ui-dev admin-ui-clean \
-        build build-clean
+        build build-clean test lint build-image-auth build-image-rpm build-images
 
 ## help: Show this help
 help:
@@ -86,3 +86,23 @@ build: admin-ui
 ## build-clean: Remove built binaries
 build-clean:
 	rm -rf bin/
+
+## test: Run the auth service unit tests
+test:
+	cd auth && $(GO) test ./...
+
+## lint: Check gofmt formatting and run go vet on the auth service
+lint:
+	@cd auth && unformatted="$$(gofmt -l .)" && { test -z "$$unformatted" || { echo "gofmt: files need formatting:"; echo "$$unformatted"; exit 1; }; }
+	cd auth && $(GO) vet ./...
+
+## build-image-auth: Build the auth container image locally (no push)
+build-image-auth:
+	docker build ./auth
+
+## build-image-rpm: Build the rpm container image locally (no push)
+build-image-rpm:
+	docker build ./rpm
+
+## build-images: Build all locally built container images (no push)
+build-images: build-image-auth build-image-rpm

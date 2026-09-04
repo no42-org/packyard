@@ -19,11 +19,17 @@ concurrency:
   group: oci-promote-${{ inputs.component }}-${{ inputs.series }}
   cancel-in-progress: false
 
+permissions:
+  contents: read
+
 jobs:
   promote:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Install crane
         env:
@@ -76,12 +82,12 @@ jobs:
         run: |
           for arch in x86_64 arm64; do
             # Ensure every archive has a paired .sha256
-            for tar in ./staging/${arch}/*.tar; do
+            for tar in "./staging/${arch}"/*.tar; do
               [ -f "$tar" ] || { echo "No .tar files found in staging/${arch}/"; exit 1; }
               [ -f "${tar}.sha256" ] || { echo "MISSING CHECKSUM: ${tar}.sha256 not found"; exit 1; }
             done
             # Verify each checksum
-            for sha in ./staging/${arch}/*.sha256; do
+            for sha in "./staging/${arch}"/*.sha256; do
               [ -f "$sha" ] || { echo "No .sha256 files found in staging/${arch}/"; exit 1; }
               expected=$(cat "$sha")
               file="${sha%.sha256}"
@@ -102,7 +108,7 @@ jobs:
         run: |
           IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           for arch in x86_64 arm64; do
-            tarcount=$(ls ./staging/${arch}/*.tar 2>/dev/null | wc -l || echo 0)
+            tarcount=$(find "./staging/${arch}" -maxdepth 1 -name '*.tar' 2>/dev/null | wc -l)
             [ "$tarcount" -eq 1 ] || { echo "Expected exactly 1 .tar for ${arch}, found ${tarcount}"; exit 1; }
             tarfile=$(ls ./staging/${arch}/*.tar)
             crane push "$tarfile" "${IMAGE_BASE}:${SERIES}-${arch}" --insecure
@@ -148,13 +154,15 @@ jobs:
           grep -q 'BEGIN PUBLIC KEY' ./static/content/gpg/cosign.pub \
             || { echo "ERROR: cosign.pub is still a placeholder — replace with real key before promoting"; exit 1; }
           IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
-          cosign verify \
+          if cosign verify \
             --key ./static/content/gpg/cosign.pub \
             --allow-insecure-registry \
             --insecure-ignore-tlog \
-            "${IMAGE_BASE}:${SERIES}" \
-            && echo "SIGNATURE VERIFIED" \
-            || { echo "SIGNATURE VERIFICATION FAILED"; exit 1; }
+            "${IMAGE_BASE}:${SERIES}"; then
+            echo "SIGNATURE VERIFIED"
+          else
+            echo "SIGNATURE VERIFICATION FAILED"; exit 1
+          fi
 
       - name: Cleanup
         if: always()
