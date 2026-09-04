@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Package audit defines the operator audit log interface used by admin
 // handlers. The persistent SQLite-backed implementation lands in section 6 of
 // change 2026-05-21-admin-ui-account-lifecycle; until then handlers wire to

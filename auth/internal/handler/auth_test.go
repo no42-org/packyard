@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package handler
 
 import (
@@ -99,9 +104,9 @@ func (r *recordingLogoutAuditor) Write(_ context.Context, e audit.Entry) {
 
 // fakeProvider satisfies auth.OAuthProvider for handler tests.
 type fakeProvider struct {
-	name         string
-	authURLFn    func(state, challenge string) string
-	exchangeFn   func(ctx context.Context, code, verifier string) (*auth.OAuthIdentity, error)
+	name       string
+	authURLFn  func(state, challenge string) string
+	exchangeFn func(ctx context.Context, code, verifier string) (*auth.OAuthIdentity, error)
 }
 
 func (f *fakeProvider) Name() string { return f.name }

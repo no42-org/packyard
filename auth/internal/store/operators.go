@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package store
 
 import (
@@ -416,14 +421,14 @@ func (s *SQLiteStore) BootstrapOperatorFromEnv(ctx context.Context, email string
 
 func scanOperator(s scanner) (*Operator, error) {
 	var (
-		op                  Operator
-		role, status        string
-		allowlistedAt       string
-		allowlistedBy       sql.NullString
-		lastLoginAt         sql.NullString
-		githubUsername      sql.NullString
-		microsoftUPN        sql.NullString
-		firstSeenProvider   sql.NullString
+		op                Operator
+		role, status      string
+		allowlistedAt     string
+		allowlistedBy     sql.NullString
+		lastLoginAt       sql.NullString
+		githubUsername    sql.NullString
+		microsoftUPN      sql.NullString
+		firstSeenProvider sql.NullString
 	)
 	if err := s.Scan(&op.ID, &op.Email, &role, &status, &allowlistedAt,
 		&allowlistedBy, &lastLoginAt, &githubUsername, &microsoftUPN, &firstSeenProvider); err != nil {

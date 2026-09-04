@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package middleware
 
 import (
@@ -41,13 +46,13 @@ type bucket struct {
 // a background reaper so the map does not grow unbounded under failed-flow
 // churn or scan attacks.
 type RateLimiter struct {
-	mu               sync.Mutex
-	buckets          map[string]*bucket
-	capacity         float64
-	refillPerSecond  float64
-	now              func() time.Time
-	auditor          audit.Auditor
-	logger           *slog.Logger
+	mu              sync.Mutex
+	buckets         map[string]*bucket
+	capacity        float64
+	refillPerSecond float64
+	now             func() time.Time
+	auditor         audit.Auditor
+	logger          *slog.Logger
 }
 
 // RateLimiterConfig wires the limiter to its audit sink and runtime knobs.

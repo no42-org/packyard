@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Package microsoft implements the Microsoft Entra (Azure AD) OAuth provider.
 //
 // Per D3 + D6 of change 2026-05-21-admin-ui-account-lifecycle, the provider

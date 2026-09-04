@@ -1,13 +1,18 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Package github implements the GitHub OAuth provider for packyard-auth.
 //
 // Flow (RFC 6749 + PKCE RFC 7636):
-//   1. AuthorizeURL builds /login/oauth/authorize?... with state + S256 code_challenge
-//      and scopes user:email + read:org (D18 of the change).
-//   2. Exchange POSTs to /login/oauth/access_token with code + code_verifier.
-//   3. Fetches /user/emails and selects the row with primary=true AND
-//      verified=true (D6 — verified primary email is the identity), lowercased.
-//   4. Fetches /user/memberships/orgs/{org} to confirm membership; the
-//      response's state field must be "active" for D7's first lock.
+//  1. AuthorizeURL builds /login/oauth/authorize?... with state + S256 code_challenge
+//     and scopes user:email + read:org (D18 of the change).
+//  2. Exchange POSTs to /login/oauth/access_token with code + code_verifier.
+//  3. Fetches /user/emails and selects the row with primary=true AND
+//     verified=true (D6 — verified primary email is the identity), lowercased.
+//  4. Fetches /user/memberships/orgs/{org} to confirm membership; the
+//     response's state field must be "active" for D7's first lock.
 package github
 
 import (
@@ -207,9 +212,9 @@ func (p *Provider) fetchUser(ctx context.Context, token string) (*userResponse, 
 //   - 200 with state=="pending"  → ErrNotOrgMember (invited but not yet joined)
 //   - 404                        → ErrNotOrgMember (not a member at all)
 //   - 403                        → ErrTokenExchange (token lacks read:org scope
-//                                  or SAML SSO enforcement; this is a config
-//                                  problem, not "you're not a member" — surfacing
-//                                  it as the latter would mislead operators)
+//     or SAML SSO enforcement; this is a config
+//     problem, not "you're not a member" — surfacing
+//     it as the latter would mislead operators)
 //   - anything else              → ErrTokenExchange (unexpected response)
 func (p *Provider) requireOrgMembership(ctx context.Context, token string) error {
 	path := "/user/memberships/orgs/" + url.PathEscape(p.cfg.AllowedOrg)
@@ -270,4 +275,3 @@ func (p *Provider) apiGet(ctx context.Context, token, path string, v any) error 
 	}
 	return nil
 }
-

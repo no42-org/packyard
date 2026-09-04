@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package store
 
 import (
@@ -220,13 +225,13 @@ type OperatorStore interface {
 
 // Session is one row of the sessions table per D16.
 type Session struct {
-	ID          string    `json:"id"`
-	OperatorID  string    `json:"operator_id"`
-	CreatedAt   time.Time `json:"created_at"`
-	LastSeenAt  time.Time `json:"last_seen_at"`
-	ExpiresAt   time.Time `json:"expires_at"`
-	IP          string    `json:"ip,omitempty"`
-	UserAgent   string    `json:"user_agent,omitempty"`
+	ID         string    `json:"id"`
+	OperatorID string    `json:"operator_id"`
+	CreatedAt  time.Time `json:"created_at"`
+	LastSeenAt time.Time `json:"last_seen_at"`
+	ExpiresAt  time.Time `json:"expires_at"`
+	IP         string    `json:"ip,omitempty"`
+	UserAgent  string    `json:"user_agent,omitempty"`
 }
 
 // SessionStore covers § 4.1: server-side sessions backed by SQLite.

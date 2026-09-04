@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package store
 
 import (
@@ -906,9 +911,9 @@ func TestCanonicalEmail(t *testing.T) {
 		{"Alice@Example.com", "alice@example.com"},
 		{"BOB@EXAMPLE.COM", "bob@example.com"},
 		{"already@lower.com", "already@lower.com"},
-		{"with.dots+plus@example.com", "with.dots+plus@example.com"},      // no dot/plus normalisation per D19
-		{"  Alice@Example.com  ", "alice@example.com"},                    // trim + lowercase
-		{"\t bob@example.com \n", "bob@example.com"},                      // trim mixed whitespace
+		{"with.dots+plus@example.com", "with.dots+plus@example.com"},         // no dot/plus normalisation per D19
+		{"  Alice@Example.com  ", "alice@example.com"},                       // trim + lowercase
+		{"\t bob@example.com \n", "bob@example.com"},                         // trim mixed whitespace
 		{"no-trim-inside.com@example.com", "no-trim-inside.com@example.com"}, // interior whitespace would fail CHECK; this confirms no inner trim
 	}
 	for _, c := range cases {

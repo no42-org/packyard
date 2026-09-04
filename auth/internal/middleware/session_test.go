@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package middleware
 
 import (
@@ -271,7 +276,7 @@ func (failingSessionStore) GetSession(context.Context, string) (*store.Session, 
 func (failingSessionStore) TouchSession(context.Context, string, time.Time) error {
 	panic("unexpected")
 }
-func (failingSessionStore) DeleteSession(context.Context, string) error      { panic("unexpected") }
+func (failingSessionStore) DeleteSession(context.Context, string) error { panic("unexpected") }
 func (failingSessionStore) DeleteOperatorSessions(context.Context, string) error {
 	panic("unexpected")
 }
