@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package github
 
 import (
@@ -110,7 +115,7 @@ func TestProvider_Exchange_HappyPath(t *testing.T) {
 			{"email": "noise@example.com", "primary": false, "verified": true},
 			{"email": "Operator@Example.COM", "primary": true, "verified": true},
 		}},
-		"GET /user": {200, map[string]any{"login": "octocat"}},
+		"GET /user":                           {200, map[string]any{"login": "octocat"}},
 		"GET /user/memberships/orgs/no42-org": {200, map[string]any{"state": "active"}},
 	})
 
@@ -176,7 +181,7 @@ func TestProvider_Exchange_PendingMembershipNotMember(t *testing.T) {
 		"GET /user/emails": {200, []map[string]any{
 			{"email": "x@x.com", "primary": true, "verified": true},
 		}},
-		"GET /user": {200, map[string]any{"login": "invited"}},
+		"GET /user":                           {200, map[string]any{"login": "invited"}},
 		"GET /user/memberships/orgs/no42-org": {200, map[string]any{"state": "pending"}},
 	})
 	_, err := p.Exchange(context.Background(), "code", "verifier")
@@ -193,7 +198,7 @@ func TestProvider_Exchange_403IsConfigError(t *testing.T) {
 		"GET /user/emails": {200, []map[string]any{
 			{"email": "x@x.com", "primary": true, "verified": true},
 		}},
-		"GET /user": {200, map[string]any{"login": "someone"}},
+		"GET /user":                           {200, map[string]any{"login": "someone"}},
 		"GET /user/memberships/orgs/no42-org": {403, ""},
 	})
 	_, err := p.Exchange(context.Background(), "code", "verifier")

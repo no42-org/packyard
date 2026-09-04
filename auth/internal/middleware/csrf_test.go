@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package middleware
 
 import (
@@ -166,10 +171,10 @@ func TestCSRFGuard_NullOriginRejected(t *testing.T) {
 // silent denial of every mutating request post-deploy.
 func TestCSRFGuard_NewPanicsOnMalformedAdminHost(t *testing.T) {
 	cases := []string{
-		"admin.example.com",      // no scheme
-		"https://",               // no host
-		"://admin.example.com",   // empty scheme
-		"not a url at all",       // garbage
+		"admin.example.com",    // no scheme
+		"https://",             // no host
+		"://admin.example.com", // empty scheme
+		"not a url at all",     // garbage
 	}
 	for _, host := range cases {
 		t.Run(host, func(t *testing.T) {

@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package handler
 
 import (
@@ -88,7 +93,7 @@ const (
 //   - missing/empty       → offset 0, limit defaultPageLimit (50)
 //   - limit > 500         → 400 LIMIT_TOO_LARGE
 //   - negative or non-int → 400 INVALID_REQUEST (used to silently coerce —
-//                            masked client bugs)
+//     masked client bugs)
 func parsePagination(w http.ResponseWriter, r *http.Request) (offset, limit int, ok bool) {
 	offset = 0
 	limit = defaultPageLimit

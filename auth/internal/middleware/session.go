@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package middleware
 
 import (
@@ -57,9 +62,9 @@ func writeError(w http.ResponseWriter, status int, code, message string) {
 //
 // Error codes follow the spec table:
 //   - UNAUTHORIZED   — no cookie present, or the cookie value does not match
-//                      any session row
+//     any session row
 //   - SESSION_EXPIRED — the session row exists but exceeded idle or absolute
-//                       lifetime, or the owning operator is disabled
+//     lifetime, or the owning operator is disabled
 //   - 500 with no cookie change — transient store error (don't log everyone out)
 //
 // Cookies are cleared only on definitively-invalid sessions, not on
@@ -222,4 +227,3 @@ func IssueSessionCookie(w http.ResponseWriter, sessionID string, expires time.Ti
 		SameSite: http.SameSiteStrictMode,
 	})
 }
-

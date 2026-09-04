@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Package adminui serves the embedded React + TypeScript SPA at /admin/*
 // per D12 of change 2026-05-21-admin-ui-account-lifecycle. Static assets
 // (the Vite-built bundle) are served straight from the embedded FS;

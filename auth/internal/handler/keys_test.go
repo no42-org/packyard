@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package handler
 
 import (
@@ -28,10 +33,10 @@ func newTestKeysHandler(s store.KeyStore) *KeysHandler {
 	cs.comps["minion"] = &store.Component{Name: "minion", Visibility: "private", RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{}}
 	cs.comps["sentinel"] = &store.Component{Name: "sentinel", Visibility: "private", RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{}}
 	return &KeysHandler{
-		Store:           s,
-		ComponentStore:  cs,
-		Logger:          slog.Default(),
-		ValidComponents: map[string]bool{"core": true, "minion": true, "sentinel": true},
+		Store:              s,
+		ComponentStore:     cs,
+		Logger:             slog.Default(),
+		ValidComponents:    map[string]bool{"core": true, "minion": true, "sentinel": true},
 		ValidComponentList: "core, minion, sentinel",
 		ComponentVisibility: map[string]string{
 			"core":     "public",
@@ -700,7 +705,7 @@ func TestList_ComponentVisibility(t *testing.T) {
 // TestGet_ComponentVisibility_RemovedComponent — key whose component is absent from the map defaults to "private".
 func TestGet_ComponentVisibility_RemovedComponent(t *testing.T) {
 	h := &KeysHandler{
-		Store:               &mockStore{
+		Store: &mockStore{
 			getByIDFn: func(_ context.Context, _ string) (*store.Key, error) {
 				return makeKey("removed", "orphan"), nil
 			},

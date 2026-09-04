@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 package main
 
 import (
@@ -238,7 +243,7 @@ func main() {
 	})
 
 	// Metrics server on :9090 — internal Docker network only, not published to host.
-	_ = metrics.RequestsTotal   // ensure package init() runs before the server starts
+	_ = metrics.RequestsTotal // ensure package init() runs before the server starts
 	go func() {
 		mux := http.NewServeMux()
 		mux.Handle("/metrics", promhttp.Handler())

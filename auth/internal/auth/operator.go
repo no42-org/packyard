@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // Package auth carries operator identity through request context.
 //
 // Until the OAuth + session middleware (change 2026-05-21-admin-ui-account-lifecycle § 4)
