@@ -1,0 +1,8 @@
+blank_issues_enabled: false
+contact_links:
+  - name: Documentation
+    url: https://no42-org.github.io/packyard/
+    about: Quick-start, operator runbooks, API and configuration reference.
+  - name: Report a security vulnerability
+    url: https://github.com/no42-org/packyard/security/advisories/new
+    about: Private reporting. Never file a vulnerability as a public issue.

@@ -4,17 +4,15 @@
 # IntelliJ
 .idea/
 
-# BMad framework (framework files, not project artifacts)
+# AI tools
 _bmad/
 _bmad-output/
-
-# Claude Code & agent integration (local IDE tooling)
+openspec/
 .claude/
 .agents/
 .agent/
 .codex/
 .gemini/
-openspec/
 
 # Scan results and local key material — never commit
 trivy_scan.txt
