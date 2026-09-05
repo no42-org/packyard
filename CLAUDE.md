@@ -70,7 +70,7 @@ When adding or updating documentation:
 - Edit the relevant file under `docs/` — do not create Wiki pages
 - New pages must be added to the appropriate sidebar in `sidebars.ts`
 - Run `make docs-serve` locally to preview before committing (requires Node 20 via `.nvmrc`)
-- Docs are published automatically on each push to `main` via `docs.yml`, and rebuilt after each Release workflow completes (so the landing-page version eyebrow picks up new tags)
+- Docs are published automatically on each push to `main` via `docs.yml`. The Release workflow dispatches `docs.yml` after publishing images so the landing-page version eyebrow picks up new tags
 
 ## Docker Compose
 
