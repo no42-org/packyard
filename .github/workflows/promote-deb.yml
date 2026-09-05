@@ -21,11 +21,17 @@ env:
   AWS_DEFAULT_REGION: us-east-1
   RUSTFS_ENDPOINT: http://localhost:9000
 
+permissions:
+  contents: read
+
 jobs:
   promote:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify GPG key is not a placeholder
         run: |
@@ -95,6 +101,7 @@ jobs:
 
       - name: Upload signed DEBs to host and copy into aptly container
         run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage"
           scp ./staging/*.deb deploy@${{ secrets.HOST }}:/tmp/deb-stage/
           ssh deploy@${{ secrets.HOST }} "
@@ -108,6 +115,7 @@ jobs:
           SERIES: ${{ inputs.series }}
           DISTRO: ${{ inputs.distro }}
         run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
           SNAPSHOT_NAME=$(ssh deploy@${{ secrets.HOST }} \
             "docker compose -f /opt/packyard/compose.yml exec -T \
               -e COMPONENT='${COMPONENT}' -e SERIES='${SERIES}' -e DISTRO='${DISTRO}' \
@@ -123,6 +131,7 @@ jobs:
           SERIES: ${{ inputs.series }}
           DISTRO: ${{ inputs.distro }}
         run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} \
             "docker compose -f /opt/packyard/compose.yml exec -T aptly \
               /scripts/publish-snapshot.sh \
@@ -134,6 +143,7 @@ jobs:
           SERIES: ${{ inputs.series }}
           DISTRO: ${{ inputs.distro }}
         run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             docker compose -f /opt/packyard/compose.yml exec -T aptly \
               test -f '/opt/aptly/public/${COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease' \
@@ -146,6 +156,7 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
         run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} \
             "docker compose -f /opt/packyard/compose.yml exec -T aptly \
               /scripts/prune-snapshots.sh '${COMPONENT}' '${SERIES}'"

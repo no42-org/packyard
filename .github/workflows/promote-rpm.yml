@@ -21,11 +21,17 @@ env:
   AWS_DEFAULT_REGION: us-east-1
   RUSTFS_ENDPOINT: http://localhost:9000
 
+permissions:
+  contents: read
+
 jobs:
   promote:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Verify GPG key is not a placeholder
         run: |
@@ -93,11 +99,15 @@ jobs:
         run: |
           # P2: pre-cache passphrase in gpg-agent via loopback pinentry, then sign with rpmsign
           # Avoids __gpg_check_password_cmd true (which bypasses passphrase verification entirely)
-          echo "${GPG_PASSPHRASE}" | gpg --batch --yes \
+          # Passphrase on fd 3; stdin is the (empty) message to sign. Using fd 0
+          # for both meant `< /dev/null` replaced the piped passphrase and the
+          # cache step silently did nothing. A wrong passphrase must fail here,
+          # with gpg's own message, rather than surface later from rpmsign.
+          gpg --batch --yes \
             --pinentry-mode loopback \
-            --passphrase-fd 0 \
+            --passphrase-fd 3 \
             -u "${GPG_KEY_ID}" \
-            --sign --output /dev/null - < /dev/null 2>/dev/null || true
+            --sign --output /dev/null - < /dev/null 3< <(printf '%s\n' "${GPG_PASSPHRASE}")
           for rpm in ./staging/*.rpm; do
             [ -f "$rpm" ] || { echo "No RPM files found in staging/"; exit 1; }
             rpmsign --addsign \
@@ -119,6 +129,7 @@ jobs:
           SERIES: ${{ inputs.series }}
           OS: ${{ inputs.os }}
         run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             set -euo pipefail
             for f in /tmp/rpm-stage/*.rpm; do

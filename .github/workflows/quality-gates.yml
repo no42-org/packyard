@@ -1,0 +1,142 @@
+name: Quality gates
+
+# Defined once, called by CI (PRs and main) and by Release via `uses:`.
+# Adding a gate or bumping a pin here applies everywhere at once.
+
+on:
+  workflow_call:
+    inputs:
+      all:
+        description: Run every gate regardless of which paths changed (used by releases)
+        type: boolean
+        required: false
+        default: false
+
+permissions:
+  contents: read
+
+jobs:
+
+  changes:
+    name: Detect changed paths
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      auth: ${{ inputs.all || steps.filter.outputs.auth == 'true' }}
+      rpm:  ${{ inputs.all || steps.filter.outputs.rpm == 'true' }}
+      docs: ${{ inputs.all || steps.filter.outputs.docs == 'true' }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: dorny/paths-filter@ceb8a2b8f2d89434be7ff52d3de7ec3738c5cc9d  # v4.0.3
+        id: filter
+        if: ${{ !inputs.all }}
+        with:
+          filters: |
+            auth:
+              - 'auth/**'
+              - 'Makefile'
+            rpm:
+              - 'rpm/**'
+            docs:
+              - 'docs/**'
+              - 'docusaurus.config.ts'
+              - 'sidebars.ts'
+              - 'src/**'
+              - 'static/**'
+              - 'package.json'
+              - 'package-lock.json'
+              - '.nvmrc'
+              - 'tsconfig.json'
+              - 'Makefile'
+
+  lint-auth:
+    name: Auth lint
+    needs: changes
+    if: needs.changes.outputs.auth == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: auth/go.mod
+          cache-dependency-path: auth/go.sum
+      - run: make lint
+
+  test-auth:
+    name: Auth unit tests
+    needs: changes
+    if: needs.changes.outputs.auth == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@b7ad1dad31e06c5925ef5d2fc7ad053ef454303e  # v7.0.0
+        with:
+          go-version-file: auth/go.mod
+          cache-dependency-path: auth/go.sum
+      - run: make test
+
+  build-docs:
+    name: Build docs
+    needs: changes
+    if: needs.changes.outputs.docs == 'true'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: package-lock.json
+      - run: make docs-install
+      - run: make docs-build
+
+  build-images:
+    name: Build Docker images
+    needs: [changes, test-auth]
+    if: |
+      always() &&
+      (needs.changes.outputs.auth == 'true' || needs.changes.outputs.rpm == 'true') &&
+      (needs.test-auth.result == 'success' || needs.test-auth.result == 'skipped')
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      - name: Build auth image
+        if: needs.changes.outputs.auth == 'true'
+        run: make build-image-auth
+      - name: Build rpm image
+        if: needs.changes.outputs.rpm == 'true'
+        run: make build-image-rpm
+
+  workflows:
+    # Lints the workflows themselves: unpinned actions, script injection,
+    # credential persistence, schema errors.
+    name: Workflow lint
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+      # docker:// refs pin by image digest rather than commit SHA.
+      - uses: docker://rhysd/actionlint@sha256:b1934ee5f1c509618f2508e6eb47ee0d3520686341fec936f3b79331f9315667  # v1.7.12
+        with:
+          args: -color
+      - uses: zizmorcore/zizmor-action@70fb788f84895a7701f5643d103d587e460b5c99  # v0.6.3
+        with:
+          # Fail the job on findings instead of uploading SARIF (needs no extra permissions).
+          advanced-security: false
+          annotations: true

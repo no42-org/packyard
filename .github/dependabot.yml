@@ -7,6 +7,8 @@ updates:
     directory: /auth
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - go
@@ -16,6 +18,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - github-actions
@@ -26,6 +30,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - docker
@@ -34,6 +40,8 @@ updates:
     directory: /auth
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - docker
@@ -42,6 +50,8 @@ updates:
     directory: /rpm
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - docker
@@ -50,6 +60,8 @@ updates:
     directory: /backup
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - docker
@@ -59,6 +71,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     labels:
       - dependencies
       - npm
@@ -68,6 +82,24 @@ updates:
       docusaurus:
         patterns:
           - "@docusaurus/*"
+      react:
+        patterns:
+          - react
+          - react-dom
+          - "@types/react"
+          - "@types/react-dom"
+
+  # npm — admin UI SPA embedded in the auth service
+  - package-ecosystem: npm
+    directory: /auth/internal/admin-ui
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
+      - npm
+    groups:
       react:
         patterns:
           - react

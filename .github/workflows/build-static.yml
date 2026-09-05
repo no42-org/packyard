@@ -13,11 +13,18 @@ env:
   REGISTRY: ghcr.io
   IMAGE: ghcr.io/${{ github.repository_owner }}/packyard-static
 
+permissions:
+  contents: read
+
+concurrency:
+  group: build-static-${{ github.ref }}
+  cancel-in-progress: false
+
 jobs:
 
   build-and-push:
     name: Build multi-arch and push to ghcr.io
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:
       contents: read
@@ -25,6 +32,8 @@ jobs:
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
 
       - name: Determine image version
         id: version
