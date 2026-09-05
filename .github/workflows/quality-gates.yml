@@ -139,3 +139,6 @@ jobs:
           # Fail the job on findings instead of uploading SARIF (needs no extra permissions).
           advanced-security: false
           annotations: true
+      # paths-filter takes its filters as a YAML string; neither linter above
+      # parses it, and a bad indent there skips every gate at run time.
+      - run: make lint-workflows
