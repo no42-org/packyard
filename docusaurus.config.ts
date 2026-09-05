@@ -42,6 +42,11 @@ const config: Config = {
   url: 'https://no42-org.github.io',
   baseUrl: '/packyard/',
 
+  // `static/` is the nginx static-service directory (GPG key, nginx config,
+  // Dockerfile), not web assets for this site. Docusaurus would otherwise
+  // publish its contents at the site root.
+  staticDirectories: [],
+
   organizationName: 'no42-org',
   projectName: 'packyard',
   trailingSlash: false,
