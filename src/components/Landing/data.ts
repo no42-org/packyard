@@ -11,7 +11,7 @@ export type TerminalLine =
 export const FEATURES: Feature[] = [
   { icon: 'pkg',    title: 'RPM · DEB · OCI',       body: 'One server, three repository formats. dnf, apt, and docker pull all hit the same Traefik front door with subscription-key auth.' },
   { icon: 'auth',   title: 'Forward-auth gating',   body: 'Per-subscriber keys scoped per-component. Traefik forwardAuth middleware calls the Go auth service before every request — no client cert dance.' },
-  { icon: 'sign',   title: 'Signed artefacts',      body: 'GPG signs RPM and DEB indices; cosign signs OCI manifests. Public keys served unauthenticated at /gpg for client-side verification.' },
+  { icon: 'sign',   title: 'Signed artefacts',      body: 'GPG signs RPM and DEB indices; cosign signs OCI manifests keylessly. The GPG key is served unauthenticated at /gpg; images verify against the signing workflow identity.' },
   { icon: 'promote',title: 'Promotion pipeline',    body: 'GitHub Actions stage artefacts to RustFS (S3-compatible), sign them, then publish to the rpm / deb / oci backends in one workflow.' },
   { icon: 'metric', title: 'Observability',         body: 'Prometheus metrics on the auth service, structured admin API with Code + Message error responses, daily SQLite backup of the key store.' },
   { icon: 'self',   title: 'Self-hosted',           body: 'docker compose v2 stack — Traefik, auth, nginx, Zot, Aptly, RustFS. No SaaS dependency, no per-subscriber licensing meter.' },

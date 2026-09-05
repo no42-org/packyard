@@ -119,8 +119,8 @@ client id / secret / tenant id values.
 | `GPG_PRIVATE_KEY`     | ASCII-armored LTS GPG signing key         |
 | `GPG_KEY_ID`          | Key fingerprint (40 hex chars, no spaces)      |
 | `GPG_PASSPHRASE`      | GPG key passphrase                             |
-| `COSIGN_PRIVATE_KEY`  | Contents of `cosign.key`                       |
-| `COSIGN_PASSWORD`     | cosign key passphrase                          |
+
+OCI images are signed keylessly, so no cosign secret is needed. The `promote-oci` workflow authenticates to Sigstore with its GitHub OIDC token.
 
 ---
 
@@ -172,42 +172,25 @@ gpg --armor --export "$GPG_KEY_ID" > static/content/gpg/lts.asc
 | `GPG_KEY_ID` | 40-character fingerprint (no spaces) |
 | `GPG_PASSPHRASE` | Passphrase chosen during key generation |
 
-### 4.2 cosign key pair
+### 4.2 cosign (keyless, no key to generate)
 
-Used to sign OCI container images at promotion time (offline key-based signing, no Sigstore/Rekor).
+OCI images are signed by `promote-oci.yml` with cosign keyless signing.
+The workflow requests a short-lived certificate from Sigstore's Fulcio CA for its GitHub Actions identity and records each signature in the Rekor transparency log.
+There is no private key to generate, store or rotate, and no public key to publish.
 
-```bash
-# 1. Generate the key pair (cosign prompts for a password → COSIGN_PASSWORD)
-cosign generate-key-pair
-# cosign.key  — encrypted private key  → COSIGN_PRIVATE_KEY secret
-# cosign.pub  — public key             → committed to repo
+Requirements:
 
-# 2. Commit the public key
-cp cosign.pub static/content/gpg/cosign.pub
-# git add static/content/gpg/cosign.pub && git commit
-
-# 3. Copy private key contents into the COSIGN_PRIVATE_KEY secret, then shred local file
-cat cosign.key
-shred -u cosign.key
-```
-
-**Secrets to set:**
-
-| Secret | Value |
-|--------|-------|
-| `COSIGN_PRIVATE_KEY` | Contents of `cosign.key` |
-| `COSIGN_PASSWORD` | Password entered during `cosign generate-key-pair` |
+- The workflow job has `id-token: write` (already set).
+- The runner can reach `fulcio.sigstore.dev` and `rekor.sigstore.dev`. GitHub-hosted runners can.
+- Subscribers verifying images can reach `rekor.sigstore.dev` and `tuf-repo-cdn.sigstore.dev`. Air-gapped subscribers cannot verify keyless signatures. If that becomes a requirement, revert to key-based signing with a published `cosign.pub`.
 
 ### 4.3 Key storage checklist
 
 - [ ] GPG private key exported and stored in secrets manager
 - [ ] GPG key ID (fingerprint) noted
 - [ ] GPG passphrase stored in secrets manager
-- [ ] cosign private key stored in secrets manager, local copy shredded
-- [ ] cosign password stored in secrets manager
 - [ ] `static/content/gpg/lts.asc` committed to repository
-- [ ] `static/content/gpg/cosign.pub` committed to repository
-- [ ] All 10 secrets set in GitHub Actions repository settings
+- [ ] All 8 secrets set in GitHub Actions repository settings
 
 ---
 
@@ -263,9 +246,8 @@ ssh-keyscan pkg.example.org
 - [ ] Docker + Compose plugin v2 installed on VM
 - [ ] `deploy` user created, added to `docker` group, SSH key authorized (§5)
 - [ ] GPG LTS signing key generated (§4.1); `lts.asc` committed to `static/content/gpg/`
-- [ ] cosign key pair generated (§4.2); `cosign.pub` committed to `static/content/gpg/`
 - [ ] `.env` file written on VM with production values (§3)
-- [ ] All 10 GitHub Actions secrets set in repository settings (§3)
+- [ ] All 8 GitHub Actions secrets set in repository settings (§3)
 
 ---
 
@@ -277,7 +259,7 @@ git clone <packyard-repo> ~/packyard
 cd ~/packyard
 
 # Write .env (see §3)
-# Ensure static/content/gpg/lts.asc and cosign.pub are present
+# Ensure static/content/gpg/lts.asc is present
 
 docker compose pull
 docker compose up -d

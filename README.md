@@ -42,10 +42,10 @@ Promotion pipeline (GitHub Actions):
 | `auth` | built from `./auth` | Subscription key validation, admin API, Prometheus metrics |
 | `rpm` | built from `./rpm` | nginx serving signed RPM repos |
 | `deb` | `nginx:alpine` | nginx serving Aptly-published DEB repos |
-| `zot` | `ghcr.io/project-zot/zot-linux-amd64:v2.1.2` | OCI registry with cosign signatures |
+| `zot` | `ghcr.io/project-zot/zot-linux-amd64:v2.1.2` | OCI registry with keyless cosign signatures |
 | `aptly` | `ghcr.io/no42-org/packyard-aptly:1.6.2` | DEB repo management and signing (multi-arch) |
 | `rustfs` | `rustfs/rustfs:latest` | S3-compatible staging storage for promotion pipeline |
-| `static` | `nginx:alpine` | Public GPG/cosign key hosting |
+| `static` | `nginx:alpine` | Public GPG key hosting |
 | `backup` | `keinos/sqlite3:latest` | Daily SQLite backup of the key store |
 
 ## Documentation
@@ -87,7 +87,7 @@ rpm/                nginx + createrepo_c for RPM serving
 zot/                Zot OCI registry configuration
 traefik/            Traefik static and dynamic configuration
 rustfs/             RustFS staging storage configuration
-static/             Public static files (GPG/cosign keys)
+static/             Public static files (GPG key)
 scripts/            Operator scripts (backup, stage-artifact, health-check)
 docs/ops/           Operational runbooks
 tests/e2e/          End-to-end subscriber tests (RPM, DEB, OCI, observability)

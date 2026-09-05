@@ -27,7 +27,6 @@ SERIES="${SERIES:-2025}"
 REGISTRY="${BASE_URL#https://}"
 IMAGE="${REGISTRY}/oci/lts-${COMPONENT}:${SERIES}"
 
-COSIGN_PUB="$(mktemp --suffix=.pub)"
 FAILED=0
 
 # ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -38,7 +37,6 @@ fail() { echo "FAIL: $*" >&2; FAILED=1; }
 cleanup() {
   docker logout "${REGISTRY}/oci" > /dev/null 2>&1 || true
   docker rmi "${IMAGE}" > /dev/null 2>&1 || true
-  rm -f "${COSIGN_PUB}"
 }
 trap cleanup EXIT
 
@@ -119,18 +117,21 @@ else
   fail "AC3b — expected HTTP 401 for invalid key; got HTTP ${HTTP_STATUS}"
 fi
 
-# ─── AC4: Offline cosign verification ────────────────────────────────────────
+# ─── AC4: Keyless cosign verification ────────────────────────────────────────
+# Images are signed keylessly by promote-oci.yml. Verification pins that
+# workflow's identity and consults the Sigstore transparency log (needs
+# outbound HTTPS). Override COSIGN_CERT_IDENTITY_REGEXP for forks.
 
 echo ""
-echo "=== AC4: Offline cosign verification ==="
-curl -fsSL "${BASE_URL}/gpg/cosign.pub" -o "${COSIGN_PUB}"
+echo "=== AC4: Keyless cosign verification ==="
+COSIGN_CERT_IDENTITY_REGEXP="${COSIGN_CERT_IDENTITY_REGEXP:-https://github.com/no42-org/packyard/\\.github/workflows/promote-oci\\.yml@refs/heads/main}"
 COSIGN_RC=0
 COSIGN_OUT=$(cosign verify \
-  --key "${COSIGN_PUB}" \
-  --insecure-ignore-tlog \
+  --certificate-identity-regexp "${COSIGN_CERT_IDENTITY_REGEXP}" \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
   "${IMAGE}" 2>&1) || COSIGN_RC=$?
 if [ "${COSIGN_RC}" -eq 0 ]; then
-  pass "AC4 — offline cosign verification succeeded (signature co-located in Zot)"
+  pass "AC4 — keyless cosign verification succeeded (signature co-located in Zot)"
 else
   fail "AC4 — cosign verify failed: ${COSIGN_OUT}"
 fi

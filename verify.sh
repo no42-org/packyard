@@ -260,11 +260,6 @@ STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/gpg/lts.asc" || true)
   && pass "/gpg/lts.asc → 200" \
   || fail "/gpg/lts.asc → $STATUS (expected 200)"
 
-STATUS=$(curl -s -o /dev/null -w "%{http_code}" "$BASE_URL/gpg/cosign.pub" || true)
-[[ "$STATUS" == "200" ]] \
-  && pass "/gpg/cosign.pub → 200" \
-  || fail "/gpg/cosign.pub → $STATUS (expected 200)"
-
 # Negative: authenticated route without credentials → 401 (skip when TEST_COMPONENT is public)
 if [[ "$TEST_COMPONENT" != "$PUBLIC_COMPONENT" || -z "$PUBLIC_COMPONENT" ]]; then
   STATUS=$(curl -s -o /dev/null -w "%{http_code}" \

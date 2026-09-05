@@ -150,7 +150,7 @@ SERIES=2025 \
 bash tests/e2e/oci-subscriber.sh
 ```
 
-**Note on offline cosign verification:** Cosign signatures are stored in Zot alongside the image as OCI objects (co-located at a digest-based tag). Verification uses `--insecure-ignore-tlog` to skip the Sigstore transparency log — no internet access is needed once the image and signature are pulled. The cosign public key is fetched once from `${BASE_URL}/gpg/cosign.pub` (subscriber onboarding step).
+**Note on cosign verification:** Cosign signatures are stored in Zot alongside the image as OCI objects (co-located at a digest-based tag). Images are signed keylessly by `promote-oci.yml`, so AC4 verifies against that workflow's identity (`--certificate-identity-regexp`, override with `COSIGN_CERT_IDENTITY_REGEXP` on forks) and needs outbound HTTPS to the Sigstore transparency log. There is no public key to fetch.
 
 **Note on multi-arch:** `docker pull` automatically selects the correct architecture from the OCI image index. Both `amd64` and `arm64` manifests must be present in the index (verified by `crane manifest` in AC2).
 
