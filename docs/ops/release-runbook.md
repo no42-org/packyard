@@ -21,8 +21,7 @@ Promotion is always manual — one `workflow_dispatch` per component and target.
 ## 1. Pre-promotion checklist
 
 - [ ] `static/content/gpg/lts.asc` is a real GPG public key (not a placeholder)
-- [ ] `static/content/gpg/cosign.pub` is a real cosign public key (not a placeholder)
-- [ ] All 10 GitHub Actions secrets are set (see [Production Deployment §3](production-deployment.md#3-secrets--environment))
+- [ ] All 8 GitHub Actions secrets are set (see [Production Deployment §3](production-deployment.md#3-secrets--environment))
 - [ ] Artifacts are staged in RustFS (§2 below)
 
 ---
@@ -104,7 +103,7 @@ gh workflow run promote-oci.yml \
   -f series=2025
 ```
 
-OCI promotion builds the multi-arch index from both staged architectures and cosign-signs all manifests in a single run — no per-arch dispatch needed.
+OCI promotion builds the multi-arch index from both staged architectures and signs all manifests keylessly with cosign in a single run — no per-arch dispatch needed.
 
 Monitor runs:
 

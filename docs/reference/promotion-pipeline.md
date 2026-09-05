@@ -6,7 +6,7 @@ Packages are promoted from staging to serving via GitHub Actions:
 |----------|---------|--------------|
 | `promote-rpm.yml` | `workflow_dispatch` | Downloads RPM from RustFS staging, GPG-signs it, rebuilds repodata, publishes to rpm service |
 | `promote-deb.yml` | `workflow_dispatch` | Downloads DEB from RustFS staging, GPG-signs it, creates Aptly snapshot, publishes to deb service |
-| `promote-oci.yml` | `workflow_dispatch` | Downloads OCI tarballs, pushes multi-arch image index to Zot, cosign-signs all manifests |
+| `promote-oci.yml` | `workflow_dispatch` | Downloads OCI tarballs, pushes multi-arch image index to Zot, signs all manifests keylessly with cosign |
 
 ## Staging an artifact
 

@@ -26,6 +26,9 @@ jobs:
   promote:
     runs-on: ubuntu-24.04
     timeout-minutes: 30
+    permissions:
+      contents: read
+      id-token: write  # cosign keyless: Fulcio certificate bound to this workflow's OIDC identity
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
@@ -128,36 +131,33 @@ jobs:
             --insecure
           echo "Index created: ${IMAGE_BASE}:${SERIES}"
 
-      - name: Sign images with cosign (ephemeral)
+      - name: Sign images with cosign (keyless)
+        # No long-lived key. cosign obtains a short-lived certificate from
+        # Fulcio for this job's GitHub OIDC identity and records the signature
+        # in the Rekor transparency log. Verifiers pin the workflow identity
+        # instead of a distributed public key (see docs/reference/subscriber-usage.md).
         env:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
-          COSIGN_PRIVATE_KEY: ${{ secrets.COSIGN_PRIVATE_KEY }}
-          COSIGN_PASSWORD: ${{ secrets.COSIGN_PASSWORD }}
         run: |
           IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           for tag in "${SERIES}-x86_64" "${SERIES}-arm64" "${SERIES}"; do
-            cosign sign \
-              --key env://COSIGN_PRIVATE_KEY \
-              --allow-insecure-registry \
-              --tlog-upload=false \
-              --yes \
-              "${IMAGE_BASE}:${tag}"
-            echo "Signed: ${IMAGE_BASE}:${tag}"
+            digest=$(crane digest --insecure "${IMAGE_BASE}:${tag}")
+            cosign sign --yes --allow-insecure-registry "${IMAGE_BASE}@${digest}"
+            echo "Signed: ${IMAGE_BASE}:${tag} (${digest})"
           done
 
       - name: Verify cosign signature (sanity check)
         env:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
+          CERT_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/promote-oci.yml@${{ github.ref }}
         run: |
-          grep -q 'BEGIN PUBLIC KEY' ./static/content/gpg/cosign.pub \
-            || { echo "ERROR: cosign.pub is still a placeholder — replace with real key before promoting"; exit 1; }
           IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
           if cosign verify \
-            --key ./static/content/gpg/cosign.pub \
             --allow-insecure-registry \
-            --insecure-ignore-tlog \
+            --certificate-identity "${CERT_IDENTITY}" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
             "${IMAGE_BASE}:${SERIES}"; then
             echo "SIGNATURE VERIFIED"
           else
@@ -168,6 +168,5 @@ jobs:
         if: always()
         run: |
           rm -f ~/.ssh/id_ed25519
-          rm -f /tmp/cosign.key
           pkill -f 'ssh -fN -L 9000' || true
           pkill -f 'ssh -fN -L 5000' || true

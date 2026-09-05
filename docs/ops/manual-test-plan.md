@@ -57,12 +57,11 @@ Expected: `{"status":"ok"}` or similar. HTTP 200.
 **What this teaches:** `/gpg/` is served by the `static` nginx container and is deliberately outside Traefik's forwardAuth middleware.
 
 ```bash
-# Both files are public — no credentials required
+# Public — no credentials required
 curl -o /dev/null -w "%{http_code}\n" http://localhost/gpg/lts.asc
-curl -o /dev/null -w "%{http_code}\n" http://localhost/gpg/cosign.pub
 ```
 
-Expected: `200` for both.
+Expected: `200`. OCI images are verified keylessly against the signing workflow identity, so there is no cosign public key to serve.
 
 ```bash
 # Confirm no Authorization header is needed (explicitly provide none)
