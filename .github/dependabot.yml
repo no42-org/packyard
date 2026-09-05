@@ -106,3 +106,8 @@ updates:
           - react-dom
           - "@types/react"
           - "@types/react-dom"
+      # @vitejs/plugin-react pins a vite major via peerDependencies; bump together
+      vite:
+        patterns:
+          - vite
+          - "@vitejs/*"
