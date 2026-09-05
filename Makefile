@@ -17,7 +17,7 @@ UNAME_S := $(shell uname -s)
 
 .PHONY: help docs-install docs-serve docs-build docs-clean check-node \
         admin-ui admin-ui-install admin-ui-dev admin-ui-clean \
-        build build-clean test lint build-image-auth build-image-rpm build-images
+        build build-clean test lint lint-workflows build-image-auth build-image-rpm build-images
 
 ## help: Show this help
 help:
@@ -95,6 +95,10 @@ test:
 lint:
 	@cd auth && unformatted="$$(gofmt -l .)" && { test -z "$$unformatted" || { echo "gofmt: files need formatting:"; echo "$$unformatted"; exit 1; }; }
 	cd auth && $(GO) vet ./...
+
+## lint-workflows: Validate YAML embedded in workflow action inputs (paths-filter)
+lint-workflows:
+	python3 scripts/lint-workflow-filters.py
 
 ## build-image-auth: Build the auth container image locally (no push)
 build-image-auth:
