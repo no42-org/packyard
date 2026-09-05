@@ -101,12 +101,13 @@ jobs:
           # Avoids __gpg_check_password_cmd true (which bypasses passphrase verification entirely)
           # Passphrase on fd 3; stdin is the (empty) message to sign. Using fd 0
           # for both meant `< /dev/null` replaced the piped passphrase and the
-          # cache step silently did nothing.
+          # cache step silently did nothing. A wrong passphrase must fail here,
+          # with gpg's own message, rather than surface later from rpmsign.
           gpg --batch --yes \
             --pinentry-mode loopback \
             --passphrase-fd 3 \
             -u "${GPG_KEY_ID}" \
-            --sign --output /dev/null - < /dev/null 3< <(printf '%s\n' "${GPG_PASSPHRASE}") 2>/dev/null || true
+            --sign --output /dev/null - < /dev/null 3< <(printf '%s\n' "${GPG_PASSPHRASE}")
           for rpm in ./staging/*.rpm; do
             [ -f "$rpm" ] || { echo "No RPM files found in staging/"; exit 1; }
             rpmsign --addsign \
