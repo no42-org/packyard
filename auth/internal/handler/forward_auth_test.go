@@ -482,3 +482,39 @@ func (e *errComponentStore) DeleteComponentWithRevoke(ctx context.Context, name 
 func (e *errComponentStore) UpdateComponentVisibility(ctx context.Context, name, vis string) (*store.Component, error) {
 	return e.inner.UpdateComponentVisibility(ctx, name, vis)
 }
+
+// FuzzExtractComponent checks the invariants extractComponent must hold for
+// any request path: a returned component is never empty, never contains a
+// separator, and always appears verbatim in the input.
+func FuzzExtractComponent(f *testing.F) {
+	for _, seed := range []string{
+		"/rpm/core/2025/el9-x86_64/Packages/x.rpm",
+		"/deb/core/2025/dists/bookworm/InRelease",
+		"/oci/v2/lts-core/manifests/2025",
+		"/oci/v2/core/manifests/2025",
+		"/gpg/lts.asc",
+		"/",
+		"",
+		"rpm//x",
+	} {
+		f.Add(seed)
+	}
+	f.Fuzz(func(t *testing.T, path string) {
+		comp, ok := extractComponent(path)
+		if !ok {
+			if comp != "" {
+				t.Fatalf("extractComponent(%q) = (%q, false); component must be empty on failure", path, comp)
+			}
+			return
+		}
+		if comp == "" {
+			t.Fatalf("extractComponent(%q) returned ok with empty component", path)
+		}
+		if strings.Contains(comp, "/") {
+			t.Fatalf("extractComponent(%q) = %q contains a separator", path, comp)
+		}
+		if !strings.Contains(path, comp) {
+			t.Fatalf("extractComponent(%q) = %q not present in input", path, comp)
+		}
+	})
+}
