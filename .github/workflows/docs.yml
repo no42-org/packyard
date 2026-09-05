@@ -19,7 +19,6 @@ on:
       - 'docusaurus.config.ts'
       - 'sidebars.ts'
       - 'src/**'
-      - 'static/**'
       - 'package.json'
       - 'package-lock.json'
       - '.nvmrc'
