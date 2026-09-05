@@ -14,7 +14,10 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"regexp"
 	"strings"
+
+	"github.com/no42-org/packyard-auth/internal/logsafe"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/no42-org/packyard-auth/internal/store"
@@ -78,9 +81,9 @@ func (h *ComponentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "name is required")
 		return
 	}
-	if strings.ContainsAny(req.Name, "/\\") || strings.Contains(req.Name, "..") {
+	if !pathSegmentRe.MatchString(req.Name) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST",
-			"name must not contain path separators or traversal sequences")
+			"name must be 1-64 characters of letters, digits, '.', '_' or '-', starting with a letter or digit")
 		return
 	}
 	for _, field := range []struct {
@@ -92,7 +95,7 @@ func (h *ComponentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 		{"rpm_architectures", req.RPMArchitectures},
 	} {
 		for _, v := range field.values {
-			if strings.ContainsAny(v, "/\\") || strings.Contains(v, "..") {
+			if !pathSegmentRe.MatchString(v) {
 				writeError(w, http.StatusBadRequest, "INVALID_REQUEST",
 					fmt.Sprintf("%s contains invalid value %q", field.label, v))
 				return
@@ -129,7 +132,7 @@ func (h *ComponentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("component %q already exists", req.Name))
 			return
 		}
-		h.Logger.Error("failed to create component", slog.String("name", req.Name), slog.String("error", err.Error()))
+		h.Logger.Error("failed to create component", logsafe.Attr("name", req.Name), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "COMPONENT_CREATE_FAILED", "failed to create component")
 		return
 	}
@@ -137,9 +140,9 @@ func (h *ComponentsHandler) Create(w http.ResponseWriter, r *http.Request) {
 	// Initialise RPM directory tree for each series × os_family × arch combination.
 	if err := h.initRPMTree(r.Context(), created); err != nil {
 		h.Logger.Error("RPM tree init failed, rolling back component",
-			slog.String("name", created.Name), slog.String("error", err.Error()))
+			logsafe.Attr("name", created.Name), slog.String("error", err.Error()))
 		if delErr := h.Store.DeleteComponent(r.Context(), created.Name); delErr != nil {
-			h.Logger.Error("rollback failed", slog.String("name", created.Name), slog.String("error", delErr.Error()))
+			h.Logger.Error("rollback failed", logsafe.Attr("name", created.Name), slog.String("error", delErr.Error()))
 		}
 		writeError(w, http.StatusInternalServerError, "RPM_INIT_FAILED",
 			fmt.Sprintf("RPM directory initialisation failed: %s", err.Error()))
@@ -187,7 +190,7 @@ func (h *ComponentsHandler) GetOne(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("component %q not found", name))
 			return
 		}
-		h.Logger.Error("failed to get component", slog.String("name", name), slog.String("error", err.Error()))
+		h.Logger.Error("failed to get component", logsafe.Attr("name", name), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "COMPONENT_GET_FAILED", "failed to get component")
 		return
 	}
@@ -210,14 +213,14 @@ func (h *ComponentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("component %q not found", name))
 			return
 		}
-		h.Logger.Error("failed to get component for delete", slog.String("name", name), slog.String("error", err.Error()))
+		h.Logger.Error("failed to get component for delete", logsafe.Attr("name", name), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "COMPONENT_DELETE_FAILED", "failed to get component for delete")
 		return
 	}
 
 	activeKeys, err := h.Store.CountActiveComponentKeys(r.Context(), name)
 	if err != nil {
-		h.Logger.Error("failed to count keys", slog.String("name", name), slog.String("error", err.Error()))
+		h.Logger.Error("failed to count keys", logsafe.Attr("name", name), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "COMPONENT_DELETE_FAILED", "failed to count keys")
 		return
 	}
@@ -243,7 +246,7 @@ func (h *ComponentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 	// Atomically revoke all active keys and delete the component record (P3).
 	revoked, err := h.Store.DeleteComponentWithRevoke(r.Context(), name)
 	if err != nil {
-		h.Logger.Error("failed to delete component", slog.String("name", name), slog.String("error", err.Error()))
+		h.Logger.Error("failed to delete component", logsafe.Attr("name", name), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "COMPONENT_DELETE_FAILED", "failed to delete component")
 		return
 	}
@@ -283,7 +286,7 @@ func (h *ComponentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("component %q not found", name))
 			return
 		}
-		h.Logger.Error("failed to update component", slog.String("name", name), slog.String("error", err.Error()))
+		h.Logger.Error("failed to update component", logsafe.Attr("name", name), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "COMPONENT_UPDATE_FAILED", "failed to update component")
 		return
 	}
@@ -293,13 +296,24 @@ func (h *ComponentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	_ = json.NewEncoder(w).Encode(comp)
 }
 
+// pathSegmentRe bounds every value that becomes a directory name under
+// RPMDataRoot: 1-64 characters, letters, digits, '.', '_' and '-', starting
+// with a letter or digit. It rejects separators, "..", and control characters.
+var pathSegmentRe = regexp.MustCompile(`^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$`)
+
 // initRPMTree creates the RPM directory tree under RPMDataRoot for the component.
 // Path structure: {RPMDataRoot}/rpm/{component}/{series}/{os_family}-{arch}/
 func (h *ComponentsHandler) initRPMTree(ctx context.Context, comp *store.Component) error {
 	for _, series := range comp.RPMSeries {
 		for _, family := range comp.RPMOSFamilies {
 			for _, arch := range comp.RPMArchitectures {
-				dir := filepath.Join(h.RPMDataRoot, "rpm", comp.Name, series, family+"-"+arch)
+				// Every segment was validated against pathSegmentRe in Create; the
+				// IsLocal check keeps the tree confined even if a caller bypasses it.
+				rel := filepath.Join("rpm", comp.Name, series, family+"-"+arch)
+				if !filepath.IsLocal(rel) {
+					return fmt.Errorf("refusing to create RPM tree outside data root: %q", rel)
+				}
+				dir := filepath.Join(h.RPMDataRoot, rel)
 				if err := os.MkdirAll(dir, 0o755); err != nil {
 					return fmt.Errorf("mkdir %s: %w", dir, err)
 				}

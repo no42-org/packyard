@@ -42,3 +42,7 @@ site/
 .roo/
 .windsurf/
 .zed/
+
+# Build artefacts
+bin/
+auth/server

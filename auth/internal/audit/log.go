@@ -16,6 +16,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/no42-org/packyard-auth/internal/logsafe"
+
 	"github.com/no42-org/packyard-auth/internal/auth"
 )
 
@@ -119,7 +121,7 @@ func (n NoopAuditor) Write(_ context.Context, e Entry) {
 		slog.String("operator_id", e.OperatorID),
 		slog.String("action", e.Action),
 		slog.String("target_type", e.TargetType),
-		slog.String("target_id", e.TargetID),
+		logsafe.Attr("target_id", e.TargetID),
 	)
 }
 
@@ -131,7 +133,7 @@ func (n NoopAuditor) WarnEmptyOperator(e Entry) {
 	n.Logger.Warn("audit entry has empty operator_id",
 		slog.String("action", e.Action),
 		slog.String("target_type", e.TargetType),
-		slog.String("target_id", e.TargetID),
+		logsafe.Attr("target_id", e.TargetID),
 	)
 }
 

@@ -14,6 +14,8 @@ import (
 	"net/http"
 	"time"
 
+	"github.com/no42-org/packyard-auth/internal/logsafe"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/no42-org/packyard-auth/internal/audit"
 	"github.com/no42-org/packyard-auth/internal/middleware"
@@ -108,7 +110,7 @@ func (h *KeysHandler) Get(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("key %q not found", id))
 			return
 		}
-		h.Logger.Error("failed to get key", slog.String("id", id), slog.String("error", err.Error()))
+		h.Logger.Error("failed to get key", logsafe.Attr("id", id), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "KEY_GET_FAILED", "failed to get key")
 		return
 	}
@@ -155,12 +157,12 @@ func (h *KeysHandler) Delete(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("key %q not found", id))
 			return
 		}
-		h.Logger.Error("failed to get key after revoke", slog.String("id", id), slog.String("error", getErr.Error()))
+		h.Logger.Error("failed to get key after revoke", logsafe.Attr("id", id), slog.String("error", getErr.Error()))
 		writeError(w, http.StatusInternalServerError, "KEY_DELETE_FAILED", "failed to get key after revoke")
 		return
 	}
 
-	h.Logger.Error("failed to revoke key", slog.String("id", id), slog.String("error", err.Error()))
+	h.Logger.Error("failed to revoke key", logsafe.Attr("id", id), slog.String("error", err.Error()))
 	writeError(w, http.StatusInternalServerError, "KEY_DELETE_FAILED", "failed to revoke key")
 }
 
@@ -240,7 +242,7 @@ func (h *KeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 				return
 			}
 			h.Logger.Error("failed to resolve account",
-				slog.String("account_id", req.AccountID), slog.String("error", err.Error()))
+				logsafe.Attr("account_id", req.AccountID), slog.String("error", err.Error()))
 			writeError(w, http.StatusInternalServerError, "KEY_CREATE_FAILED", "failed to resolve account")
 			return
 		}
@@ -259,7 +261,7 @@ func (h *KeysHandler) Create(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("component %q not found", req.Component))
 			return
 		}
-		h.Logger.Error("failed to validate component", slog.String("component", req.Component), slog.String("error", err.Error()))
+		h.Logger.Error("failed to validate component", logsafe.Attr("component", req.Component), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "KEY_CREATE_FAILED", "failed to validate component")
 		return
 	}
