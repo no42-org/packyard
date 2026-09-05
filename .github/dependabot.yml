@@ -24,18 +24,9 @@ updates:
       - dependencies
       - github-actions
 
-  # Docker base images — service Dockerfiles only
-  # Note: images declared in compose.yml are not scanned by Dependabot's docker ecosystem
-  - package-ecosystem: docker
-    directory: /
-    schedule:
-      interval: weekly
-    cooldown:
-      default-days: 7
-    labels:
-      - dependencies
-      - docker
-
+  # Docker base images — service Dockerfiles only (auth, rpm, backup).
+  # Images declared in compose.yml are not scanned by Dependabot's docker ecosystem,
+  # and the repository root has no Dockerfile.
   - package-ecosystem: docker
     directory: /auth
     schedule:
