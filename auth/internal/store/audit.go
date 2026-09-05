@@ -14,6 +14,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/no42-org/packyard-auth/internal/logsafe"
+
 	"github.com/no42-org/packyard-auth/internal/audit"
 )
 
@@ -116,7 +118,7 @@ func (s *SQLiteStore) WarnEmptyOperator(e audit.Entry) {
 	s.currentAuditLogger().Warn("audit entry has empty operator_id",
 		slog.String("action", e.Action),
 		slog.String("target_type", e.TargetType),
-		slog.String("target_id", e.TargetID),
+		logsafe.Attr("target_id", e.TargetID),
 	)
 }
 
@@ -126,8 +128,8 @@ func (s *SQLiteStore) logAuditFailure(stage string, e audit.Entry, err error) {
 		slog.String("action", e.Action),
 		slog.String("operator_id", e.OperatorID),
 		slog.String("target_type", e.TargetType),
-		slog.String("target_id", e.TargetID),
-		slog.String("ip", e.IP),
+		logsafe.Attr("target_id", e.TargetID),
+		logsafe.Attr("ip", e.IP),
 		slog.String("error", err.Error()),
 	)
 }

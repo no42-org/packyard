@@ -14,6 +14,8 @@ import (
 	"net/url"
 	"strconv"
 
+	"github.com/no42-org/packyard-auth/internal/logsafe"
+
 	"github.com/go-chi/chi/v5"
 	"github.com/no42-org/packyard-auth/internal/audit"
 	"github.com/no42-org/packyard-auth/internal/auth"
@@ -301,7 +303,7 @@ func (h *AccountsHandler) Get(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("account %q not found", id))
 			return
 		}
-		h.Logger.Error("get account failed", slog.String("id", id), slog.String("error", err.Error()))
+		h.Logger.Error("get account failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "ACCOUNT_GET_FAILED", "failed to get account")
 		return
 	}
@@ -328,7 +330,7 @@ func (h *AccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("account %q not found", id))
 			return
 		}
-		h.Logger.Error("get account for update failed", slog.String("id", id), slog.String("error", err.Error()))
+		h.Logger.Error("get account for update failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "ACCOUNT_GET_FAILED", "failed to get account")
 		return
 	}
@@ -392,7 +394,7 @@ func (h *AccountsHandler) Update(w http.ResponseWriter, r *http.Request) {
 				"the legacy account cannot be suspended or deleted")
 			return
 		default:
-			h.Logger.Error("update account failed", slog.String("id", id), slog.String("error", err.Error()))
+			h.Logger.Error("update account failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 			writeError(w, http.StatusInternalServerError, "ACCOUNT_UPDATE_FAILED", "failed to update account")
 			return
 		}
@@ -430,7 +432,7 @@ func (h *AccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("account %q not found", id))
 			return
 		}
-		h.Logger.Error("get account for delete failed", slog.String("id", id), slog.String("error", err.Error()))
+		h.Logger.Error("get account for delete failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "ACCOUNT_GET_FAILED", "failed to get account")
 		return
 	}
@@ -439,7 +441,7 @@ func (h *AccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 		n, err := h.Accounts.CountActiveAccountKeys(r.Context(), id)
 		if err != nil {
 			h.Logger.Error("count account keys for impact preview failed",
-				slog.String("id", id), slog.String("error", err.Error()))
+				logsafe.Attr("id", id), slog.String("error", err.Error()))
 			writeError(w, http.StatusInternalServerError, "ACCOUNT_DELETE_FAILED",
 				"failed to compute delete impact preview")
 			return
@@ -467,7 +469,7 @@ func (h *AccountsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 				"the legacy account cannot be deleted")
 			return
 		default:
-			h.Logger.Error("delete account failed", slog.String("id", id), slog.String("error", err.Error()))
+			h.Logger.Error("delete account failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 			writeError(w, http.StatusInternalServerError, "ACCOUNT_DELETE_FAILED", "failed to delete account")
 			return
 		}
@@ -495,7 +497,7 @@ func (h *AccountsHandler) ListKeys(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("account %q not found", id))
 			return
 		}
-		h.Logger.Error("get account for key list failed", slog.String("id", id), slog.String("error", err.Error()))
+		h.Logger.Error("get account for key list failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "ACCOUNT_GET_FAILED", "failed to get account")
 		return
 	}
@@ -507,7 +509,7 @@ func (h *AccountsHandler) ListKeys(w http.ResponseWriter, r *http.Request) {
 
 	keys, err := h.Accounts.ListAccountKeys(r.Context(), id, offset, limit+1)
 	if err != nil {
-		h.Logger.Error("list account keys failed", slog.String("id", id), slog.String("error", err.Error()))
+		h.Logger.Error("list account keys failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "ACCOUNT_KEYS_LIST_FAILED", "failed to list account keys")
 		return
 	}
@@ -544,7 +546,7 @@ func (h *AccountsHandler) IssueKey(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("account %q not found", id))
 			return
 		}
-		h.Logger.Error("get account for issue key failed", slog.String("id", id), slog.String("error", err.Error()))
+		h.Logger.Error("get account for issue key failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "ACCOUNT_GET_FAILED", "failed to get account")
 		return
 	}
@@ -576,7 +578,7 @@ func (h *AccountsHandler) IssueKey(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("validate component failed",
-			slog.String("component", req.Component), slog.String("error", err.Error()))
+			logsafe.Attr("component", req.Component), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "KEY_CREATE_FAILED", "failed to validate component")
 		return
 	}
@@ -590,7 +592,7 @@ func (h *AccountsHandler) IssueKey(w http.ResponseWriter, r *http.Request) {
 				fmt.Sprintf("account %q not found", id))
 			return
 		}
-		h.Logger.Error("create key for account failed", slog.String("id", id), slog.String("error", err.Error()))
+		h.Logger.Error("create key for account failed", logsafe.Attr("id", id), slog.String("error", err.Error()))
 		writeError(w, http.StatusInternalServerError, "KEY_CREATE_FAILED", "failed to create key")
 		return
 	}

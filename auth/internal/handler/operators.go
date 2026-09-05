@@ -12,6 +12,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/no42-org/packyard-auth/internal/logsafe"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/no42-org/packyard-auth/internal/audit"
@@ -237,7 +239,7 @@ func (h *OperatorsHandler) Update(w http.ResponseWriter, r *http.Request) {
 				"refusing to leave zero active admins; ask another admin to make this change")
 		default:
 			h.Logger.Error("update operator failed",
-				slog.String("id", id), slog.String("error", err.Error()))
+				logsafe.Attr("id", id), slog.String("error", err.Error()))
 			writeError(w, http.StatusInternalServerError, "OPERATOR_UPDATE_FAILED",
 				"failed to update operator")
 		}
@@ -278,7 +280,7 @@ func (h *OperatorsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	if demoted || disabled {
 		if err := h.Sessions.DeleteOperatorSessions(r.Context(), id); err != nil {
 			h.Logger.Warn("force-logout failed",
-				slog.String("operator_id", id),
+				logsafe.Attr("operator_id", id),
 				slog.String("error", err.Error()))
 		}
 	}

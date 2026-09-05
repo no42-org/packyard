@@ -13,6 +13,8 @@ import (
 	"strings"
 	"time"
 
+	"github.com/no42-org/packyard-auth/internal/logsafe"
+
 	"github.com/no42-org/packyard-auth/internal/metrics"
 	"github.com/no42-org/packyard-auth/internal/store"
 )
@@ -74,7 +76,7 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 			return
 		}
 		h.Logger.Error("store error resolving component",
-			slog.String("component", requestedComponent),
+			logsafe.Attr("component", requestedComponent),
 			slog.String("error", err.Error()),
 		)
 		metrics.RequestsTotal.WithLabelValues("error").Inc()
@@ -84,7 +86,7 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 
 	// Public components bypass credential checking entirely.
 	if comp.Visibility == "public" {
-		h.Logger.Info("public component access allowed", slog.String("component", requestedComponent))
+		h.Logger.Info("public component access allowed", logsafe.Attr("component", requestedComponent))
 		metrics.RequestsTotal.WithLabelValues("allowed-public").Inc()
 		w.WriteHeader(http.StatusOK)
 		return
@@ -187,13 +189,12 @@ func extractComponent(path string) (string, bool) {
 	if len(parts) < 2 || parts[0] == "" {
 		return "", false
 	}
+	var comp string
 	switch parts[0] {
-	case "rpm":
+	case "rpm", "deb":
 		// /rpm/{component}/{series}/{os-arch}/...
-		return parts[1], true
-	case "deb":
 		// /deb/{component}/{series}/...
-		return parts[1], true
+		comp = parts[1]
 	case "oci":
 		// /oci/v2/lts-{component}/...
 		if len(parts) < 3 {
@@ -203,7 +204,13 @@ func extractComponent(path string) (string, bool) {
 		if !found {
 			return "", false
 		}
-		return after, true
+		comp = after
+	default:
+		return "", false
 	}
-	return "", false
+	// An empty segment (e.g. "/rpm//x" or "/oci/v2/lts-/x") is not a component.
+	if comp == "" {
+		return "", false
+	}
+	return comp, true
 }

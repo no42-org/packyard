@@ -9,6 +9,8 @@ import (
 	"log/slog"
 	"net/http"
 	"time"
+
+	"github.com/no42-org/packyard-auth/internal/logsafe"
 )
 
 // responseWriter wraps http.ResponseWriter to capture the status code.
@@ -34,7 +36,7 @@ func RequestLogger(logger *slog.Logger) func(http.Handler) http.Handler {
 			next.ServeHTTP(rw, r)
 			logger.Info("request",
 				slog.String("method", r.Method),
-				slog.String("path", r.URL.Path),
+				logsafe.Attr("path", r.URL.Path),
 				slog.Int("status", rw.status),
 				slog.Duration("latency", time.Since(start)),
 			)

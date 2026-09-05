@@ -11,6 +11,8 @@ import (
 	"log/slog"
 	"net/http"
 
+	"github.com/no42-org/packyard-auth/internal/logsafe"
+
 	"github.com/go-chi/chi/v5"
 
 	"github.com/no42-org/packyard-auth/internal/audit"
@@ -175,7 +177,7 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 				"not_org_member")
 		default:
 			h.Logger.Error("oauth exchange failed",
-				slog.String("provider", providerName),
+				logsafe.Attr("provider", providerName),
 				slog.String("error", err.Error()))
 			h.failCallback(w, r, "", providerName, http.StatusUnauthorized, "OAUTH_EXCHANGE_FAILED",
 				"failed to exchange authorisation code",
@@ -246,11 +248,11 @@ func (h *AuthHandler) Callback(w http.ResponseWriter, r *http.Request) {
 		// than buried as a silent column-stays-NULL outcome.
 		h.Logger.Warn("oauth identity missing provider user id; skipping first_seen capture",
 			slog.String("operator_id", op.ID),
-			slog.String("provider", providerName))
+			logsafe.Attr("provider", providerName))
 	} else if err := h.Operators.UpdateLoginProvider(r.Context(), op.ID, providerName, identity.ProviderUserID); err != nil {
 		h.Logger.Warn("update login provider failed",
 			slog.String("operator_id", op.ID),
-			slog.String("provider", providerName),
+			logsafe.Attr("provider", providerName),
 			slog.String("error", err.Error()))
 	}
 
