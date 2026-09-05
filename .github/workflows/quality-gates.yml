@@ -44,7 +44,7 @@ jobs:
               - 'docusaurus.config.ts'
               - 'sidebars.ts'
               - 'src/**'
-                      - 'package.json'
+              - 'package.json'
               - 'package-lock.json'
               - '.nvmrc'
               - 'tsconfig.json'
