@@ -192,11 +192,12 @@ These tests are integration tests, not unit tests. They require:
 **CI approach (`.github/workflows/integration.yml`):** the workflow drives the stack through Makefile targets.
 `make ci-stack-up` builds auth, rpm, static, backup and aptly from the working tree (labelled with the commit via `CI_REVISION`), starts the CI compose stack and waits for routing and health.
 `make ci-verify-env` proves the forwarded `PACKYARD_*` variables reach the auth container and that compose rejects a missing `ADMIN_DOMAIN`.
-It also asserts every built service runs an image carrying the current revision label, so a pulled image cannot pass silently.
+It also asserts every built service runs an image whose revision label is the commit under test (`-dirty` if the tree had uncommitted changes), so a stale or pulled image does not pass unnoticed, and that the backup and aptly tags in `compose.yml` match their Dockerfile ARGs.
 `make ci-seed` gives CI an operator session without OAuth: `scripts/ci/seed-integration.sh` inserts one session row for the bootstrap operator into the auth database (via a one-off `sqlite3` sidecar on the `auth-db` volume), verifies it with `GET /api/v1/auth/whoami`, then provisions components, a per-run subscriber account and a key through the real API with the session cookie and an `Origin` header derived from `ADMIN_DOMAIN`.
 `make e2e-observability` runs this suite with the seeded key.
 To reproduce locally: export `COMPOSE_PROJECT_NAME=packyard-ci` and `COMPOSE_FILE=compose.yml:compose.override.ci.yml` (add `:compose.override.arm64.yml` on Apple silicon), point `COMPOSE_ENV_FILES` at a copy of the workflow's `.env`, and run the same targets.
 The `ci-*` targets refuse to run without those two exports, so they cannot touch a developer's real stack.
+Built images are tagged with the names from `compose.yml`, so on a shared daemon a CI run temporarily replaces the published tags; `make ci-stack-down` removes them again.
 
 ---
 

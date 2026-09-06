@@ -1,0 +1,6 @@
+# The only image built with the repository root as context is backup/
+# (compose.override.ci.yml and build-backup.yml). Allow-list what it needs so
+# .git, node_modules, .env files and CI artefacts never reach the daemon.
+*
+!backup/
+!scripts/backup-keystore.sh
