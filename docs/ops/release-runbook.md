@@ -113,6 +113,16 @@ gh run list --workflow=promote-deb.yml
 gh run list --workflow=promote-oci.yml
 ```
 
+### Changing component visibility
+
+Forward-auth caches `public` visibility for `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` (default 30s). Changing a component from private to public takes effect on the next request. Changing it from public to private takes effect immediately on the auth instance that handled the change, but another instance can keep serving it as public for up to one TTL. Before promoting content that must not be public into a component you have just made private:
+
+1. Change the visibility: `PATCH /api/v1/components/{name}` with `{"visibility": "private"}`.
+2. Wait one TTL (30s by default; check `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` in `.env`).
+3. Promote.
+
+To take the cache out of the picture entirely, set `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL=0` in `.env` and restart the auth service; no image change or redeploy is needed.
+
 ---
 
 ## 4. Verify

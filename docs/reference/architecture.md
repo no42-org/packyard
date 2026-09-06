@@ -55,9 +55,17 @@ A subscription key is a 64-character hex secret bound to a single
 - fails closed: if the auth service is unreachable, Traefik returns 503
   rather than admitting the request.
 
-Forward-auth queries the database live on every request — component
-visibility, key revocation, and account suspension take effect on the next
+Forward-auth queries the database live on every request for private
+components — key revocation and account suspension take effect on the next
 subscriber request with no service restart needed.
+
+Public components take a fast path.
+The auth service keeps an in-memory, positive-only cache of components whose visibility is `public`, each entry valid for `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` (default 30s).
+A request for a cached public component is allowed without touching the database, so public package traffic survives database outages shorter than the TTL.
+Nothing else is ever cached: a `private` result, an unknown component, or a database error always goes back to the database and fails closed with 503 when the database is unavailable.
+Changing a component's visibility or deleting it evicts its entry immediately on the instance that handled the change; on any other instance the old answer can persist for at most one TTL.
+That TTL is therefore the revocation bound for public-to-private changes, and the release runbook asks operators to wait one TTL after such a change before promoting content that must not be public.
+Setting the TTL to `0` disables the cache and restores the live-lookup behaviour for every request.
 
 ### Operator trust
 
