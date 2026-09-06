@@ -17,7 +17,8 @@ UNAME_S := $(shell uname -s)
 
 .PHONY: help docs-install docs-serve docs-build docs-clean check-node \
         admin-ui admin-ui-install admin-ui-dev admin-ui-clean \
-        build build-clean test lint lint-workflows build-image-auth build-image-rpm build-images
+        build build-clean test lint lint-workflows build-image-auth build-image-rpm build-images \
+        ci-guard ci-stack-up ci-stack-down ci-stack-logs ci-seed ci-verify-env e2e-observability
 
 ## help: Show this help
 help:
@@ -110,3 +111,43 @@ build-image-rpm:
 
 ## build-images: Build all locally built container images (no push)
 build-images: build-image-auth build-image-rpm
+
+# ---------------------------------------------------------------------------
+# Integration stack (CI). Every ci-* target refuses to run unless COMPOSE_FILE
+# names compose.override.ci.yml and COMPOSE_PROJECT_NAME is set, so a stray
+# `make ci-stack-down` can never remove a developer's real stack. A .env (or
+# COMPOSE_ENV_FILES) with the required hostnames and credentials must exist.
+# ---------------------------------------------------------------------------
+
+ci-guard:
+	@case "$${COMPOSE_FILE:-}" in *compose.override.ci.yml*) ;; *) \
+	  echo "refusing: COMPOSE_FILE must include compose.override.ci.yml (got '$${COMPOSE_FILE:-}')"; exit 1 ;; esac
+	@test -n "$${COMPOSE_PROJECT_NAME:-}" || { echo "refusing: COMPOSE_PROJECT_NAME must be set (e.g. packyard-ci)"; exit 1; }
+
+## ci-stack-up: Start the CI compose stack, wait for every service, Traefik routing and auth health
+ci-stack-up: ci-guard
+	docker compose up -d
+	bash scripts/ci/wait-for-stack.sh
+
+## ci-stack-down: Stop the CI compose stack and remove its volumes
+ci-stack-down: ci-guard
+	docker compose down -v
+	rm -f .ci-valid-key
+
+## ci-stack-logs: Dump all CI stack service logs (used on failure)
+ci-stack-logs: ci-guard
+	docker compose logs --no-color
+
+## ci-seed: Seed an operator session, CI components, an account and a subscription key via the admin API
+ci-seed: ci-guard
+	bash scripts/ci/seed-integration.sh
+
+## ci-verify-env: Assert PACKYARD_* variables reach the auth container with the expected values, and that compose rejects a missing ADMIN_DOMAIN
+ci-verify-env: ci-guard
+	bash scripts/ci/verify-env.sh
+
+## e2e-observability: Run the observability end-to-end tests (VALID_KEY from the environment or .ci-valid-key)
+e2e-observability: ci-guard
+	VALID_KEY="$${VALID_KEY:-$$(cat .ci-valid-key 2>/dev/null)}" \
+	BASE_URL="$${BASE_URL:-http://localhost}" METRICS_URL="$${METRICS_URL:-http://localhost:9090/metrics}" \
+	bash tests/e2e/observability.sh

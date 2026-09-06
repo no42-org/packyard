@@ -189,7 +189,13 @@ These tests are integration tests, not unit tests. They require:
 - Format-specific clients (`dnf` for RPM, `apt-get` for DEB, `docker`/`podman` for OCI)
 - Network access to `BASE_URL`
 
-**Recommended CI approach:** Run in a dedicated integration test job that spins up the full stack via `docker compose up -d`, waits for health checks, seeds test data, then runs the e2e scripts.
+**CI approach (`.github/workflows/integration.yml`):** the workflow drives the stack through Makefile targets.
+`make ci-stack-up` starts the CI compose stack and waits for routing and health.
+`make ci-verify-env` proves the forwarded `PACKYARD_*` variables reach the auth container and that compose rejects a missing `ADMIN_DOMAIN`.
+`make ci-seed` gives CI an operator session without OAuth: `scripts/ci/seed-integration.sh` inserts one session row for the bootstrap operator into the auth database (via a one-off `sqlite3` sidecar on the `auth-db` volume), verifies it with `GET /api/v1/auth/whoami`, then provisions components, a per-run subscriber account and a key through the real API with the session cookie and an `Origin` header derived from `ADMIN_DOMAIN`.
+`make e2e-observability` runs this suite with the seeded key.
+To reproduce locally: export `COMPOSE_PROJECT_NAME=packyard-ci` and `COMPOSE_FILE=compose.yml:compose.override.ci.yml` (add `:compose.override.arm64.yml` on Apple silicon), point `COMPOSE_ENV_FILES` at a copy of the workflow's `.env`, and run the same targets.
+The `ci-*` targets refuse to run without those two exports, so they cannot touch a developer's real stack.
 
 ---
 
