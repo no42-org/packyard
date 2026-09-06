@@ -34,11 +34,12 @@ RUSTFS_SECRET_KEY=dev-secret-key-value
 
 ### Advanced (auth service)
 
-These are set via `compose.yml` and only need overriding when deploying with a non-standard volume layout:
+These are set via `compose.yml` or the auth container's environment. `RPM_DATA_ROOT` only needs overriding for a non-standard volume layout; the cache TTL is a tuning knob with a safe default:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `RPM_DATA_ROOT` | `/data/rpm` | Root directory for RPM tree initialisation inside the auth container. Must match the mount point of the `rpm-data` volume. The auth service creates trees under `{RPM_DATA_ROOT}/rpm/{component}/{series}/{os_family}-{arch}/` — note the extra `rpm/` subdirectory level. |
+| `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` | `30s` | How long forward-auth caches a component's `public` visibility in memory, so public package traffic is served without a database read and survives store outages shorter than this. Go duration syntax (`30s`, `2m`); `0` disables the cache; values above `1h` are rejected at startup. Only `public` results are cached, so private components always fail closed. This is also the revocation bound: a public-to-private change takes effect immediately on the instance that handled it and within one TTL on any other. |
 
 ## Compose Override Files
 

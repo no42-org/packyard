@@ -34,3 +34,24 @@ func TestMetricsEndpoint(t *testing.T) {
 		t.Error("packyard_auth_duration_seconds not found in /metrics output")
 	}
 }
+
+func TestComponentCacheMetricsRegistered(t *testing.T) {
+	// Touch each metric so it appears in Gather output even at zero.
+	ComponentCacheRequests.Add(0)
+	ComponentCacheHits.Add(0)
+	ComponentCacheEntries.Set(0)
+
+	req := httptest.NewRequest("GET", "/metrics", nil)
+	w := httptest.NewRecorder()
+	promhttp.Handler().ServeHTTP(w, req)
+	body := w.Body.String()
+	for _, name := range []string{
+		"packyard_auth_component_cache_requests_total",
+		"packyard_auth_component_cache_hits_total",
+		"packyard_auth_component_cache_entries",
+	} {
+		if !strings.Contains(body, name) {
+			t.Errorf("%s not found in /metrics output", name)
+		}
+	}
+}

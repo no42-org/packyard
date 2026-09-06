@@ -8,6 +8,9 @@ Metrics are exposed by the auth service at `http://auth:9090/metrics` (Docker-in
 |--------|------|-------------|
 | `packyard_auth_requests_total{status="allowed\|denied\|error"}` | Counter | forwardAuth request outcomes |
 | `packyard_auth_duration_seconds` | Histogram | forwardAuth latency |
+| `packyard_auth_component_cache_requests_total` | Counter | Component lookups through the public-component cache (forward-auth and admin reads) |
+| `packyard_auth_component_cache_hits_total` | Counter | Lookups answered from the cache without a store call; hit ratio is hits / requests |
+| `packyard_auth_component_cache_entries` | Gauge | Components currently cached as public; should track the number of public components |
 
 Traefik exposes its own metrics on an internal `metrics` entrypoint at
 `http://traefik:8082/metrics` — Docker-internal only, not published to the
