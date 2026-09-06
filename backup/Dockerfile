@@ -1,5 +1,5 @@
 FROM alpine:3.24@sha256:28bd5fe8b56d1bd048e5babf5b10710ebe0bae67db86916198a6eec434943f8b
-ARG SQLITE_VERSION=3.48.0-r4
+ARG SQLITE_VERSION=3.53.4-r0
 
 RUN apk add --no-cache sqlite=${SQLITE_VERSION}
 
