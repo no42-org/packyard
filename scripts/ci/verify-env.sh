@@ -6,9 +6,10 @@
 #   1. every PACKYARD_* variable compose.yml forwards reaches the auth
 #      container, and the two that carry values in CI carry the right ones;
 #   2. compose refuses to start without ADMIN_DOMAIN (the `${VAR:?}` guard);
-#   3. every service this repository builds is running an image built from
-#      the commit under test (org.opencontainers.image.revision == CI_REVISION),
-#      not a pulled published tag.
+#   3. every service with a build: entry is running an image built from the
+#      commit under test (org.opencontainers.image.revision == CI_REVISION);
+#   4. the backup and aptly image tags in compose.yml match the Dockerfile ARGs
+#      the publish workflows derive them from.
 # Used by `make ci-verify-env`.
 set -euo pipefail
 # shellcheck source=scripts/ci/lib.sh
@@ -53,10 +54,28 @@ echo "compose refuses to start without ADMIN_DOMAIN, as intended"
 
 # --- 3. images under test ------------------------------------------------
 : "${CI_REVISION:?CI_REVISION is required (the commit the images were built from)}"
-for svc in auth rpm static backup aptly; do
-  cid=$(docker compose ps -q --status running "${svc}")
+# Derive the list from compose config so a new build: entry is asserted
+# automatically instead of silently escaping the check.
+BUILT_SERVICES=$(docker compose config --format json | jq -r '.services | to_entries[] | select(.value.build) | .key' | sort)
+[ -n "${BUILT_SERVICES}" ] || { echo "ERROR: no services with a build: entry in the compose configuration" >&2; exit 1; }
+for svc in ${BUILT_SERVICES}; do
+  cid=$(docker compose ps -q --status running "${svc}" 2>/dev/null) || cid=""
   [ "$(printf '%s\n' "${cid}" | grep -c .)" = "1" ] || { echo "ERROR: expected exactly one running ${svc} container, got: '${cid}'" >&2; exit 1; }
   rev=$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "${cid}")
-  [ "${rev}" = "${CI_REVISION}" ] || { echo "ERROR: ${svc} runs an image with revision '${rev}', want '${CI_REVISION}' (was it pulled instead of built?)" >&2; exit 1; }
+  case "${rev}" in
+    ""|"<no value>") echo "ERROR: ${svc} runs an image with no org.opencontainers.image.revision label (pulled, not built here)" >&2; exit 1 ;;
+  esac
+  [ "${rev}" = "${CI_REVISION}" ] || { echo "ERROR: ${svc} runs an image with revision '${rev}', want '${CI_REVISION}'" >&2; exit 1; }
 done
-echo "auth, rpm, static, backup and aptly run images built from ${CI_REVISION:0:12}"
+# shellcheck disable=SC2086  # word-splitting the service list is intended
+echo "$(printf '%s, ' ${BUILT_SERVICES} | sed 's/, $//') run images built from ${CI_REVISION:0:12}${CI_REVISION#"${CI_REVISION%-dirty}"}"
+
+# --- 4. published tags stay in sync with the Dockerfile ARGs -------------
+# build-backup.yml and build-aptly.yml derive the published tag from these
+# ARGs; compose.yml carries the tag by hand. Catch drift here.
+compose_tag() { docker compose config --format json | jq -r --arg s "$1" '.services[$s].image | split(":")[1]'; }
+sqlite_ver=$(sed -n 's/^ARG SQLITE_VERSION=//p' backup/Dockerfile); sqlite_ver="${sqlite_ver%-r*}"
+aptly_ver=$(sed -n 's/^ARG APTLY_VERSION=//p' aptly/Dockerfile)
+[ "$(compose_tag backup)" = "${sqlite_ver}" ] || { echo "ERROR: compose backup tag '$(compose_tag backup)' != Dockerfile SQLITE_VERSION '${sqlite_ver}'" >&2; exit 1; }
+[ "$(compose_tag aptly)" = "${aptly_ver}" ] || { echo "ERROR: compose aptly tag '$(compose_tag aptly)' != Dockerfile APTLY_VERSION '${aptly_ver}'" >&2; exit 1; }
+echo "backup and aptly compose tags match their Dockerfile ARGs (${sqlite_ver}, ${aptly_ver})"

@@ -123,10 +123,17 @@ ci-guard:
 	@case "$${COMPOSE_FILE:-}" in *compose.override.ci.yml*) ;; *) \
 	  echo "refusing: COMPOSE_FILE must include compose.override.ci.yml (got '$${COMPOSE_FILE:-}')"; exit 1 ;; esac
 	@test -n "$${COMPOSE_PROJECT_NAME:-}" || { echo "refusing: COMPOSE_PROJECT_NAME must be set (e.g. packyard-ci)"; exit 1; }
+	@test -n "$${CI_REVISION:-}" || { echo "refusing: CI_REVISION is empty (not a git checkout?); export CI_REVISION=<commit> to build under test"; exit 1; }
 
 # Commit under test; stamped into every locally built image as
-# org.opencontainers.image.revision and asserted by ci-verify-env.
-export CI_REVISION ?= $(shell git rev-parse HEAD)
+# org.opencontainers.image.revision and asserted by ci-verify-env. Evaluated
+# once. Suffixed -dirty when tracked files have uncommitted changes, so the
+# label never claims a commit the image was not built from. Empty outside a
+# git checkout; ci-guard then refuses with a clear message.
+ifeq ($(origin CI_REVISION), undefined)
+CI_REVISION := $(shell r=$$(git rev-parse HEAD 2>/dev/null) && { git diff --quiet HEAD -- 2>/dev/null && printf '%s' "$$r" || printf '%s-dirty' "$$r"; })
+endif
+export CI_REVISION
 
 ## ci-stack-up: Build the images under test, start the CI compose stack, wait for routing and health
 ci-stack-up: ci-guard
@@ -134,9 +141,11 @@ ci-stack-up: ci-guard
 	docker compose up -d
 	bash scripts/ci/wait-for-stack.sh
 
-## ci-stack-down: Stop the CI compose stack and remove its volumes
+## ci-stack-down: Stop the CI compose stack, remove its volumes and the locally built images
 ci-stack-down: ci-guard
 	docker compose down -v
+	@docker compose config --format json | jq -r '.services[] | select(.build) | .image' \
+	  | xargs -r docker image rm -f > /dev/null 2>&1 || true
 	rm -f .ci-valid-key
 
 ## ci-stack-logs: Dump all CI stack service logs (used on failure)
