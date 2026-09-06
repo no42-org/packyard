@@ -518,3 +518,61 @@ func FuzzExtractComponent(f *testing.F) {
 		}
 	})
 }
+
+// toggleErrComponentStore wraps a stubComponentStore and, once failing is set,
+// returns an error from GetComponent for every name. It simulates a database
+// outage that begins after the cache has been warmed.
+type toggleErrComponentStore struct {
+	*stubComponentStore
+	failing bool
+}
+
+func (s *toggleErrComponentStore) GetComponent(ctx context.Context, name string) (*store.Component, error) {
+	if s.failing {
+		return nil, errors.New("database is locked")
+	}
+	return s.stubComponentStore.GetComponent(ctx, name)
+}
+
+// TestForwardAuth_PublicComponentCache_SurvivesOutage covers issue #84 AC1 at
+// the handler level: with the CachedComponentStore in front of a store that
+// starts failing, a recently seen public component keeps returning 200 while an
+// unseen component fails closed with 503. With the cache disabled the same
+// sequence returns 503 for both, which is today's behaviour.
+func TestForwardAuth_PublicComponentCache_SurvivesOutage(t *testing.T) {
+	run := func(t *testing.T, ttl time.Duration, wantCached int) {
+		cs := newStubComponentStore()
+		cs.comps["core"] = &store.Component{Name: "core", Visibility: "public"}
+		cs.comps["minion"] = &store.Component{Name: "minion", Visibility: "private"}
+		toggle := &toggleErrComponentStore{stubComponentStore: cs}
+		h := &ForwardAuthHandler{
+			Store:          &mockStore{},
+			ComponentStore: store.NewCachedComponentStore(context.Background(), toggle, ttl),
+			Logger:         slog.Default(),
+		}
+		get := func(uri string) int {
+			req := httptest.NewRequest("GET", "/auth", nil)
+			req.Header.Set("X-Forwarded-Uri", uri)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+			return w.Code
+		}
+
+		if code := get("/rpm/core/2025/el9-x86_64/"); code != http.StatusOK {
+			t.Fatalf("warm-up: expected 200, got %d", code)
+		}
+		toggle.failing = true
+		if code := get("/rpm/core/2025/el9-x86_64/"); code != wantCached {
+			t.Fatalf("cached public component during outage: expected %d, got %d", wantCached, code)
+		}
+		if code := get("/rpm/minion/2025/el9-x86_64/"); code != http.StatusServiceUnavailable {
+			t.Fatalf("uncached component during outage: expected 503, got %d", code)
+		}
+	}
+	t.Run("cache enabled serves public from cache", func(t *testing.T) {
+		run(t, 30*time.Second, http.StatusOK)
+	})
+	t.Run("cache disabled fails closed", func(t *testing.T) {
+		run(t, 0, http.StatusServiceUnavailable)
+	})
+}

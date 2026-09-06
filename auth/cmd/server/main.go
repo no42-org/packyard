@@ -121,6 +121,19 @@ func main() {
 	defer serverCancel()
 	stateStore := auth.NewMemStateStore(serverCtx, 5*time.Minute)
 
+	// Public-component cache for forward-auth (issue #84). Public lookups are
+	// served from memory for up to this long, so public traffic survives
+	// short store outages; private traffic still fails closed. The TTL is
+	// also the bound on how long a public→private change can lag on an
+	// instance that did not handle the request. 0 disables the cache.
+	cacheTTL, err := envDuration("PACKYARD_PUBLIC_COMPONENT_CACHE_TTL", 30*time.Second, time.Hour)
+	if err != nil {
+		logger.Error("invalid public-component cache configuration", slog.String("error", err.Error()))
+		os.Exit(1)
+	}
+	comps := store.NewCachedComponentStore(serverCtx, st, cacheTTL)
+	logger.Info("public-component cache configured", slog.Duration("ttl", cacheTTL), slog.Bool("enabled", cacheTTL > 0))
+
 	// Auditor: the SQLiteStore implements audit.Auditor via its Write method,
 	// so all audit calls now persist to the audit_log table. The store
 	// internally logs persistence failures (fire-and-forget per the Auditor
@@ -165,7 +178,7 @@ func main() {
 		w.WriteHeader(http.StatusOK)
 	})
 
-	forwardAuth := handler.NewForwardAuthHandler(st, st, st, logger)
+	forwardAuth := handler.NewForwardAuthHandler(st, comps, st, logger)
 	r.Get("/auth", forwardAuth.ServeHTTP)
 
 	authH := handler.NewAuthHandler(st, auditor, logger)
@@ -175,7 +188,7 @@ func main() {
 
 	keys := handler.NewKeysHandler(st, st, st, auditor, logger, validComponents, componentList, compVisibility)
 	rpmDataRoot := os.Getenv("RPM_DATA_ROOT")
-	components := handler.NewComponentsHandler(st, logger, rpmDataRoot)
+	components := handler.NewComponentsHandler(comps, logger, rpmDataRoot)
 	accounts := handler.NewAccountsHandler(st, st, auditor, logger, compVisibility)
 	auditH := handler.NewAuditHandler(st, logger)
 	operators := handler.NewOperatorsHandler(st, st, auditor, logger)
