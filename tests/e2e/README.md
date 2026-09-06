@@ -189,7 +189,7 @@ These tests are integration tests, not unit tests. They require:
 - Format-specific clients (`dnf` for RPM, `apt-get` for DEB, `docker`/`podman` for OCI)
 - Network access to `BASE_URL`
 
-**Recommended CI approach:** Run in a dedicated integration test job that spins up the full stack via `docker compose up -d`, waits for health checks, seeds test data, then runs the e2e scripts.
+**CI approach (`.github/workflows/integration.yml`):** the workflow starts the stack with `make ci-stack-up`, then runs `make ci-seed`. Because the admin API sits behind OAuth, the seed script (`scripts/ci/seed-integration.sh`) inserts one session row for the bootstrap operator into the auth database using the backup image as a one-off `sqlite3` sidecar on the `auth-db` volume, verifies it with `GET /api/v1/auth/whoami`, and then provisions components and a key through the real API with the session cookie and an `Origin` header matching `PACKYARD_ADMIN_HOST`. The suite then runs via `make e2e-observability`. To reproduce locally, export `COMPOSE_PROJECT_NAME`, `COMPOSE_FILE=compose.yml:compose.override.ci.yml`, write a `.env` like the workflow's, and run the same targets.
 
 ---
 

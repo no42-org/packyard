@@ -1,6 +1,27 @@
 name: Integration
 
+# Full-stack end-to-end run: brings the compose stack up with the CI override
+# (plain HTTP, ports published to the runner), seeds an operator session and
+# test data through the real admin API, and runs the e2e observability suite.
+# All steps call Makefile targets so the same commands work locally.
+
 on:
+  push:
+    branches: [main]
+    paths:
+      - 'compose.yml'
+      - 'compose.override.ci.yml'
+      - 'traefik/**'
+      - 'auth/**'
+      - 'rpm/**'
+      - 'static/**'
+      - 'backup/**'
+      - 'tests/e2e/**'
+      - 'scripts/ci/**'
+      - 'Makefile'
+      - '.github/workflows/integration.yml'
+  schedule:
+    - cron: '17 4 * * 1'   # weekly, so a broken stack is noticed even without stack changes
   workflow_dispatch:
 
 permissions:
@@ -10,104 +31,55 @@ concurrency:
   group: integration-${{ github.ref }}
   cancel-in-progress: true
 
+env:
+  COMPOSE_PROJECT_NAME: packyard-ci
+  COMPOSE_FILE: compose.yml:compose.override.ci.yml
+
 jobs:
 
   integration:
     name: Full stack + observability
     runs-on: ubuntu-24.04
-    timeout-minutes: 20
+    timeout-minutes: 25
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
 
-      - name: Create .env
+      - name: Create CI .env
+        # Every ${VAR:?} guard in compose.yml must be satisfied. Hostnames are
+        # placeholders: the CI Traefik config routes by path, not by host, and
+        # ADMIN_DOMAIN only needs to match the Origin header the seed script sends.
         run: |
           cat > .env <<'EOF'
           ACME_EMAIL=ci@example.com
+          PKG_DOMAIN=pkg.ci.local
+          ADMIN_DOMAIN=admin.ci.local
           RUSTFS_ACCESS_KEY=ci-access-key
           RUSTFS_SECRET_KEY=ci-secret-key-value
+          PACKYARD_BOOTSTRAP_OPERATOR_EMAIL=ci-operator@example.org
           EOF
 
-      - name: Start stack (CI override — HTTP, no TLS)
-        run: |
-          docker compose \
-            -f compose.yml \
-            -f compose.override.ci.yml \
-            up -d
+      - name: Start stack
+        run: make ci-stack-up
 
-      - name: Wait for Traefik to be ready
-        run: |
-          echo "Waiting for Traefik..."
-          timeout 30 bash -c \
-            'until curl -s -o /dev/null -w "%{http_code}" http://localhost/gpg/lts.asc | grep -qE "^(200|404)$"; do sleep 1; done'
-          echo "Traefik is ready."
+      - name: Verify environment passthrough and compose guards
+        run: make ci-verify-env
 
-      - name: Wait for auth to be healthy
-        run: |
-          echo "Waiting for auth service..."
-          timeout 60 bash -c \
-            'until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done'
-          echo "Auth is healthy."
-
-      - name: Seed CI components
-        run: |
-          # Provision the CI component set (mixed visibility — exercises both auth code paths):
-          #   core:   public  — unauthenticated access allowed
-          #   minion: private — credentials required
-          # Treat 409 (already exists) as success so re-runs are idempotent.
-          for payload in \
-            '{"name":"core","visibility":"public","rpm_series":["2025"],"rpm_os_families":["el9"],"rpm_architectures":["x86_64"]}' \
-            '{"name":"minion","visibility":"private","rpm_series":["2025"],"rpm_os_families":["el9"],"rpm_architectures":["x86_64"]}'; do
-            HTTP_CODE=$(curl -s -o /dev/null -w "%{http_code}" -X POST http://localhost:8080/api/v1/components \
-              -H 'Content-Type: application/json' \
-              -d "${payload}")
-            if [ "${HTTP_CODE}" != "201" ] && [ "${HTTP_CODE}" != "409" ]; then
-              echo "ERROR: unexpected HTTP ${HTTP_CODE} seeding component" >&2
-              exit 1
-            fi
-          done
-          echo "Components provisioned."
-          # Restart auth so it reloads component sets from the database.
-          docker compose -f compose.yml -f compose.override.ci.yml restart auth \
-            || { echo "ERROR: docker compose restart auth failed" >&2; exit 1; }
-          timeout 60 bash -c \
-            'until curl -sf http://localhost:8080/health > /dev/null; do sleep 2; done'
-          echo "Auth reloaded with new components."
-
-      - name: Seed CI subscription key
-        run: |
-          RESPONSE=$(curl -sf http://localhost:8080/api/v1/keys \
-            -H 'Content-Type: application/json' \
-            -d '{"component":"core","label":"ci-integration-test"}')
-          echo "Create key response: ${RESPONSE}"
-          KEY_ID=$(echo "${RESPONSE}" | jq -r '.id')
-          if [ -z "${KEY_ID}" ] || [ "${KEY_ID}" = "null" ]; then
-            echo "ERROR: failed to extract key ID from response" >&2
-            exit 1
-          fi
-          echo "VALID_KEY=${KEY_ID}" >> "${GITHUB_ENV}"
-          echo "Seeded subscription key: ${KEY_ID}"
+      - name: Seed operator session, components and key
+        env:
+          ADMIN_ORIGIN: https://admin.ci.local
+          BOOTSTRAP_EMAIL: ci-operator@example.org
+        run: make ci-seed
 
       - name: Run observability tests (AC1–AC4)
-        env:
-          BASE_URL: http://localhost
-          METRICS_URL: http://localhost:9090/metrics
-        run: bash tests/e2e/observability.sh
+        run: make e2e-observability
 
       - name: Dump service logs on failure
         if: failure()
-        run: |
-          docker compose \
-            -f compose.yml \
-            -f compose.override.ci.yml \
-            logs --no-color
+        run: make ci-stack-logs
 
       - name: Tear down stack
         if: always()
-        run: |
-          docker compose \
-            -f compose.yml \
-            -f compose.override.ci.yml \
-            down -v
+        run: make ci-stack-down
