@@ -204,7 +204,7 @@ services:
       - backend
 
   backup:
-    image: ghcr.io/no42-org/packyard-backup:3.48.0
+    image: ghcr.io/no42-org/packyard-backup:3.53.4
     restart: unless-stopped
     depends_on:
       auth:
