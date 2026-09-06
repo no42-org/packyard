@@ -6,6 +6,24 @@ name: Integration
 # All steps call Makefile targets so the same commands work locally.
 
 on:
+  pull_request:
+    paths:
+      - 'compose.yml'
+      - 'compose.override.ci.yml'
+      - 'traefik/**'
+      - 'auth/**'
+      - 'rpm/**'
+      - 'static/**'
+      - 'backup/**'
+      - 'aptly/**'
+      - 'deb/**'
+      - 'zot/**'
+      - 'rustfs/**'
+      - 'scripts/backup-keystore.sh'
+      - 'tests/e2e/**'
+      - 'scripts/ci/**'
+      - 'Makefile'
+      - '.github/workflows/integration.yml'
   push:
     branches: [main]
     paths:
@@ -16,6 +34,11 @@ on:
       - 'rpm/**'
       - 'static/**'
       - 'backup/**'
+      - 'aptly/**'
+      - 'deb/**'
+      - 'zot/**'
+      - 'rustfs/**'
+      - 'scripts/backup-keystore.sh'
       - 'tests/e2e/**'
       - 'scripts/ci/**'
       - 'Makefile'
@@ -27,9 +50,11 @@ on:
 permissions:
   contents: read
 
+# One run per event and ref. Never cancel: a post-merge run that is cancelled
+# by the next merge leaves that commit without a verdict and skips the log dump.
 concurrency:
-  group: integration-${{ github.ref }}
-  cancel-in-progress: true
+  group: integration-${{ github.event_name }}-${{ github.ref }}
+  cancel-in-progress: false
 
 env:
   COMPOSE_PROJECT_NAME: packyard-ci
@@ -49,8 +74,8 @@ jobs:
 
       - name: Create CI .env
         # Every ${VAR:?} guard in compose.yml must be satisfied. Hostnames are
-        # placeholders: the CI Traefik config routes by path, not by host, and
-        # ADMIN_DOMAIN only needs to match the Origin header the seed script sends.
+        # placeholders: the CI Traefik config routes by path, not by host. The
+        # seed script derives its Origin header from ADMIN_DOMAIN via compose.
         run: |
           cat > .env <<'EOF'
           ACME_EMAIL=ci@example.com
@@ -67,10 +92,9 @@ jobs:
       - name: Verify environment passthrough and compose guards
         run: make ci-verify-env
 
-      - name: Seed operator session, components and key
-        env:
-          ADMIN_ORIGIN: https://admin.ci.local
-          BOOTSTRAP_EMAIL: ci-operator@example.org
+      - name: Seed operator session, components, account and key
+        # Admin host and bootstrap email are read from `docker compose config`,
+        # so they always match what the auth container was started with.
         run: make ci-seed
 
       - name: Run observability tests (AC1–AC4)

@@ -46,3 +46,6 @@ site/
 # Build artefacts
 bin/
 auth/server
+
+# Integration run artefact (subscription key seeded by scripts/ci/seed-integration.sh)
+.ci-valid-key
