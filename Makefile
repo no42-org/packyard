@@ -124,8 +124,13 @@ ci-guard:
 	  echo "refusing: COMPOSE_FILE must include compose.override.ci.yml (got '$${COMPOSE_FILE:-}')"; exit 1 ;; esac
 	@test -n "$${COMPOSE_PROJECT_NAME:-}" || { echo "refusing: COMPOSE_PROJECT_NAME must be set (e.g. packyard-ci)"; exit 1; }
 
-## ci-stack-up: Start the CI compose stack, wait for every service, Traefik routing and auth health
+# Commit under test; stamped into every locally built image as
+# org.opencontainers.image.revision and asserted by ci-verify-env.
+export CI_REVISION ?= $(shell git rev-parse HEAD)
+
+## ci-stack-up: Build the images under test, start the CI compose stack, wait for routing and health
 ci-stack-up: ci-guard
+	docker compose build
 	docker compose up -d
 	bash scripts/ci/wait-for-stack.sh
 

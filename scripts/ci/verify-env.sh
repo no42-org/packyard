@@ -2,10 +2,13 @@
 # Copyright 2026 Ronny Trommer <ronny@no42.org>
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# verify-env.sh — prove two things about the running CI stack:
+# verify-env.sh — prove three things about the running CI stack:
 #   1. every PACKYARD_* variable compose.yml forwards reaches the auth
 #      container, and the two that carry values in CI carry the right ones;
-#   2. compose refuses to start without ADMIN_DOMAIN (the `${VAR:?}` guard).
+#   2. compose refuses to start without ADMIN_DOMAIN (the `${VAR:?}` guard);
+#   3. every service this repository builds is running an image built from
+#      the commit under test (org.opencontainers.image.revision == CI_REVISION),
+#      not a pulled published tag.
 # Used by `make ci-verify-env`.
 set -euo pipefail
 # shellcheck source=scripts/ci/lib.sh
@@ -47,3 +50,13 @@ if env -u ADMIN_DOMAIN docker compose --env-file "${TMP}" config > /dev/null 2> 
 fi
 grep -q 'ADMIN_DOMAIN' "${TMP}.err" || { echo "ERROR: compose failed for another reason:" >&2; cat "${TMP}.err" >&2; exit 1; }
 echo "compose refuses to start without ADMIN_DOMAIN, as intended"
+
+# --- 3. images under test ------------------------------------------------
+: "${CI_REVISION:?CI_REVISION is required (the commit the images were built from)}"
+for svc in auth rpm static backup aptly; do
+  cid=$(docker compose ps -q --status running "${svc}")
+  [ "$(printf '%s\n' "${cid}" | grep -c .)" = "1" ] || { echo "ERROR: expected exactly one running ${svc} container, got: '${cid}'" >&2; exit 1; }
+  rev=$(docker inspect --format '{{index .Config.Labels "org.opencontainers.image.revision"}}' "${cid}")
+  [ "${rev}" = "${CI_REVISION}" ] || { echo "ERROR: ${svc} runs an image with revision '${rev}', want '${CI_REVISION}' (was it pulled instead of built?)" >&2; exit 1; }
+done
+echo "auth, rpm, static, backup and aptly run images built from ${CI_REVISION:0:12}"

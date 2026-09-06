@@ -1,7 +1,10 @@
 # compose.override.ci.yml — CI-only overrides (Option A)
 #
-# Swaps Traefik to plaintext HTTP (no TLS/ACME) and publishes auth ports
-# to the host so the CI workflow can seed keys and read metrics.
+# Swaps Traefik to plaintext HTTP (no TLS/ACME), publishes auth ports to the
+# host so the CI workflow can seed keys and read metrics, and builds every
+# image this repository publishes from the working tree instead of pulling the
+# published tag, so the suite exercises the commit under test. Each built image
+# is labelled with the commit (CI_REVISION) and `make ci-verify-env` asserts it.
 #
 # Usage:
 #   docker compose -f compose.yml -f compose.override.ci.yml up -d
@@ -20,6 +23,40 @@ services:
       - ./traefik/dynamic-ci:/etc/traefik/dynamic-ci:ro
 
   auth:
+    build:
+      context: ./auth
+      labels:
+        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
+    pull_policy: build
     ports:
       - "127.0.0.1:8080:8080"   # admin API — key seeding from CI runner
       - "127.0.0.1:9090:9090"   # Prometheus metrics — observability.sh AC1
+
+  rpm:
+    build:
+      context: ./rpm
+      labels:
+        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
+    pull_policy: build
+
+  static:
+    build:
+      context: ./static
+      labels:
+        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
+    pull_policy: build
+
+  backup:
+    build:
+      context: .
+      dockerfile: backup/Dockerfile
+      labels:
+        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
+    pull_policy: build
+
+  aptly:
+    build:
+      context: ./aptly
+      labels:
+        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
+    pull_policy: build
