@@ -192,8 +192,9 @@ endpoints below remain useful for queries; routine issuance goes through
 ## Components
 
 Components are provisioned via the admin API and stored in the SQLite
-database. Forward-auth resolves component visibility via a live database
-lookup on every request; the `GET /api/v1/keys?component=` filter and
+database. Forward-auth resolves component visibility from the database,
+caching `public` results for `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` (30s by
+default) and evicting on `PATCH`/`DELETE`; the `GET /api/v1/keys?component=` filter and
 `component_visibility` field in key responses use a snapshot loaded at
 startup (restart required to pick up new components in those paths).
 

@@ -115,13 +115,13 @@ gh run list --workflow=promote-oci.yml
 
 ### Changing component visibility
 
-Forward-auth caches `public` visibility for `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` (default 30s). Changing a component from private to public takes effect on the next request. Changing it from public to private takes effect immediately on the auth instance that handled the change, but another instance can keep serving it as public for up to one TTL. Before promoting content that must not be public into a component you have just made private:
+Forward-auth caches `public` visibility for `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` (30s unless set in `.env`). Changing a component from private to public takes effect on the next request. Changing it from public to private through `PATCH /api/v1/components/{name}` takes effect immediately on the auth instance that handled the request, which on the shipped single-instance Compose stack is the only instance. The cache can still serve the old answer for up to one TTL when the change did not go through that API: a second auth instance, a direct edit of the SQLite database, or a restore of the `auth-db` volume while the service is running. Before promoting content that must not be public into a component you have just made private:
 
 1. Change the visibility: `PATCH /api/v1/components/{name}` with `{"visibility": "private"}`.
-2. Wait one TTL (30s by default; check `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` in `.env`).
+2. Wait one TTL. This is a no-op safety margin on a single instance and required in the cases above.
 3. Promote.
 
-To take the cache out of the picture entirely, set `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL=0` in `.env` and restart the auth service; no image change or redeploy is needed.
+To take the cache out of the picture entirely, set `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL=0` in `.env` and recreate the container with `docker compose up -d auth`. A plain `docker compose restart` keeps the old environment and will not apply the change. No image change is needed.
 
 ---
 

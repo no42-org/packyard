@@ -53,7 +53,9 @@ A subscription key is a 64-character hex secret bound to a single
 - enforces the key's component against the request path
   (`/rpm/{component}/…` etc.) — a `core` key cannot fetch `minion`;
 - fails closed: if the auth service is unreachable, Traefik returns 503
-  rather than admitting the request.
+  rather than admitting the request; if the auth service cannot reach its
+  database, it returns 503 for everything except public components it has
+  confirmed within the cache TTL described below.
 
 Forward-auth queries the database live on every request for private
 components — key revocation and account suspension take effect on the next
@@ -61,9 +63,11 @@ subscriber request with no service restart needed.
 
 Public components take a fast path.
 The auth service keeps an in-memory, positive-only cache of components whose visibility is `public`, each entry valid for `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` (default 30s).
-A request for a cached public component is allowed without touching the database, so public package traffic survives database outages shorter than the TTL.
+A request for a cached public component is allowed without touching the database, so a public component that was confirmed public shortly before a database outage keeps being served for the remainder of its entry's TTL.
+Entries expire one TTL after they were written, not after the outage began, and a component that was not already cached fails closed like everything else.
 Nothing else is ever cached: a `private` result, an unknown component, or a database error always goes back to the database and fails closed with 503 when the database is unavailable.
-Changing a component's visibility or deleting it evicts its entry immediately on the instance that handled the change; on any other instance the old answer can persist for at most one TTL.
+Changing a component's visibility or deleting it through the admin API evicts its entry immediately on the instance that handled the change.
+Any change that did not go through that instance's API, for example a second auth instance, a direct database edit, or a restore of the `auth-db` volume, becomes visible within one TTL.
 That TTL is therefore the revocation bound for public-to-private changes, and the release runbook asks operators to wait one TTL after such a change before promoting content that must not be public.
 Setting the TTL to `0` disables the cache and restores the live-lookup behaviour for every request.
 

@@ -82,7 +82,7 @@ curl -s -X POST http://localhost:8080/api/v1/keys \
 ```
 
 :::note
-`component_visibility` is derived from a startup-loaded snapshot. Because `core` was provisioned after the service started, the snapshot does not include it and the field shows `"private"` (the fallback). This is expected — the field is informational only. Forward-auth reads visibility live from the database on every request, so `core` is publicly accessible immediately without a restart.
+`component_visibility` is derived from a startup-loaded snapshot. Because `core` was provisioned after the service started, the snapshot does not include it and the field shows `"private"` (the fallback). This is expected — the field is informational only. Forward-auth checks visibility against the database on the first request and then caches a `public` result for `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL` (30s by default), so `core` is publicly accessible immediately without a restart.
 :::
 
 ## 4. Make an authenticated request
