@@ -3,8 +3,11 @@
 # Swaps Traefik to plaintext HTTP (no TLS/ACME), publishes auth ports to the
 # host so the CI workflow can seed keys and read metrics, and builds every
 # image this repository publishes from the working tree instead of pulling the
-# published tag, so the suite exercises the commit under test. Each built image
-# is labelled with the commit (CI_REVISION) and `make ci-verify-env` asserts it.
+# published tag, so the suite exercises the working tree at the commit under
+# test. Each built image is labelled with the commit (CI_REVISION, suffixed
+# `-dirty` when the tree has uncommitted changes) and `make ci-verify-env`
+# asserts it. `make ci-stack-up` runs an explicit build; there is deliberately
+# no `pull_policy: build`, which would rebuild on every `up`.
 #
 # Usage:
 #   docker compose -f compose.yml -f compose.override.ci.yml up -d
@@ -12,6 +15,12 @@
 # The base compose.yml port mapping for Traefik (443) is merged in by
 # Compose but harmless — Traefik only listens on the entryPoints defined in
 # traefik.ci.yml (web:80 and admin:8088).
+
+# Every image built here is stamped with the commit under test. The value is
+# enforced non-empty by `make ci-guard` rather than by a `${VAR:?}` guard, so
+# read-only compose commands (down, logs, ps) keep working when it is unset.
+x-ci-image-labels: &ci-image-labels
+  org.opencontainers.image.revision: ${CI_REVISION:-}
 
 services:
 
@@ -25,9 +34,7 @@ services:
   auth:
     build:
       context: ./auth
-      labels:
-        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
-    pull_policy: build
+      labels: *ci-image-labels
     ports:
       - "127.0.0.1:8080:8080"   # admin API — key seeding from CI runner
       - "127.0.0.1:9090:9090"   # Prometheus metrics — observability.sh AC1
@@ -35,28 +42,20 @@ services:
   rpm:
     build:
       context: ./rpm
-      labels:
-        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
-    pull_policy: build
+      labels: *ci-image-labels
 
   static:
     build:
       context: ./static
-      labels:
-        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
-    pull_policy: build
+      labels: *ci-image-labels
 
   backup:
     build:
       context: .
       dockerfile: backup/Dockerfile
-      labels:
-        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
-    pull_policy: build
+      labels: *ci-image-labels
 
   aptly:
     build:
       context: ./aptly
-      labels:
-        org.opencontainers.image.revision: ${CI_REVISION:?CI_REVISION must be set (git rev-parse HEAD)}
-    pull_policy: build
+      labels: *ci-image-labels
