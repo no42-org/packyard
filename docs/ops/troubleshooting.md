@@ -118,9 +118,12 @@ curl -s "https://admin.pkg.example.org/api/v1/keys?account=${ACCOUNT_ID}" \
 
 If a component has `visibility: public` (set via `POST /api/v1/components` or
 updated via `PATCH /api/v1/components/{name}`), the auth service allows
-requests to its paths without inspecting credentials. Forward-auth reads
-visibility from the database on every request — changes take effect
-immediately without a restart. If a subscriber reports getting `401` on a
+requests to its paths without inspecting credentials. A change to `public`
+takes effect on the next request. A change to `private` made through the
+admin API takes effect immediately on the instance that handled it; a
+cached `public` answer can persist for up to `PACKYARD_PUBLIC_COMPONENT_CACHE_TTL`
+(30s by default) only if the change bypassed that API, such as a direct
+database edit or a volume restore. If a subscriber reports getting `401` on a
 public component path, confirm the component's current visibility:
 
 ```bash
@@ -130,7 +133,7 @@ curl -s "https://admin.pkg.example.org/api/v1/components/core" \
 
 **Restart semantics — when a restart is and is not required:**
 
-- **Key creation** (`POST /api/v1/keys`) and **forward-auth decisions** both query the database on every request — a restart is **not** needed for new components, deleted components, or visibility changes to take effect.
+- **Key creation** (`POST /api/v1/keys`) and **forward-auth decisions** query the database (forward-auth serves recently confirmed `public` components from a short in-memory cache, evicted on API changes) — a restart is **not** needed for new components, deleted components, or visibility changes to take effect.
 - **Key list filter** (`GET /api/v1/keys?component=<name>`) validates the component name against an in-memory map loaded at startup — it returns `400 INVALID_COMPONENT` for a newly provisioned component until the service is restarted.
 - **`component_visibility` in key responses** is also derived from the startup-loaded map — it may show a stale value after a `PATCH /api/v1/components/{name}` visibility change until the service is restarted. This is cosmetic only; forward-auth always uses the live value.
 

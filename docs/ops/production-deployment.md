@@ -98,6 +98,10 @@ PACKYARD_MICROSOFT_CLIENT_SECRET=<from Entra app registration>
 PACKYARD_MICROSOFT_REDIRECT_URI=https://admin.pkg.example.org/api/v1/auth/callback/microsoft
 PACKYARD_MICROSOFT_TENANT_ID=<from Entra directory>
 
+# Forward-auth public-component cache TTL (optional; unset = 30s, 0 disables,
+# max 1h). See docs/reference/configuration.md.
+#PACKYARD_PUBLIC_COMPONENT_CACHE_TTL=30s
+
 # RustFS staging storage (generate with: openssl rand -hex 20)
 RUSTFS_ACCESS_KEY=<generate>
 RUSTFS_SECRET_KEY=<generate>

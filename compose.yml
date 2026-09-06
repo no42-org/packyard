@@ -47,6 +47,23 @@ services:
       # guard to enforce same-origin on /api/v1/* mutations. Derived from
       # ADMIN_DOMAIN so prod stays a single source of truth.
       - PACKYARD_ADMIN_HOST=https://${ADMIN_DOMAIN:?ADMIN_DOMAIN must be set in .env}
+      # Operator bootstrap and OAuth providers — values come from .env. Compose
+      # only uses .env for interpolation, so each variable must be forwarded
+      # explicitly here to reach the container. `${VAR:-}` forwards an unset
+      # variable as empty; the auth service treats an empty provider group or
+      # bootstrap email as "not configured".
+      - PACKYARD_BOOTSTRAP_OPERATOR_EMAIL=${PACKYARD_BOOTSTRAP_OPERATOR_EMAIL:-}
+      - PACKYARD_GITHUB_CLIENT_ID=${PACKYARD_GITHUB_CLIENT_ID:-}
+      - PACKYARD_GITHUB_CLIENT_SECRET=${PACKYARD_GITHUB_CLIENT_SECRET:-}
+      - PACKYARD_GITHUB_REDIRECT_URI=${PACKYARD_GITHUB_REDIRECT_URI:-}
+      - PACKYARD_GITHUB_ORG=${PACKYARD_GITHUB_ORG:-}
+      - PACKYARD_MICROSOFT_CLIENT_ID=${PACKYARD_MICROSOFT_CLIENT_ID:-}
+      - PACKYARD_MICROSOFT_CLIENT_SECRET=${PACKYARD_MICROSOFT_CLIENT_SECRET:-}
+      - PACKYARD_MICROSOFT_REDIRECT_URI=${PACKYARD_MICROSOFT_REDIRECT_URI:-}
+      - PACKYARD_MICROSOFT_TENANT_ID=${PACKYARD_MICROSOFT_TENANT_ID:-}
+      # Public-component cache TTL for forward-auth. Unset or empty = 30s
+      # default; "0" disables. See docs/reference/configuration.md.
+      - PACKYARD_PUBLIC_COMPONENT_CACHE_TTL=${PACKYARD_PUBLIC_COMPONENT_CACHE_TTL:-}
     volumes:
       - auth-db:/data/db
       - auth-backup:/data/backup
