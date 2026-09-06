@@ -50,14 +50,39 @@ func (s *countingComponentStore) setErr(err error) {
 	s.err = err
 }
 
-func (s *countingComponentStore) GetComponent(_ context.Context, name string) (*Component, error) {
+func (s *countingComponentStore) setUpdateErr(err error) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.updateErr = err
+}
+
+func (s *countingComponentStore) setGate(g chan struct{}) {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	s.gate = g
+}
+
+func (s *countingComponentStore) GetComponent(ctx context.Context, name string) (*Component, error) {
+	// Honour the context like a real driver would, so tests about which
+	// context reaches the store are meaningful.
+	if err := ctx.Err(); err != nil {
+		return nil, err
+	}
 	s.mu.Lock()
 	s.getCalls++
 	err, gate := s.err, s.gate
 	c, ok := s.comps[name]
+	if ok {
+		cp := *c
+		cp.RPMSeries = append([]string(nil), c.RPMSeries...)
+		c = &cp
+	}
 	s.mu.Unlock()
 	if gate != nil {
 		<-gate
+	}
+	if err := ctx.Err(); err != nil {
+		return nil, err
 	}
 	if err != nil {
 		return nil, err
@@ -65,8 +90,7 @@ func (s *countingComponentStore) GetComponent(_ context.Context, name string) (*
 	if !ok {
 		return nil, ErrComponentNotFound
 	}
-	cp := *c
-	return &cp, nil
+	return c, nil
 }
 
 func (s *countingComponentStore) UpdateComponentVisibility(_ context.Context, name, visibility string) (*Component, error) {
@@ -116,7 +140,9 @@ func (s *countingComponentStore) CountActiveComponentKeys(context.Context, strin
 
 const testTTL = 30 * time.Second
 
-func public(name string) *Component  { return &Component{Name: name, Visibility: "public"} }
+func public(name string) *Component {
+	return &Component{Name: name, Visibility: "public", RPMSeries: []string{"2025"}}
+}
 func private(name string) *Component { return &Component{Name: name, Visibility: "private"} }
 
 func mustGet(t *testing.T, cs ComponentStore, name string) *Component {
@@ -150,7 +176,7 @@ func TestCached_HitAvoidsInner(t *testing.T) {
 
 func TestCached_PrivateAndNotFoundNeverCached(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
-		inner := newCountingStore(private("secret"))
+		inner := newCountingStore(private("secret"), &Component{Name: "odd", Visibility: ""})
 		cs := NewCachedComponentStore(context.Background(), inner, testTTL)
 
 		for i := 0; i < 2; i++ {
@@ -163,8 +189,11 @@ func TestCached_PrivateAndNotFoundNeverCached(t *testing.T) {
 				t.Fatalf("ghost err = %v, want ErrComponentNotFound", err)
 			}
 		}
-		if inner.calls() != 4 {
-			t.Fatalf("inner calls = %d, want 4 (nothing cached)", inner.calls())
+		for i := 0; i < 2; i++ {
+			mustGet(t, cs, "odd") // unknown visibility is treated as not public
+		}
+		if inner.calls() != 6 {
+			t.Fatalf("inner calls = %d, want 6 (nothing cached)", inner.calls())
 		}
 		if n := cs.Len(); n != 0 {
 			t.Fatalf("cache entries = %d, want 0", n)
@@ -183,10 +212,10 @@ func TestCached_TTLExpiry(t *testing.T) {
 		if inner.calls() != 1 {
 			t.Fatalf("inner calls before expiry = %d, want 1", inner.calls())
 		}
-		time.Sleep(2 * time.Nanosecond)
+		time.Sleep(time.Nanosecond) // now == expiresAt exactly: a miss, since lookup uses Before
 		mustGet(t, cs, "core")
 		if inner.calls() != 2 {
-			t.Fatalf("inner calls after expiry = %d, want 2", inner.calls())
+			t.Fatalf("inner calls at exact expiry = %d, want 2", inner.calls())
 		}
 	})
 }
@@ -265,7 +294,7 @@ func TestCached_FailedWriteDoesNotEvict(t *testing.T) {
 		cs := NewCachedComponentStore(context.Background(), inner, testTTL)
 		mustGet(t, cs, "core")
 
-		inner.updateErr = errors.New("disk full")
+		inner.setUpdateErr(errors.New("disk full"))
 		if _, err := cs.UpdateComponentVisibility(context.Background(), "core", "private"); err == nil {
 			t.Fatal("expected write error")
 		}
@@ -279,7 +308,8 @@ func TestCached_FailedWriteDoesNotEvict(t *testing.T) {
 func TestCached_StampedeCollapsesToOneInnerCall(t *testing.T) {
 	synctest.Test(t, func(t *testing.T) {
 		inner := newCountingStore(public("core"))
-		inner.gate = make(chan struct{})
+		gate := make(chan struct{})
+		inner.setGate(gate)
 		cs := NewCachedComponentStore(context.Background(), inner, testTTL)
 
 		const n = 25
@@ -293,7 +323,7 @@ func TestCached_StampedeCollapsesToOneInnerCall(t *testing.T) {
 			}(i)
 		}
 		synctest.Wait() // every caller is now blocked behind the single in-flight lookup
-		close(inner.gate)
+		close(gate)
 		wg.Wait()
 
 		for i, err := range results {
@@ -314,9 +344,13 @@ func TestCached_ReturnsCopies(t *testing.T) {
 
 		first := mustGet(t, cs, "core")
 		first.Visibility = "mutated"
+		first.RPMSeries[0] = "mutated"
 		second := mustGet(t, cs, "core")
 		if second.Visibility != "public" {
 			t.Fatalf("cached entry was mutated through a returned pointer: %q", second.Visibility)
+		}
+		if second.RPMSeries[0] != "2025" {
+			t.Fatalf("cached slice was mutated through a returned value: %v", second.RPMSeries)
 		}
 	})
 }
@@ -344,6 +378,76 @@ func TestCached_InnerCallUsesServiceContextNotCallers(t *testing.T) {
 		cancel() // an already-cancelled request context must not fail the lookup
 		if _, err := cs.GetComponent(ctx, "core"); err != nil {
 			t.Fatalf("lookup with cancelled caller context: %v", err)
+		}
+	})
+}
+
+// TestCached_WriteDuringInFlightLookupIsNotResurrected covers the race found
+// in review: a lookup that read "public" before a write landed must not insert
+// that stale value after the write evicted the name.
+func TestCached_WriteDuringInFlightLookupIsNotResurrected(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		inner := newCountingStore(public("core"))
+		gate := make(chan struct{})
+		inner.setGate(gate)
+		cs := NewCachedComponentStore(context.Background(), inner, testTTL)
+
+		done := make(chan struct{})
+		go func() {
+			defer close(done)
+			// The fake snapshots "public" before blocking on the gate.
+			_, _ = cs.GetComponent(context.Background(), "core")
+		}()
+		synctest.Wait() // lookup is in flight, blocked on the gate
+
+		// Operator flips visibility while the read is in flight.
+		inner.setGate(nil)
+		if _, err := cs.UpdateComponentVisibility(context.Background(), "core", "private"); err != nil {
+			t.Fatal(err)
+		}
+		close(gate) // stale "public" result now returns to the decorator
+		<-done
+
+		if n := cs.Len(); n != 0 {
+			t.Fatalf("stale public entry was resurrected after eviction: entries = %d", n)
+		}
+		if c := mustGet(t, cs, "core"); c.Visibility != "private" {
+			t.Fatalf("visibility after flip = %q, want private", c.Visibility)
+		}
+	})
+}
+
+func TestCached_GaugeTracksLen(t *testing.T) {
+	synctest.Test(t, func(t *testing.T) {
+		inner := newCountingStore(public("a"), public("b"), public("c"))
+		cs := NewCachedComponentStore(context.Background(), inner, testTTL)
+		check := func(step string) {
+			t.Helper()
+			if g, n := testutil.ToFloat64(metrics.ComponentCacheEntries), cs.Len(); int(g) != n {
+				t.Fatalf("%s: gauge = %v, Len = %d", step, g, n)
+			}
+		}
+		mustGet(t, cs, "a")
+		mustGet(t, cs, "b")
+		mustGet(t, cs, "c")
+		check("after three inserts")
+		if err := cs.DeleteComponent(context.Background(), "b"); err != nil {
+			t.Fatal(err)
+		}
+		check("after evict")
+		time.Sleep(testTTL + time.Nanosecond)
+		mustGet(t, cs, "a") // expired entry replaced by a fresh one
+		_, _ = cs.GetComponent(context.Background(), "c")
+		check("after expiry and refresh")
+		if err := cs.DeleteComponent(context.Background(), "a"); err != nil {
+			t.Fatal(err)
+		}
+		if err := cs.DeleteComponent(context.Background(), "c"); err != nil {
+			t.Fatal(err)
+		}
+		check("after all evicted")
+		if cs.Len() != 0 {
+			t.Fatalf("Len = %d, want 0", cs.Len())
 		}
 	})
 }

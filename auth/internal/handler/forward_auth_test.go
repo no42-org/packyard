@@ -561,6 +561,11 @@ func TestForwardAuth_PublicComponentCache_SurvivesOutage(t *testing.T) {
 		if code := get("/rpm/core/2025/el9-x86_64/"); code != http.StatusOK {
 			t.Fatalf("warm-up: expected 200, got %d", code)
 		}
+		// Warm the private component too: it must be looked up and denied, and
+		// must NOT be cached, so it fails closed once the store is down.
+		if code := get("/rpm/minion/2025/el9-x86_64/"); code != http.StatusUnauthorized {
+			t.Fatalf("warm-up private without creds: expected 401, got %d", code)
+		}
 		toggle.failing = true
 		if code := get("/rpm/core/2025/el9-x86_64/"); code != wantCached {
 			t.Fatalf("cached public component during outage: expected %d, got %d", wantCached, code)

@@ -34,7 +34,7 @@ RUSTFS_SECRET_KEY=dev-secret-key-value
 
 ### Advanced (auth service)
 
-These are set via `compose.yml` and only need overriding when deploying with a non-standard volume layout:
+These are set via `compose.yml` or the auth container's environment. `RPM_DATA_ROOT` only needs overriding for a non-standard volume layout; the cache TTL is a tuning knob with a safe default:
 
 | Variable | Default | Description |
 |----------|---------|-------------|
