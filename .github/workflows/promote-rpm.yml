@@ -75,6 +75,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           echo "${{ secrets.SSH_KNOWN_HOST }}" >> ~/.ssh/known_hosts
 
+      - name: Upload the publish scripts to the host
+        # The same scripts CI runs against its own stack (make test-publish-scripts);
+        # production streams packages into them over SSH. Copied fresh every run.
+        run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/publish && mkdir -p /tmp/publish"
+          scp -q scripts/publish/rpm.sh scripts/publish/deb.sh deploy@${{ secrets.HOST }}:/tmp/publish/
+
       - name: Open RustFS tunnel
         run: |
           ssh -fN -L 9000:localhost:9000 deploy@${{ secrets.HOST }}
@@ -153,25 +161,14 @@ jobs:
           SERIES: ${{ inputs.series }}
           OS: ${{ inputs.os }}
         run: |
-          # The rpm container has a read-only root filesystem, which docker cp
-          # refuses, so each package is streamed as a tar over SSH into the
-          # container's /tmp tmpfs, published, and removed. The tree is group
-          # 101, setgid and group-writable and the container has no
-          # capabilities, so publish as 0:101 and extract without ownership.
+          # One package per call keeps the container's tmpfs to one package.
           for f in ./staging/*.rpm; do
             n=$(basename "$f")
             [[ "$n" =~ ^[A-Za-z0-9][A-Za-z0-9._+~-]*$ ]] || { echo "ERROR: unsafe file name: ${n}"; exit 1; }
             echo "Publishing ${n} into ${OS}"
             # shellcheck disable=SC2029  # client-side expansion is intended
-            tar -cf - -C ./staging "$n" | ssh deploy@${{ secrets.HOST }} "
-              docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0:101 rpm bash -c '
-                set -euo pipefail
-                mkdir -p /tmp/rpm-stage
-                tar -xf - --no-same-owner -C /tmp/rpm-stage
-                /scripts/add-package.sh /tmp/rpm-stage/${n} ${COMPONENT} ${SERIES} ${OS}
-                rm -f /tmp/rpm-stage/${n}
-              '
-            "
+            tar -cf - -C ./staging "$n" | ssh deploy@${{ secrets.HOST }} \
+              "bash /tmp/publish/rpm.sh '${DEPLOY_DIR}/compose.yml' '${COMPONENT}' '${SERIES}' '${OS}'"
           done
 
       - name: Cleanup
@@ -180,6 +177,7 @@ jobs:
           # Remote cleanup first: it needs the SSH key that is removed below.
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
+            rm -rf /tmp/publish
             docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0:101 rpm \
               rm -rf /tmp/rpm-stage 2>/dev/null || true
           " || echo "WARN: remote cleanup failed"

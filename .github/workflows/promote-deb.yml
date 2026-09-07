@@ -75,6 +75,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           echo "${{ secrets.SSH_KNOWN_HOST }}" >> ~/.ssh/known_hosts
 
+      - name: Upload the publish scripts to the host
+        # The same scripts CI runs against its own stack (make test-publish-scripts);
+        # production streams packages into them over SSH. Copied fresh every run.
+        run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/publish && mkdir -p /tmp/publish"
+          scp -q scripts/publish/rpm.sh scripts/publish/deb.sh deploy@${{ secrets.HOST }}:/tmp/publish/
+
       - name: Open RustFS tunnel
         run: |
           ssh -fN -L 9000:localhost:9000 deploy@${{ secrets.HOST }}
@@ -116,96 +124,30 @@ jobs:
             echo "OK: $file"
           done
 
-      - name: Stream DEBs into the aptly container
+      - name: Publish through aptly
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+          DISTRO: ${{ inputs.distro }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
-          # The aptly container has a read-only root filesystem, which docker cp
-          # refuses: stream the packages as a tar over SSH into its /tmp tmpfs.
+          # The bundle carries the packages and the signing material; deb.sh
+          # extracts it straight into the aptly container's tmpfs, so neither
+          # the key nor a package touches the host filesystem.
           for f in ./staging/*.deb; do
             n=$(basename "$f")
             [[ "$n" =~ ^[A-Za-z0-9][A-Za-z0-9._+~-]*$ ]] || { echo "ERROR: unsafe file name: ${n}"; exit 1; }
           done
+          bundle=$(mktemp -d)
+          mkdir -p "${bundle}/packages" "${bundle}/signing"
+          cp ./staging/*.deb "${bundle}/packages/"
+          (umask 077; printf '%s\n' "${GPG_PRIVATE_KEY}" > "${bundle}/signing/key.asc"; printf '%s\n' "${GPG_PASSPHRASE}" > "${bundle}/signing/passphrase")
           # shellcheck disable=SC2029  # client-side expansion is intended
-          (cd ./staging && tar -cf - -- *.deb) | ssh deploy@${{ secrets.HOST }} "
-            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly sh -c '
-              rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage && tar -xf - --no-same-owner -C /tmp/deb-stage
-            '
-          "
-
-      - name: Import GPG key into the aptly container
-        # apt verifies the repository's InRelease, not individual packages.
-        # aptly signs it inside its container: import the key into the
-        # container's tmpfs home and hand it the passphrase through a file.
-        # gpg reads a passphrase file only in loopback pinentry mode; without
-        # it, signing fails with "Inappropriate ioctl for device" (no tty).
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
-        run: |
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          printf '%s\n' "${GPG_PRIVATE_KEY}" | ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly sh -c '
-              mkdir -p /root/.gnupg && chmod 700 /root/.gnupg
-              printf \"pinentry-mode loopback\n\" > /root/.gnupg/gpg.conf
-              printf \"allow-loopback-pinentry\n\" > /root/.gnupg/gpg-agent.conf
-              gpg --batch --quiet --import
-            '"
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          printf '%s\n' "${GPG_PASSPHRASE}" | ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly sh -c 'umask 077; cat > /tmp/gpg-pass'"
-
-      - name: Create Aptly snapshot on host
-        env:
-          COMPONENT: ${{ inputs.component }}
-          SERIES: ${{ inputs.series }}
-          DISTRO: ${{ inputs.distro }}
-        run: |
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          SNAPSHOT_NAME=$(ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T \
-              -e COMPONENT='${COMPONENT}' -e SERIES='${SERIES}' -e DISTRO='${DISTRO}' \
-              -e DEB_STAGE_DIR=/tmp/deb-stage \
-              aptly /scripts/create-snapshot.sh '${COMPONENT}' '${SERIES}' '${DISTRO}'")
-          [ -n "${SNAPSHOT_NAME}" ] || { echo "ERROR: snapshot name is empty"; exit 1; }
-          echo "SNAPSHOT_NAME=${SNAPSHOT_NAME}" >> "$GITHUB_ENV"
-          echo "Created snapshot: ${SNAPSHOT_NAME}"
-
-      - name: Publish Aptly snapshot on host
-        env:
-          COMPONENT: ${{ inputs.component }}
-          SERIES: ${{ inputs.series }}
-          DISTRO: ${{ inputs.distro }}
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-        run: |
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T \
-              -e GPG_KEY_ID='${GPG_KEY_ID}' -e GPG_PASSPHRASE_FILE=/tmp/gpg-pass aptly \
-              /scripts/publish-snapshot.sh \
-              '${SNAPSHOT_NAME}' '${COMPONENT}' '${SERIES}' '${DISTRO}'"
-
-      - name: Smoke test — verify InRelease published to filesystem
-        env:
-          COMPONENT: ${{ inputs.component }}
-          SERIES: ${{ inputs.series }}
-          DISTRO: ${{ inputs.distro }}
-        run: |
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} "
-            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
-              test -f '/opt/aptly/public/${COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease' \
-              && echo 'SMOKE TEST PASS' \
-              || { echo 'SMOKE TEST FAIL'; exit 1; }
-          "
-
-      - name: Prune old snapshots
-        env:
-          COMPONENT: ${{ inputs.component }}
-          SERIES: ${{ inputs.series }}
-        run: |
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
-              /scripts/prune-snapshots.sh '${COMPONENT}' '${SERIES}'"
+          tar -cf - -C "${bundle}" . | ssh deploy@${{ secrets.HOST }} \
+            "bash /tmp/publish/deb.sh '${DEPLOY_DIR}/compose.yml' '${COMPONENT}' '${SERIES}' '${GPG_KEY_ID}' '${DISTRO}'"
+          rm -rf "${bundle}"
 
       - name: Cleanup
         if: always()
@@ -213,6 +155,7 @@ jobs:
           # Remote cleanup first: it needs the SSH key that is removed below.
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
+            rm -rf /tmp/publish
             docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               sh -c 'gpgconf --kill gpg-agent 2>/dev/null; rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg' 2>/dev/null || true
           " || echo "WARN: remote cleanup failed"
