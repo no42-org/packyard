@@ -22,7 +22,7 @@ upstream repo, tag v38.1.0                     no42-org/packyard, promote-releas
 GitHub Release                                 1. validate inputs, preflight the host over SSH
   bbo-core-38.1.0-761.x86_64.rpm   ──────────► 2. gh release download, cosign verify-blob SHA256SUMS,
   bbo-core_38.1.0-761_amd64.deb                   sha256sum --check
-  SHA256SUMS, SHA256SUMS.sig/.pem               3. rpmsign / dpkg-sig with the Packyard GPG key
+  SHA256SUMS, SHA256SUMS.sig/.pem               3. rpmsign with the Packyard GPG key
 quay.io/bluebird/core:38.1.0      ──────────► 4. rpm container:  add-package.sh into every rpm_target
   (cosign-signed)                              5. aptly container: one snapshot, published per deb_distro
                                                6. cosign verify upstream, crane copy into Zot as
@@ -74,7 +74,7 @@ The step-by-step procedure is in the [release runbook](../ops/release-runbook.md
 
 ## What every promotion has in common
 
-- **Packyard signs, upstream signatures are only checked.** RPMs and DEBs carry the Packyard GPG key. Images are signed keylessly by the promoting workflow's GitHub OIDC identity. Subscribers verify one identity for everything on the host.
+- **Packyard signs, upstream signatures are only checked.** RPMs carry the Packyard GPG key; DEB repositories carry it on their `InRelease`, which is what apt verifies (individual `.deb` files are not signed, apt never checks those). Images are signed keylessly by the promoting workflow's GitHub OIDC identity. Subscribers verify one identity for everything on the host.
 - **The GPG key must be the served key.** Before signing, the workflows compare the `GPG_KEY_ID` fingerprint with the key served at `https://<host>/gpg/lts.asc`. The copy of `lts.asc` in this repository is a placeholder.
 - **Publishing happens inside the service containers.** The rpm image ships `createrepo_c` and the publishing scripts, Aptly runs in its own container. The host needs Docker and the `deploy` user, nothing else. See [Production deployment §5](../ops/production-deployment.md#5-creating-the-deploy-user).
 - **One copy per package.** A package published into several RPM targets is hardlinked between the target directories. Aptly stores each `.deb` once in its pool no matter how many distributions publish it.

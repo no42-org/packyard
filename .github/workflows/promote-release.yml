@@ -116,11 +116,12 @@ jobs:
           echo "  images:      ${IMAGES:-none}"
 
       - name: Install signing tools
+        # rpmsign for the RPMs. DEBs are not signed individually: apt verifies
+        # the repository's InRelease, which aptly signs inside its container.
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends rpm dpkg-sig
+          sudo apt-get install -y -qq --no-install-recommends rpm
           rpmsign --version
-          dpkg-sig --version | head -1
 
       - name: Install crane
         env:
@@ -208,7 +209,7 @@ jobs:
           done
           sha256sum --check --strict --ignore-missing SHA256SUMS
 
-      - name: Import GPG key (ephemeral) and sign packages
+      - name: Import GPG key (ephemeral) and sign RPMs
         env:
           GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
@@ -218,17 +219,12 @@ jobs:
           gpg --list-secret-keys "${GPG_KEY_ID}"
           # Pre-cache the passphrase in gpg-agent via loopback pinentry. A wrong
           # passphrase fails here with gpg's own message rather than later
-          # from rpmsign or dpkg-sig. Passphrase on fd 3; stdin is the empty
-          # message to sign.
+          # from rpmsign. Passphrase on fd 3; stdin is the empty message to sign.
           gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 -u "${GPG_KEY_ID}" \
             --sign --output /dev/null - < /dev/null 3< <(printf '%s\n' "${GPG_PASSPHRASE}")
           for rpm in ./release/*.rpm; do
             rpmsign --addsign --define "_gpg_name ${GPG_KEY_ID}" "$rpm"
             echo "Signed: $(basename "$rpm")"
-          done
-          for deb in ./release/*.deb; do
-            dpkg-sig --sign builder -k "${GPG_KEY_ID}" "$deb"
-            echo "Signed: $(basename "$deb")"
           done
 
       - name: Publish RPMs inside the rpm container
