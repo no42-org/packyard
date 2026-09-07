@@ -116,15 +116,19 @@ jobs:
             echo "OK: $file"
           done
 
-      - name: Upload DEBs to host and copy into aptly container
+      - name: Stream DEBs into the aptly container
         run: |
+          # The aptly container has a read-only root filesystem, which docker cp
+          # refuses: stream the packages as a tar over SSH into its /tmp tmpfs.
+          for f in ./staging/*.deb; do
+            n=$(basename "$f")
+            [[ "$n" =~ ^[A-Za-z0-9][A-Za-z0-9._+~-]*$ ]] || { echo "ERROR: unsafe file name: ${n}"; exit 1; }
+          done
           # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage"
-          scp ./staging/*.deb deploy@${{ secrets.HOST }}:/tmp/deb-stage/
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} "
-            APTLY_ID=\$(docker compose -f '${DEPLOY_DIR}/compose.yml' ps -q aptly)
-            docker cp /tmp/deb-stage/ \"\${APTLY_ID}:/tmp/\"
+          (cd ./staging && tar -cf - -- *.deb) | ssh deploy@${{ secrets.HOST }} "
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly sh -c '
+              rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage && tar -xf - --no-same-owner -C /tmp/deb-stage
+            '
           "
 
       - name: Import GPG key into the aptly container
@@ -202,7 +206,6 @@ jobs:
           rm -f ~/.ssh/id_ed25519
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
-            rm -rf /tmp/deb-stage
             docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg 2>/dev/null || true
           " 2>/dev/null || true
