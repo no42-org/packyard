@@ -275,9 +275,16 @@ jobs:
           "
           # aptly signs Release inside its container: import the key into the
           # container's tmpfs home and hand it the passphrase through a file.
+          # gpg reads a passphrase file only in loopback pinentry mode; without
+          # it, signing fails with "Inappropriate ioctl for device" (no tty).
           # shellcheck disable=SC2029  # client-side expansion is intended
           printf '%s\n' "${GPG_PRIVATE_KEY}" | ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${C}' exec -T aptly gpg --batch --quiet --import"
+            "docker compose -f '${C}' exec -T aptly sh -c '
+              mkdir -p /root/.gnupg && chmod 700 /root/.gnupg
+              printf \"pinentry-mode loopback\n\" > /root/.gnupg/gpg.conf
+              printf \"allow-loopback-pinentry\n\" > /root/.gnupg/gpg-agent.conf
+              gpg --batch --quiet --import
+            '"
           # shellcheck disable=SC2029  # client-side expansion is intended
           printf '%s\n' "${GPG_PASSPHRASE}" | ssh deploy@${{ secrets.HOST }} \
             "docker compose -f '${C}' exec -T aptly sh -c 'umask 077; cat > /tmp/gpg-pass'"
@@ -355,11 +362,14 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          rm -f ~/.ssh/id_ed25519
+          # Remote cleanup first: it needs the SSH key that is removed below.
+          # Staged packages, the imported GPG key, its passphrase file and the
+          # agent that may cache the passphrase all leave the containers.
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             C='${DEPLOY_DIR}/compose.yml'
             docker compose -f \"\$C\" exec -T --user 0:101 rpm rm -rf /tmp/rpm-stage 2>/dev/null || true
-            docker compose -f \"\$C\" exec -T aptly rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg 2>/dev/null || true
-          " 2>/dev/null || true
+            docker compose -f \"\$C\" exec -T aptly sh -c 'gpgconf --kill gpg-agent 2>/dev/null; rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg' 2>/dev/null || true
+          " || echo "WARN: remote cleanup failed"
           pkill -f 'ssh -fN -L 5000' || true
+          rm -f ~/.ssh/id_ed25519

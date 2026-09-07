@@ -177,13 +177,11 @@ jobs:
       - name: Cleanup
         if: always()
         run: |
-          # P3: remove SSH private key from disk
-          rm -f ~/.ssh/id_ed25519
-          # P5: remove staged RPMs from the container (handles failure mid-loop)
+          # Remote cleanup first: it needs the SSH key that is removed below.
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0:101 rpm \
               rm -rf /tmp/rpm-stage 2>/dev/null || true
-          " 2>/dev/null || true
-          # Close SSH tunnel
+          " || echo "WARN: remote cleanup failed"
           pkill -f 'ssh -fN -L 9000' || true
+          rm -f ~/.ssh/id_ed25519
