@@ -69,9 +69,10 @@ jobs:
         uses: docker/metadata-action@dc802804100637a589fabce1cb79ff13a1411302  # v6.2.0
         with:
           images: ${{ env.IMAGE }}
-          # latest=auto moves `latest` only for stable semver tags, so
-          # v1.2.0-rc1 publishes 1.2.0-rc1 without touching latest.
-          flavor: latest=auto
+          # `latest` is NOT written here. It moves in the release job, after
+          # every image, SBOM and the draft release exist, so a failure later
+          # in the pipeline cannot leave `latest` pointing at an unreleased build.
+          flavor: latest=false
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -100,7 +101,9 @@ jobs:
           push-to-registry: true
 
       - name: SBOM
-        uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26  # v0.24.2
+        # sbom-action does not create the output directory.
+        run: mkdir -p dist
+      - uses: anchore/sbom-action@3ad7283483fc7af8ff2b4ea19663c2d5ca935e26  # v0.24.2
         with:
           image: ${{ env.IMAGE }}@${{ steps.push.outputs.digest }}
           format: spdx-json
@@ -122,6 +125,7 @@ jobs:
     timeout-minutes: 15
     permissions:
       contents: write   # create release + upload assets
+      packages: write   # move `latest` to the released images
       id-token: write   # cosign sign-blob
       attestations: write
       actions: write    # dispatch the docs rebuild
@@ -161,6 +165,30 @@ jobs:
             gh release create "$GITHUB_REF_NAME" --draft --verify-tag \
               --title "$GITHUB_REF_NAME" --notes "Release notes pending." $PRE
           find dist -type f -exec gh release upload "$GITHUB_REF_NAME" --clobber {} +
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@dbcb813823bdd20940b903addbd779551569679f  # v4.6.0
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Move `latest` to the released images (stable tags only)
+        # Runs last so `latest` only ever points at a version whose images,
+        # signatures, SBOMs and draft release all exist. Prereleases never
+        # move it. Retagging the manifest list keeps the digests, so the
+        # cosign signatures and provenance published above still apply.
+        env:
+          OWNER: ${{ github.repository_owner }}
+        run: |
+          case "$GITHUB_REF_NAME" in *-*) echo "prerelease: latest unchanged"; exit 0 ;; esac
+          ver="${GITHUB_REF_NAME#v}"
+          for svc in auth rpm static; do
+            docker buildx imagetools create \
+              -t "ghcr.io/${OWNER}/packyard-${svc}:latest" \
+              "ghcr.io/${OWNER}/packyard-${svc}:${ver}"
+            echo "latest -> packyard-${svc}:${ver}"
+          done
 
       - name: Rebuild docs so the landing page shows the new version
         env:
