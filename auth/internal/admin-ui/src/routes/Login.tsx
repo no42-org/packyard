@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { useSearchParams } from "react-router-dom";
 
 // Known error codes the OAuth callback may pass back via ?error=. Anything

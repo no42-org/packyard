@@ -1,4 +1,6 @@
 #!/bin/sh
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: GPL-3.0-or-later
 # backup-keystore.sh — SQLite online backup for the packyard auth keystore (Story 5.4)
 #
 # USAGE (inside the backup container):

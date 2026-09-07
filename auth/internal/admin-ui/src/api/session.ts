@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import { useQuery } from "@tanstack/react-query";
 
 import { ApiError, apiFetch } from "./client";

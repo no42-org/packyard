@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // API client for /api/v1/* — thin fetch wrapper that:
 //
 //   1. Always sends credentials so the session cookie travels (the cookie is
