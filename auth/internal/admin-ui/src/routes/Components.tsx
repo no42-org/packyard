@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-import { useState } from "react";
+import { useEffect, useState } from "react";
 
 import {
   Component,
@@ -11,6 +11,12 @@ import {
   useCreateComponent,
   useUpdateComponent,
 } from "../api/components";
+import {
+  type DeleteImpact,
+  canConfirmDelete,
+  previewComponentDelete,
+  useDeleteComponent,
+} from "../api/componentDelete";
 import { ErrorBanner } from "../components/ErrorBanner";
 import { Modal } from "../components/Modal";
 
@@ -18,6 +24,7 @@ export function Components() {
   const list = useComponents();
   const [createOpen, setCreateOpen] = useState(false);
   const [editing, setEditing] = useState<Component | null>(null);
+  const [deleting, setDeleting] = useState<Component | null>(null);
 
   return (
     <div>
@@ -55,6 +62,9 @@ export function Components() {
                 <td>
                   <button className="btn-secondary" onClick={() => setEditing(c)}>
                     Edit
+                  </button>{" "}
+                  <button className="btn-danger" onClick={() => setDeleting(c)}>
+                    Delete
                   </button>
                 </td>
               </tr>
@@ -73,6 +83,9 @@ export function Components() {
       <CreateComponentModal open={createOpen} onClose={() => setCreateOpen(false)} />
       {editing && (
         <EditComponentModal component={editing} onClose={() => setEditing(null)} />
+      )}
+      {deleting && (
+        <DeleteComponentModal component={deleting} onClose={() => setDeleting(null)} />
       )}
     </div>
   );
@@ -236,6 +249,95 @@ function EditComponentModal({ component, onClose }: { component: Component; onCl
           <ErrorBanner error={update.error} />
         </>
       )}
+    </Modal>
+  );
+}
+
+// DeleteComponentModal drives the API's safe-lock: first the preview (the 409
+// impact), then the destructive call only once the operator has typed the
+// component name exactly. The API enforces the same rule; this mirrors it so
+// the UI cannot skip the preview.
+function DeleteComponentModal({ component, onClose }: { component: Component; onClose: () => void }) {
+  const del = useDeleteComponent(component.name);
+  const [impact, setImpact] = useState<DeleteImpact | null>(null);
+  const [previewError, setPreviewError] = useState<unknown>(null);
+  const [typed, setTyped] = useState("");
+
+  useEffect(() => {
+    let cancelled = false;
+    previewComponentDelete(component.name)
+      .then((i) => {
+        if (!cancelled) setImpact(i);
+      })
+      .catch((e: unknown) => {
+        if (!cancelled) setPreviewError(e);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [component.name]);
+
+  const submit = async () => {
+    try {
+      await del.mutateAsync();
+      onClose();
+    } catch {
+      /* error rendered below */
+    }
+  };
+
+  const ready = impact !== null && canConfirmDelete(typed, component.name) && !del.isPending;
+
+  return (
+    <Modal
+      open={true}
+      title={`Delete ${component.name}`}
+      onClose={onClose}
+      actions={
+        <>
+          <button className="btn-secondary" onClick={onClose}>
+            Cancel
+          </button>
+          <button className="btn-danger" onClick={submit} disabled={!ready}>
+            Delete component
+          </button>
+        </>
+      }
+    >
+      {impact === null && previewError === null && <p className="muted">Loading impact…</p>}
+      {impact !== null && (
+        <div className="field">
+          <p>Deleting this component will:</p>
+          <ul>
+            <li>
+              revoke <strong>{impact.keys_revoked}</strong> active subscription key
+              {impact.keys_revoked === 1 ? "" : "s"}
+            </li>
+            <li>
+              drop the auth records for RPM series{" "}
+              {impact.rpm_series_removed.length > 0 ? (
+                impact.rpm_series_removed.map((sName) => <code key={sName}>{sName} </code>)
+              ) : (
+                <em>none</em>
+              )}
+            </li>
+          </ul>
+          <p className="muted">
+            Published packages and directories stay on disk and keep being served by the web tier;
+            remove them by hand if they should disappear. This cannot be undone.
+          </p>
+          <label>
+            Type <code>{component.name}</code> to confirm
+          </label>
+          <input
+            type="text"
+            value={typed}
+            autoComplete="off"
+            onChange={(e) => setTyped(e.target.value)}
+          />
+        </div>
+      )}
+      <ErrorBanner error={previewError ?? del.error} />
     </Modal>
   );
 }
