@@ -33,7 +33,7 @@ Pushing the tag triggers the `Release` workflow (`.github/workflows/release.yml`
 2. Builds and pushes the three images for `linux/amd64` and `linux/arm64`.
 3. Signs each image with cosign keyless and attaches SLSA build provenance to the registry.
 4. Generates an SPDX SBOM per image.
-5. Creates a **draft** GitHub Release with the SBOMs, a `checksums.txt` and its cosign signature attached.
+5. Creates a **draft** GitHub Release with the SBOMs, a `checksums.txt` and its Sigstore bundle (`checksums.txt.sigstore.json`) attached.
 6. Only then moves `latest` to the released images and dispatches `docs.yml` so the landing page shows the new version.
    `latest` is written last on purpose: a failure anywhere earlier leaves `latest` on the previous release rather than on a half-published build.
 
@@ -110,7 +110,7 @@ Verify the release checksums file:
 
 ```bash
 cosign verify-blob checksums.txt \
-  --signature checksums.txt.sig --certificate checksums.txt.pem \
+  --bundle checksums.txt.sigstore.json \
   --certificate-identity-regexp 'https://github.com/no42-org/packyard/\.github/workflows/release\.yml@refs/tags/v.*' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com
 sha256sum -c checksums.txt
