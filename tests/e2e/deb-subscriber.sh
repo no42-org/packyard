@@ -12,6 +12,7 @@
 # OPTIONAL ENV VARS:
 #   COMPONENT  — LTS component (default: core)
 #   SERIES     — LTS series (default: 2025)
+#   PRIVATE_COMPONENT — a private component for the 401 check (default: COMPONENT)
 #   DISTRO     — DEB distribution codename (default: bookworm)
 #   PACKAGE    — DEB package name to install (default: lts-core)
 #
@@ -113,7 +114,10 @@ fi
 
 echo ""
 echo "=== AC3: Invalid key returns 401 ==="
-BAD_AUTH_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/deb/${COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease"
+# A public component ignores credentials by design, so the 401 check needs a
+# private one. PRIVATE_COMPONENT defaults to COMPONENT for stacks where it is private.
+PRIVATE_COMPONENT="${PRIVATE_COMPONENT:-${COMPONENT}}"
+BAD_AUTH_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/deb/${PRIVATE_COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease"
 HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "${BAD_AUTH_URL}" || true)
 if [ "${HTTP_STATUS}" = "401" ]; then
   pass "AC3 — invalid key correctly returns HTTP 401"

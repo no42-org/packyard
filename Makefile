@@ -179,12 +179,12 @@ ci-publish-fixtures: ci-guard
 ## e2e-rpm: RPM subscriber test against the CI stack and its fixture
 e2e-rpm: ci-guard
 	VALID_KEY="$${VALID_KEY:-$$(cat .ci-valid-key 2>/dev/null)}" BASE_URL="$${BASE_URL:-http://localhost}" \
-	PACKAGE=packyard-fixture bash tests/e2e/rpm-subscriber.sh
+	PACKAGE=packyard-fixture PRIVATE_COMPONENT=minion bash tests/e2e/rpm-subscriber.sh
 
 ## e2e-deb: DEB subscriber test against the CI stack and its fixture
 e2e-deb: ci-guard
 	VALID_KEY="$${VALID_KEY:-$$(cat .ci-valid-key 2>/dev/null)}" BASE_URL="$${BASE_URL:-http://localhost}" \
-	PACKAGE=packyard-fixture bash tests/e2e/deb-subscriber.sh
+	PACKAGE=packyard-fixture PRIVATE_COMPONENT=minion bash tests/e2e/deb-subscriber.sh
 
 ## e2e-oci: OCI subscriber test against the CI stack and its fixture (COSIGN_SKIP=1 when the fixture is unsigned)
 e2e-oci: ci-guard

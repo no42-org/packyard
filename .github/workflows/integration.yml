@@ -99,7 +99,7 @@ jobs:
           CRANE_SHA256: c14340087103ba9dadf61d45acd20675490fd0ccbd56ac7901fc1b502137f44b
         run: |
           sudo apt-get update -qq
-          sudo apt-get install -y -qq --no-install-recommends dnf rpm
+          sudo apt-get install -y -qq --no-install-recommends dnf dnf-plugins-core rpm
           curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" -o /tmp/crane.tar.gz
           echo "${CRANE_SHA256}  /tmp/crane.tar.gz" | sha256sum --check --strict
           tar -xzf /tmp/crane.tar.gz -C /tmp crane && sudo mv /tmp/crane /usr/local/bin/crane
