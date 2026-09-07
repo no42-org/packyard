@@ -165,12 +165,12 @@ jobs:
           SERIES: ${{ inputs.series }}
           OS: ${{ inputs.os }}
         run: |
-          # createrepo_c and the publish scripts live in the rpm image. The
-          # service runs as uid 101 but the auth service creates component
-          # directories as root, so publish as root inside the container.
+          # createrepo_c and the publish scripts live in the rpm image. The tree
+          # is group 101, setgid and group-writable; the container has no
+          # capabilities, so publish as root with group 101.
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
-            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0 rpm bash -c '
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0:101 rpm bash -c '
               set -euo pipefail
               for f in /tmp/rpm-stage/*.rpm; do
                 /scripts/add-package.sh \"\$f\" \"${COMPONENT}\" \"${SERIES}\" \"${OS}\"
@@ -187,7 +187,7 @@ jobs:
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             rm -rf /tmp/rpm-stage
-            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0 rpm \
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0:101 rpm \
               rm -rf /tmp/rpm-stage 2>/dev/null || true
           " 2>/dev/null || true
           # Close SSH tunnel

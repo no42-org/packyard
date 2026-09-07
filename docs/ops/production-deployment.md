@@ -257,6 +257,8 @@ chmod 640 /path/to/checkout/.env
 
 The RPM tree lives in the `rpm-data` volume and is written from inside the `rpm` container, which ships `createrepo_c`. The host needs no RPM tooling.
 
+Three processes write that tree and none of them has capabilities: nginx as uid 101, the auth service as root (it creates component directories from the component record), and the promotion exec as root. The rpm image's start script therefore makes the tree group 101, setgid and group-writable, `compose.yml` gives the auth service `group_add: ["101"]`, and the promotion exec runs as `0:101`. A volume created by an image older than 0.5.1 is normalised on the next start of the `rpm` container.
+
 ---
 
 ## 6. Pre-Deployment Checklist

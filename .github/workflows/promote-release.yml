@@ -239,15 +239,16 @@ jobs:
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/rpm-stage && mkdir -p /tmp/rpm-stage"
           scp ./release/*.rpm deploy@${{ secrets.HOST }}:/tmp/rpm-stage/
-          # The rpm service runs as uid 101 but the auth service creates the
-          # component tree as root, so publish as root inside the container.
+          # The tree is group 101, setgid and group-writable; the container has
+          # no capabilities, so publish as root with group 101 to write into
+          # directories created by either the auth service or the rpm image.
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             set -euo pipefail
             C='${DEPLOY_DIR}/compose.yml'
             RPM_ID=\$(docker compose -f \"\$C\" ps -q rpm)
             docker cp /tmp/rpm-stage/ \"\${RPM_ID}:/tmp/\"
-            docker compose -f \"\$C\" exec -T --user 0 rpm bash -c '
+            docker compose -f \"\$C\" exec -T --user 0:101 rpm bash -c '
               set -euo pipefail
               for f in /tmp/rpm-stage/*.rpm; do
                 /scripts/add-package.sh \"\$f\" \"${COMPONENT}\" \"${SERIES}\" ${RPM_TARGETS}
@@ -356,7 +357,7 @@ jobs:
           ssh deploy@${{ secrets.HOST }} "
             C='${DEPLOY_DIR}/compose.yml'
             rm -rf /tmp/rpm-stage /tmp/deb-stage
-            docker compose -f \"\$C\" exec -T --user 0 rpm rm -rf /tmp/rpm-stage 2>/dev/null || true
+            docker compose -f \"\$C\" exec -T --user 0:101 rpm rm -rf /tmp/rpm-stage 2>/dev/null || true
             docker compose -f \"\$C\" exec -T aptly rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg 2>/dev/null || true
           " 2>/dev/null || true
           pkill -f 'ssh -fN -L 5000' || true
