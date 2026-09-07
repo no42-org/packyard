@@ -10,6 +10,7 @@ import { BrowserRouter } from "react-router-dom";
 
 import { App } from "./App";
 import { setUnauthorizedHandler } from "./api/client";
+import { LOGIN_PATH, handleUnauthorized } from "./api/unauthorized";
 import "./styles.css";
 
 const queryClient = new QueryClient({
@@ -24,17 +25,20 @@ const queryClient = new QueryClient({
   },
 });
 
-// Wire the global 401 handler: any API call returning 401 invalidates the
-// cached operator (so App's logged-out branch renders), then forces a hard
-// redirect to /admin/login so partially-loaded protected pages don't keep
-// firing failing requests in the background.
-setUnauthorizedHandler(() => {
-  queryClient.setQueryData(["session", "whoami"], null);
-  queryClient.invalidateQueries({ queryKey: ["session"] });
-  if (window.location.pathname !== "/admin/login") {
-    window.location.href = "/admin/login";
-  }
-});
+// Wire the global 401 handler. The decision lives in api/unauthorized.ts
+// (unit-tested); this supplies the effects. See that file for why a 401 from
+// the session probe must not invalidate the session query (#209).
+setUnauthorizedHandler((failedPath) =>
+  handleUnauthorized(failedPath, window.location.pathname, {
+    clearSession: () => queryClient.setQueryData(["session", "whoami"], null),
+    invalidateSession: () => {
+      void queryClient.invalidateQueries({ queryKey: ["session"] });
+    },
+    redirectToLogin: () => {
+      window.location.href = LOGIN_PATH;
+    },
+  }),
+);
 
 const rootEl = document.getElementById("root");
 if (!rootEl) {
