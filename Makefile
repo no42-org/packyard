@@ -16,7 +16,7 @@ UNAME_S := $(shell uname -s)
 .DEFAULT_GOAL := help
 
 .PHONY: help docs-install docs-serve docs-build docs-clean check-node test-rpm-publish \
-        admin-ui admin-ui-install admin-ui-dev admin-ui-clean \
+        admin-ui admin-ui-install admin-ui-test admin-ui-dev admin-ui-clean \
         build build-clean test lint lint-workflows build-image-auth build-image-rpm build-images \
         ci-guard ci-stack-up ci-stack-down ci-stack-logs ci-seed ci-verify-env e2e-observability
 
@@ -61,6 +61,10 @@ admin-ui-install: check-node $(ADMIN_UI_DIR)/node_modules/.package-lock.json
 
 $(ADMIN_UI_DIR)/node_modules/.package-lock.json: $(ADMIN_UI_DIR)/package-lock.json | check-node
 	cd $(ADMIN_UI_DIR) && $(NPM) ci
+
+## admin-ui-test: Run the admin SPA unit tests (vitest)
+admin-ui-test: admin-ui-install
+	cd $(ADMIN_UI_DIR) && $(NPM) test
 
 ## admin-ui: Build the admin SPA bundle into the Go embed directory
 admin-ui: $(ADMIN_UI_DIR)/node_modules/.package-lock.json

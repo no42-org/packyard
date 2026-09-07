@@ -81,6 +81,12 @@ jobs:
           go-version-file: auth/go.mod
           cache-dependency-path: auth/go.sum
       - run: make test
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020  # v7.0.0
+        with:
+          node-version-file: .nvmrc
+          cache: npm
+          cache-dependency-path: auth/internal/admin-ui/package-lock.json
+      - run: make admin-ui-test
 
   build-docs:
     name: Build docs

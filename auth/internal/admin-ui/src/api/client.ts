@@ -36,19 +36,21 @@ export class ApiError extends Error {
   }
 }
 
-let unauthorizedHandler: (() => void) | null = null;
+let unauthorizedHandler: ((failedPath: string) => void) | null = null;
 
-// setUnauthorizedHandler registers a callback invoked exactly once whenever
-// any API call returns 401 — used to invalidate the cached operator and
-// redirect to /login. Set from main.tsx; tests can clear by passing null.
-export function setUnauthorizedHandler(fn: (() => void) | null) {
+// setUnauthorizedHandler registers a callback invoked whenever any API call
+// returns 401, with the path that failed. main.tsx wires it to
+// handleUnauthorized (api/unauthorized.ts), which decides whether to clear
+// the cached operator, re-confirm the session and redirect to /login. Tests
+// can clear by passing null.
+export function setUnauthorizedHandler(fn: ((failedPath: string) => void) | null) {
   unauthorizedHandler = fn;
 }
 
-function fireUnauthorized() {
+function fireUnauthorized(failedPath: string) {
   if (unauthorizedHandler) {
     try {
-      unauthorizedHandler();
+      unauthorizedHandler(failedPath);
     } catch {
       /* swallow; the redirect side-effect must not throw further */
     }
@@ -94,7 +96,7 @@ export async function apiFetch<T = unknown>(
 
   if (!res.ok) {
     const payload = (body as ApiErrorPayload) ?? null;
-    if (res.status === 401) fireUnauthorized();
+    if (res.status === 401) fireUnauthorized(path);
     throw new ApiError(res.status, payload, `HTTP ${res.status}`);
   }
 
@@ -120,7 +122,7 @@ export async function apiListFetch<T>(path: string): Promise<PaginatedResult<T>>
   }
   if (!res.ok) {
     const payload = (body as ApiErrorPayload) ?? null;
-    if (res.status === 401) fireUnauthorized();
+    if (res.status === 401) fireUnauthorized(path);
     throw new ApiError(res.status, payload, `HTTP ${res.status}`);
   }
   return {
