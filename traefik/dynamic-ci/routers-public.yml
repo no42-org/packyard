@@ -60,6 +60,24 @@ http:
       service: packyard-zot-svc
       # No tls: — CI uses plaintext HTTP
 
+    # docker treats a localhost registry as insecure, which means it still
+    # tries TLS first and only skips certificate verification. Traefik answers
+    # that handshake on any entryPoint with its default self-signed
+    # certificate, so docker never falls back to plaintext and only TLS
+    # routers can match it. This twin serves those connections; production is
+    # TLS-only and needs no equivalent. Same rule, same middlewares, so the
+    # method restriction holds for docker as well.
+    oci-v2-authenticated-tls:
+      entryPoints:
+        - web
+      rule: 'PathPrefix(`/v2/`) && (Method(`GET`) || Method(`HEAD`))'
+      middlewares:
+        - packyard-v2-to-oci
+        - packyard-auth
+        - packyard-strip-oci
+      service: packyard-zot-svc
+      tls: {}
+
   services:
     packyard-static-svc:
       loadBalancer:
