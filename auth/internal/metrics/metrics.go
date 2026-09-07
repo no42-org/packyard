@@ -10,7 +10,7 @@ import "github.com/prometheus/client_golang/prometheus"
 
 var (
 	// RequestsTotal counts forwardAuth requests by outcome status.
-	// Labels: status = allowed | denied | error
+	// Labels: status = allowed | allowed-public | denied | denied-method | error
 	RequestsTotal = prometheus.NewCounterVec(
 		prometheus.CounterOpts{
 			Name: "packyard_auth_requests_total",
