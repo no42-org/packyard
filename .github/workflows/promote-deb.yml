@@ -49,10 +49,21 @@ jobs:
             [[ "$v" =~ $re ]] && [[ "$v" != *..* ]] || { echo "ERROR: invalid input value: $v"; exit 1; }
           done
 
-      - name: Verify GPG key is not a placeholder
+      - name: Verify the signing key is the key subscribers download
+        # The public key lives on the deployment (static/content/gpg/lts.asc is
+        # a placeholder in this repository). Compare fingerprints with what the
+        # host serves, so packages are never signed with a key subscribers
+        # cannot verify.
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          HOST: ${{ secrets.HOST }}
         run: |
-          grep -q 'BEGIN PGP PUBLIC KEY BLOCK' ./static/content/gpg/lts.asc \
-            || { echo "ERROR: lts.asc is still a placeholder — replace with real GPG key before promoting"; exit 1; }
+          served=$(curl -fsSL "https://${HOST}/gpg/lts.asc" | gpg --show-keys --with-colons | awk -F: '/^fpr/{print $10}')
+          [ -n "$served" ] || { echo "ERROR: https://${HOST}/gpg/lts.asc is not a GPG public key"; exit 1; }
+          want=$(tr '[:lower:]' '[:upper:]' <<< "${GPG_KEY_ID}")
+          grep -qx "${want}" <<< "${served}" \
+            || { echo "ERROR: GPG_KEY_ID does not match any fingerprint served at https://${HOST}/gpg/lts.asc"; exit 1; }
+          echo "signing key ${want} is served by the host"
 
       - name: Set up SSH
         run: |
