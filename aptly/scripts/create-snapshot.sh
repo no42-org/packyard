@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: GPL-3.0-or-later
 # create-snapshot.sh — create an immutable Aptly snapshot from staged DEBs
 # Usage: create-snapshot.sh <component> <series> <distro>
 # Example: create-snapshot.sh core 2025 bookworm
@@ -20,7 +22,10 @@ echo "Creating snapshot: ${SNAPSHOT_NAME}" >&2
 # Create local repo if it doesn't already exist
 if ! aptly repo show "${REPO_NAME}" > /dev/null 2>&1; then
   echo "Creating Aptly repo: ${REPO_NAME}" >&2
-  aptly repo create -component="${COMPONENT}" "${REPO_NAME}" >&2
+  # apt component is always "main": the Packyard component already names the
+  # publish point (/deb/<component>/<series>/), so sources.list lines read
+  # "<distro> main" as subscribers expect.
+  aptly repo create -component=main "${REPO_NAME}" >&2
 fi
 
 # Add staged DEBs to the local repo
