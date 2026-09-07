@@ -66,7 +66,9 @@ Confirm the landing page at https://no42-org.github.io/packyard/ shows the new v
 
 ## 4. Bump to the next development version
 
-Bump `main` to the next patch version with an `-rc` suffix so preview builds are never mistaken for a release:
+Bump `main` to the next patch version with an `-rc` suffix so preview builds are never mistaken for a release.
+Do this immediately after tagging: preview builds publish the version in the tree as a mutable tag, so a push to `main` before the bump would overwrite the release image.
+The preview workflows refuse to publish a version without the `-rc` suffix, so a forgotten bump fails the next preview build instead of clobbering a release.
 
 ```bash
 NEXT=1.2.4-rc
