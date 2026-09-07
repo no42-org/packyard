@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import React, {useEffect, useState} from 'react';
 import {TERMINAL_SCRIPT, type TerminalLine} from './data';
 

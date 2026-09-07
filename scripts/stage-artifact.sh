@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: GPL-3.0-or-later
 # stage-artifact.sh — upload an unsigned artefact to RustFS staging
 # Usage: stage-artifact.sh <component> <series> <format> <os-arch> <local-file>
 #

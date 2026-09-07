@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 import React, {useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import BrowserOnly from '@docusaurus/BrowserOnly';

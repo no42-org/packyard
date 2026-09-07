@@ -1,3 +1,8 @@
+/*
+ * Copyright 2026 Ronny Trommer <ronny@no42.org>
+ * SPDX-License-Identifier: GPL-3.0-or-later
+ */
+
 // --wrap swizzle of @docusaurus/theme-mermaid.
 //
 // Depends on theme-mermaid internal structure: we query the rendered <svg>

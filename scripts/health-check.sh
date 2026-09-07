@@ -1,4 +1,6 @@
 #!/usr/bin/env bash
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: GPL-3.0-or-later
 # health-check.sh — verify packyard stack is operational
 # Exit 0 on success, non-zero on failure.
 # Extended by later stories (Story 1.2 adds /gpg/lts.asc check,
