@@ -17,6 +17,7 @@ const sidebars: SidebarsConfig = {
         'ops/operator-onboarding',
         'ops/admin-migration-runbook',
         'ops/release-runbook',
+        'ops/upstream-release-dispatch',
         'ops/restore-keystore',
         'ops/manual-test-plan',
         'ops/troubleshooting',

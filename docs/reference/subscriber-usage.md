@@ -30,25 +30,30 @@ deb [signed-by=/usr/share/keyrings/lts.gpg] \
 
 ## OCI (Docker / Kubernetes)
 
+Images are published as `lts-<component>/<image>` with an immutable version tag and a floating series tag that follows the newest version in that series.
+
 ```bash
-# Authenticate
+# Authenticate (not needed for a public component)
 docker login pkg.example.org/oci \
   --username subscriber \
   --password KEY
 
-# Pull
-docker pull pkg.example.org/oci/lts-core:2025
+# Pull a specific version, or the newest version of a series
+docker pull pkg.example.org/oci/lts-bluebird/core:38.1.0
+docker pull pkg.example.org/oci/lts-bluebird/core:38
 
-# Verify the signature. Images are signed keylessly by the promote-oci
+# Verify the signature. Images are signed keylessly by the promoting
 # workflow, so you pin the signing workflow's identity rather than a key.
 # cosign consults the Sigstore transparency log, which needs outbound HTTPS.
 cosign verify \
-  --certificate-identity-regexp 'https://github.com/no42-org/packyard/\.github/workflows/promote-oci\.yml@refs/heads/main' \
+  --certificate-identity-regexp 'https://github.com/no42-org/packyard/\.github/workflows/promote-release\.yml@refs/heads/main' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  pkg.example.org/oci/lts-core:2025
+  pkg.example.org/oci/lts-bluebird/core:38.1.0
 ```
 
-The signature is stored in the registry next to the image, so `docker pull` and `cosign verify` both go through the same authenticated `/oci/` endpoint.
+Images promoted from staged tarballs with the older `promote-oci.yml` workflow are named `lts-<component>:<series>` and verify against `promote-oci\.yml` in the identity above.
+
+The signature is stored in the registry next to the image, so `docker pull` and `cosign verify` both go through the same `/oci/` endpoint.
 
 ## Public Keys
 

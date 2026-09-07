@@ -2,13 +2,28 @@
 
 How to promote staged LTS packages (RPM, DEB, OCI) through the signing pipeline and into the serving infrastructure.
 
-**Last updated:** 2026-04-14
+**Last updated:** 2026-09-07
 
 ---
 
 ## Overview
 
-Promotion is always manual — one `workflow_dispatch` per component and target. The workflows download from RustFS staging, verify checksums, sign, and publish directly to the serving stack on the VM.
+There are two ways into the serving stack.
+
+**Automated.** An upstream project's release job triggers `promote-release.yml`, which pulls the GitHub Release and the images, verifies them, signs everything with Packyard's keys and publishes all three formats in one run.
+Nothing to stage, nothing to dispatch by hand.
+Setting it up is described in [Upstream release dispatch](upstream-release-dispatch.md); the same workflow can be dispatched by hand to repeat or roll back a release:
+
+```bash
+gh workflow run promote-release.yml \
+  -f source_repo=Bluebird-Community/opennms \
+  -f tag=v38.1.0 \
+  -f component=bluebird \
+  -f series=38
+```
+
+**Manual.** For files that do not come from a GitHub Release, stage them into RustFS and run one `workflow_dispatch` per component and target.
+The rest of this runbook covers the manual path.
 
 | Format | Workflow | Key input parameters |
 |--------|----------|---------------------|
@@ -16,11 +31,16 @@ Promotion is always manual — one `workflow_dispatch` per component and target.
 | DEB | `promote-deb.yml` | `component`, `series`, `distro` |
 | OCI | `promote-oci.yml` | `component`, `series` |
 
+`series` is any path-safe label under the component: an LTS year such as `2025`, or a major version such as `38`.
+The RPM target directories come from the component record (`rpm_series`, `rpm_os_families`, `rpm_architectures`); a promotion into an unprovisioned target fails and says so.
+
 ---
 
 ## 1. Pre-promotion checklist
 
-- [ ] `static/content/gpg/lts.asc` is a real GPG public key (not a placeholder)
+- [ ] `https://<host>/gpg/lts.asc` serves the public key whose fingerprint is the `GPG_KEY_ID` secret (the workflows check this before signing)
+- [ ] The component and, for RPM, its series and OS targets exist (admin UI or `POST /api/v1/components`)
+- [ ] The host contract is in place: `DEPLOY_DIR` variable, `COMPOSE_PROJECT_NAME` and a `deploy`-readable `.env` (see [Production Deployment §5](production-deployment.md#5-creating-the-deploy-user))
 - [ ] All 8 GitHub Actions secrets are set (see [Production Deployment §3](production-deployment.md#3-secrets--environment))
 - [ ] Artifacts are staged in RustFS (§2 below)
 
