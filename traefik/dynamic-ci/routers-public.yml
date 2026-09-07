@@ -29,10 +29,14 @@ http:
       service: packyard-deb-svc
       # No tls: — CI uses plaintext HTTP
 
+    # Subscribers only read. Forward-auth allows every method on a public
+    # component and Zot enforces nothing itself, so write methods must not
+    # reach the registry: they match no router here and get 404. Promotions
+    # push to Zot on its loopback port and never traverse these routers.
     oci-authenticated:
       entryPoints:
         - web
-      rule: "PathPrefix(`/oci/`)"
+      rule: "PathPrefix(`/oci/`) && (Method(`GET`) || Method(`HEAD`))"
       middlewares:
         - packyard-auth       # MUST be first — forwardAuth sees full /oci/v2/... for scope check
         - packyard-strip-oci  # MUST be second — strips /oci before Zot receives request
@@ -48,7 +52,7 @@ http:
     oci-v2-authenticated:
       entryPoints:
         - websecure
-      rule: 'PathPrefix(`/v2/`)'
+      rule: 'PathPrefix(`/v2/`) && (Method(`GET`) || Method(`HEAD`))'
       middlewares:
         - packyard-v2-to-oci  # MUST be first — turns /v2/oci/... into /oci/v2/...
         - packyard-auth       # sees the rewritten /oci/v2/lts-<component>/... path
