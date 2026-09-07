@@ -47,7 +47,10 @@ printf 'pinentry-mode loopback\n' > "${GNUPGHOME}/gpg.conf"; printf 'allow-loopb
 gpg --batch --quiet --import "${REPO_ROOT}/ci/key.asc"
 gpg --batch --yes --passphrase-file "${REPO_ROOT}/ci/passphrase" -u "${KEYID}" --sign --output /dev/null - </dev/null
 rpmsign --addsign --define "_gpg_name ${KEYID}" --define "_gpg_path ${GNUPGHOME}" "${RPM}" >/dev/null
-rpm -K "${RPM}" | grep -qiE "signatures? OK|pgp" || { echo "ERROR: RPM is not signed" >&2; exit 1; }
+# rpm -K reports a signer it does not know as NOT OK, so ask for the header.
+sig=$(rpm -qp --qf '%{SIGPGP:pgpsig}' "${RPM}" 2>/dev/null || true)
+case "${sig}" in ""|"(none)") echo "ERROR: RPM is not signed" >&2; exit 1 ;; esac
+echo "   signed: ${sig}"
 
 echo "== rpm.sh -> ${COMPONENT}/${SERIES}/${RPM_TARGET}"
 tar -cf - -C "${WORK}/pkg" "$(basename "${RPM}")" | bash "${REPO_ROOT}/scripts/publish/rpm.sh" "${COMPOSE_FILE_MAIN}" "${COMPONENT}" "${SERIES}" "${RPM_TARGET}"
