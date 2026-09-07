@@ -39,6 +39,24 @@ http:
       service: packyard-zot-svc
       # No tls: — CI uses plaintext HTTP
 
+    # docker, crane and cosign address a registry at /v2/ on the host root, so
+    # the documented reference <host>/oci/lts-<component>/<image> arrives as
+    # /v2/oci/lts-<component>/<image>/... Rewrite it to the /oci/v2/... shape
+    # forward-auth scopes on, then strip /oci for Zot like the /oci/ router.
+    # The bare /v2/ ping is left alone and answers 401 from forward-auth,
+    # which anonymous clients accept.
+    oci-v2-authenticated:
+      entryPoints:
+        - websecure
+      rule: 'PathPrefix(`/v2/`)'
+      middlewares:
+        - packyard-v2-to-oci  # MUST be first — turns /v2/oci/... into /oci/v2/...
+        - packyard-auth       # sees the rewritten /oci/v2/lts-<component>/... path
+        - packyard-strip-oci  # Zot receives /v2/lts-<component>/...
+      service: packyard-zot-svc
+      tls:
+        certResolver: letsencrypt
+
   services:
     packyard-static-svc:
       loadBalancer:

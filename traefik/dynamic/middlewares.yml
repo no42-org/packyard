@@ -17,6 +17,13 @@ http:
         # becomes /<component>/<series>/. Applied AFTER packyard-auth, which needs
         # the full path for component scope enforcement.
 
+    packyard-v2-to-oci:
+      replacePathRegex:
+        regex: '^/v2/oci/(.*)'
+        replacement: '/oci/v2/$1'
+        # Docker-style registry references put the /oci path element inside
+        # the repository name; forward-auth expects it before /v2/.
+
     packyard-strip-oci:
       stripPrefix:
         prefixes:

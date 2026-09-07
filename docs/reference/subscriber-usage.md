@@ -33,8 +33,9 @@ deb [signed-by=/usr/share/keyrings/lts.gpg] \
 Images are published as `lts-<component>/<image>` with an immutable version tag and a floating series tag that follows the newest version in that series.
 
 ```bash
-# Authenticate (not needed for a public component)
-docker login pkg.example.org/oci \
+# Authenticate (not needed for a public component). The registry host is
+# pkg.example.org; the /oci path element is part of the image name.
+docker login pkg.example.org \
   --username subscriber \
   --password KEY
 
