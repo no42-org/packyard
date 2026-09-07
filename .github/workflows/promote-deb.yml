@@ -116,20 +116,7 @@ jobs:
             echo "OK: $file"
           done
 
-      - name: Import GPG key (ephemeral) and sign DEBs
-        env:
-          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
-          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
-        run: |
-          echo "${GPG_PRIVATE_KEY}" | gpg --batch --import
-          gpg --list-secret-keys "${GPG_KEY_ID}"
-          for deb in ./staging/*.deb; do
-            [ -f "$deb" ] || { echo "No DEB files found in staging/"; exit 1; }
-            dpkg-sig --sign builder -k "${GPG_KEY_ID}" "$deb"
-            echo "Signed: $(basename "$deb")"
-          done
-
-      - name: Upload signed DEBs to host and copy into aptly container
+      - name: Upload DEBs to host and copy into aptly container
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage"
@@ -139,6 +126,21 @@ jobs:
             APTLY_ID=\$(docker compose -f '${DEPLOY_DIR}/compose.yml' ps -q aptly)
             docker cp /tmp/deb-stage/ \"\${APTLY_ID}:/tmp/\"
           "
+
+      - name: Import GPG key into the aptly container
+        # apt verifies the repository's InRelease, not individual packages.
+        # aptly signs it inside its container: import the key into the
+        # container's tmpfs home and hand it the passphrase through a file.
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          printf '%s\n' "${GPG_PRIVATE_KEY}" | ssh deploy@${{ secrets.HOST }} \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly gpg --batch --quiet --import"
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          printf '%s\n' "${GPG_PASSPHRASE}" | ssh deploy@${{ secrets.HOST }} \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly sh -c 'umask 077; cat > /tmp/gpg-pass'"
 
       - name: Create Aptly snapshot on host
         env:
@@ -161,10 +163,12 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
           DISTRO: ${{ inputs.distro }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T \
+              -e GPG_KEY_ID='${GPG_KEY_ID}' -e GPG_PASSPHRASE_FILE=/tmp/gpg-pass aptly \
               /scripts/publish-snapshot.sh \
               '${SNAPSHOT_NAME}' '${COMPONENT}' '${SERIES}' '${DISTRO}'"
 
@@ -200,6 +204,6 @@ jobs:
           ssh deploy@${{ secrets.HOST }} "
             rm -rf /tmp/deb-stage
             docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
-              rm -rf /tmp/deb-stage 2>/dev/null || true
+              rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg 2>/dev/null || true
           " 2>/dev/null || true
           pkill -f 'ssh -fN -L 9000' || true
