@@ -60,8 +60,11 @@ jobs:
         run: |
           served=$(curl -fsSL "https://${HOST}/gpg/lts.asc" | gpg --show-keys --with-colons | awk -F: '/^fpr/{print $10}')
           [ -n "$served" ] || { echo "ERROR: https://${HOST}/gpg/lts.asc is not a GPG public key"; exit 1; }
-          want=$(tr '[:lower:]' '[:upper:]' <<< "${GPG_KEY_ID}")
-          grep -qx "${want}" <<< "${served}" \
+          # GPG_KEY_ID may be the full 40-hex fingerprint or a 16-hex long key id,
+          # which is the fingerprint's suffix. Anything shorter is too weak to match on.
+          want=$(tr '[:lower:]' '[:upper:]' <<< "${GPG_KEY_ID}" | tr -d ' ')
+          [[ "${want}" =~ ^[0-9A-F]{16,40}$ ]] || { echo "ERROR: GPG_KEY_ID must be a 16 to 40 character hex key id or fingerprint"; exit 1; }
+          grep -qE "${want}\$" <<< "${served}" \
             || { echo "ERROR: GPG_KEY_ID does not match any fingerprint served at https://${HOST}/gpg/lts.asc"; exit 1; }
           echo "signing key ${want} is served by the host"
 
