@@ -26,7 +26,7 @@ docker build -q -t "${IMAGE}" "${REPO_ROOT}/rpm" > /dev/null
 echo "== build fixture RPM with nfpm"
 cp "${REPO_ROOT}/tests/rpm/fixtures/nfpm.yaml" "${WORK}/"
 echo "hello" > "${WORK}/hello.txt"
-docker run --rm -v "${WORK}:/work" -w /work "${NFPM_IMAGE}" package --packager rpm --target /work/ > /dev/null
+docker run --rm --user "$(id -u):$(id -g)" -v "${WORK}:/work" -w /work "${NFPM_IMAGE}" package --packager rpm --target /work/ > /dev/null
 echo "   $(ls "${WORK}"/*.rpm | xargs -n1 basename)"
 
 echo "== start the rpm container hardened like compose.yml"

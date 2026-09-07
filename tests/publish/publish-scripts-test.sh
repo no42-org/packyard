@@ -29,8 +29,8 @@ docker build -q -t packyard-aptly-test:local "${REPO_ROOT}/aptly" > /dev/null
 
 echo "== fixtures (nfpm: one config, both packagers)"
 mkdir -p "${WORK}/pkg"; cp "${REPO_ROOT}/tests/rpm/fixtures/nfpm.yaml" "${WORK}/pkg/"; echo hello > "${WORK}/pkg/hello.txt"
-docker run --rm -v "${WORK}/pkg:/work" -w /work "${NFPM_IMAGE}" package --packager rpm --target /work/ > /dev/null
-docker run --rm -v "${WORK}/pkg:/work" -w /work "${NFPM_IMAGE}" package --packager deb --target /work/ > /dev/null
+docker run --rm --user "$(id -u):$(id -g)" -v "${WORK}/pkg:/work" -w /work "${NFPM_IMAGE}" package --packager rpm --target /work/ > /dev/null
+docker run --rm --user "$(id -u):$(id -g)" -v "${WORK}/pkg:/work" -w /work "${NFPM_IMAGE}" package --packager deb --target /work/ > /dev/null
 ls "${WORK}"/pkg/*.rpm "${WORK}"/pkg/*.deb | xargs -n1 basename | sed 's/^/   /'
 
 echo "== ephemeral GPG key (generated in a throwaway aptly container, exported)"

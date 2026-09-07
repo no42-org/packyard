@@ -36,8 +36,8 @@ export COPYFILE_DISABLE=1
 
 echo "== fixtures: nfpm builds the RPM and the DEB from one config"
 mkdir -p "${WORK}/pkg"; cp "${REPO_ROOT}/tests/rpm/fixtures/nfpm.yaml" "${WORK}/pkg/"; echo hello > "${WORK}/pkg/hello.txt"
-docker run --rm -v "${WORK}/pkg:/work" -w /work "${NFPM_IMAGE}" package --packager rpm --target /work/ >/dev/null
-docker run --rm -v "${WORK}/pkg:/work" -w /work "${NFPM_IMAGE}" package --packager deb --target /work/ >/dev/null
+docker run --rm --user "$(id -u):$(id -g)" -v "${WORK}/pkg:/work" -w /work "${NFPM_IMAGE}" package --packager rpm --target /work/ >/dev/null
+docker run --rm --user "$(id -u):$(id -g)" -v "${WORK}/pkg:/work" -w /work "${NFPM_IMAGE}" package --packager deb --target /work/ >/dev/null
 RPM=$(ls "${WORK}"/pkg/*.rpm); DEB=$(ls "${WORK}"/pkg/*.deb)
 echo "   $(basename "${RPM}")  $(basename "${DEB}")"
 
