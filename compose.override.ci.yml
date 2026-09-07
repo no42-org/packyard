@@ -48,6 +48,10 @@ services:
     build:
       context: ./static
       labels: *ci-image-labels
+    volumes:
+      # The image bakes a placeholder key; serve the run's ephemeral one, the
+      # way production bind-mounts its real key (scripts/ci/signing-key.sh).
+      - ./ci/lts.asc:/usr/share/nginx/html/gpg/lts.asc:ro
 
   backup:
     build:

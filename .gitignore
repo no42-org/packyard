@@ -49,3 +49,6 @@ auth/server
 
 # Integration run artefact (subscription key seeded by scripts/ci/seed-integration.sh)
 .ci-valid-key
+
+# Ephemeral CI signing key and fixtures (scripts/ci/signing-key.sh)
+/ci/

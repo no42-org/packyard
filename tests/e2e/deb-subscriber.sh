@@ -12,6 +12,7 @@
 # OPTIONAL ENV VARS:
 #   COMPONENT  — LTS component (default: core)
 #   SERIES     — LTS series (default: 2025)
+#   PRIVATE_COMPONENT — a private component for the 401 check (default: COMPONENT)
 #   DISTRO     — DEB distribution codename (default: bookworm)
 #   PACKAGE    — DEB package name to install (default: lts-core)
 #
@@ -94,11 +95,16 @@ if ( cd "${DOWNLOAD_DIR}" && apt-get "${APT_OPTS[@]}" download "${PACKAGE}" 2>&1
     python3 - "${DEB_FILE}" "${TAMPERED}" <<'EOF'
 import sys
 data = bytearray(open(sys.argv[1], 'rb').read())
-data[4096] ^= 0xFF
+# Flip a byte inside the compressed payload, not the archive trailer; a small
+# fixture package is shorter than 4 KiB.
+i = min(4096, len(data) // 2)
+data[i] ^= 0xFF
 open(sys.argv[2], 'wb').write(data)
 EOF
     INSTALL_RC=0
-    INSTALL_OUT=$(DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install --assume-yes "${TAMPERED}" 2>&1) || INSTALL_RC=$?
+    # AC1 installed this exact version, so without --reinstall apt would answer
+    # "already the newest version" and never unpack the tampered file.
+    INSTALL_OUT=$(DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install --reinstall --assume-yes "${TAMPERED}" 2>&1) || INSTALL_RC=$?
     if [ "${INSTALL_RC}" -ne 0 ]; then
       pass "AC2 — tampered DEB rejected by apt-get install (exit non-zero): ${INSTALL_OUT}"
     else
@@ -113,7 +119,10 @@ fi
 
 echo ""
 echo "=== AC3: Invalid key returns 401 ==="
-BAD_AUTH_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/deb/${COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease"
+# A public component ignores credentials by design, so the 401 check needs a
+# private one. PRIVATE_COMPONENT defaults to COMPONENT for stacks where it is private.
+PRIVATE_COMPONENT="${PRIVATE_COMPONENT:-${COMPONENT}}"
+BAD_AUTH_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/deb/${PRIVATE_COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease"
 HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' "${BAD_AUTH_URL}" || true)
 if [ "${HTTP_STATUS}" = "401" ]; then
   pass "AC3 — invalid key correctly returns HTTP 401"

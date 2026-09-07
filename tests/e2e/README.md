@@ -194,7 +194,10 @@ These tests are integration tests, not unit tests. They require:
 `make ci-verify-env` proves the forwarded `PACKYARD_*` variables reach the auth container and that compose rejects a missing `ADMIN_DOMAIN`.
 It also asserts every built service runs an image whose revision label is the commit under test (`-dirty` if the tree had uncommitted changes), so a stale or pulled image does not pass unnoticed, and that the backup and aptly tags in `compose.yml` match their Dockerfile ARGs.
 `make ci-seed` gives CI an operator session without OAuth: `scripts/ci/seed-integration.sh` inserts one session row for the bootstrap operator into the auth database (via a one-off `sqlite3` sidecar on the `auth-db` volume), verifies it with `GET /api/v1/auth/whoami`, then provisions components, a per-run subscriber account and a key through the real API with the session cookie and an `Origin` header derived from `ADMIN_DOMAIN`.
-`make e2e-observability` runs this suite with the seeded key.
+`make ci-signing-key` generates an ephemeral GPG key under `ci/` before the stack starts; `compose.override.ci.yml` bind-mounts its public half over the static placeholder, so `/gpg/lts.asc` serves the run's key exactly as production serves its real one.
+`make ci-publish-fixtures` builds a fixture RPM and DEB with nfpm, signs the RPM, and publishes both plus a digest-pinned multi-arch `busybox` image (`lts-core/fixture:2025`) through `scripts/publish/rpm.sh`, `deb.sh` and `oci.sh`, the same scripts production promotions run on the host.
+On push and schedule runs the image is signed keylessly with the `integration.yml` identity; pull requests publish it unsigned and run the OCI test with `COSIGN_SKIP=1`.
+`make e2e-observability`, `make e2e-rpm`, `make e2e-deb` and `make e2e-oci` then run the four suites; the RPM and DEB ones under `sudo -E`, because `dnf` and `apt-get` install into a private root.
 To reproduce locally: export `COMPOSE_PROJECT_NAME=packyard-ci` and `COMPOSE_FILE=compose.yml:compose.override.ci.yml` (add `:compose.override.arm64.yml` on Apple silicon), point `COMPOSE_ENV_FILES` at a copy of the workflow's `.env`, and run the same targets.
 The `ci-*` targets refuse to run without those two exports, so they cannot touch a developer's real stack.
 Built images are tagged with the names from `compose.yml`, so on a shared daemon a CI run temporarily replaces the published tags; `make ci-stack-down` removes them again.
@@ -207,4 +210,5 @@ Built images are tagged with the names from `compose.yml`, so on a shared daemon
 |------|---------|
 | `fixtures/lts-test.repo.tmpl` | RPM `.repo` file template; `{{BASE_URL}}`, `{{COMPONENT}}`, `{{SERIES}}`, `{{OS_ARCH}}` substituted at runtime |
 | `fixtures/lts-test.list.tmpl` | DEB `sources.list` template; `{{KEY}}`, `{{BASE_URL_HOST}}`, `{{COMPONENT}}`, `{{SERIES}}`, `{{DISTRO}}` substituted at runtime |
-| `fixtures/docker-daemon.json.tmpl` | Docker auth template; documents `docker login` as the recommended credential approach for OCI pull |
+| `fixtures/docker-daemon.json.tmpl` | Docker auth template, kept for reference; OCI is anonymous-only for now (#221), so the OCI test never logs in |
+| `../rpm/fixtures/nfpm.yaml` | The `packyard-fixture` package definition nfpm builds as both `.rpm` and `.deb` for CI |

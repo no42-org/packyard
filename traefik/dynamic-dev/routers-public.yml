@@ -62,8 +62,7 @@ http:
         - packyard-auth       # sees the rewritten /oci/v2/lts-<component>/... path
         - packyard-strip-oci  # Zot receives /v2/lts-<component>/...
       service: packyard-zot-svc
-      tls:
-        certResolver: letsencrypt
+      tls: {}
 
   services:
     packyard-static-svc:

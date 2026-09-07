@@ -2,8 +2,10 @@ name: Integration
 
 # Full-stack end-to-end run: brings the compose stack up with the CI override
 # (plain HTTP, ports published to the runner), seeds an operator session and
-# test data through the real admin API, and runs the e2e observability suite.
-# All steps call Makefile targets so the same commands work locally.
+# test data through the real admin API, publishes an RPM, a DEB and a
+# multi-arch image through the same scripts production promotions use, and
+# runs the four e2e suites. All steps call Makefile targets so the same
+# commands work locally.
 
 on:
   pull_request:
@@ -65,7 +67,10 @@ jobs:
   integration:
     name: Full stack + observability
     runs-on: ubuntu-24.04
-    timeout-minutes: 25
+    timeout-minutes: 40
+    permissions:
+      contents: read
+      id-token: write  # cosign keyless signing of the OCI fixture (push and schedule only)
 
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
@@ -86,6 +91,26 @@ jobs:
           PACKYARD_BOOTSTRAP_OPERATOR_EMAIL=ci-operator@example.org
           EOF
 
+      - name: Install subscriber tooling
+        # dnf and rpm for the RPM test and rpmsign; crane and cosign for the
+        # OCI fixture and test. apt-get, docker and gpg are on the runner.
+        env:
+          CRANE_VERSION: v0.20.2
+          CRANE_SHA256: c14340087103ba9dadf61d45acd20675490fd0ccbd56ac7901fc1b502137f44b
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends dnf dnf-plugins-core rpm
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" -o /tmp/crane.tar.gz
+          echo "${CRANE_SHA256}  /tmp/crane.tar.gz" | sha256sum --check --strict
+          tar -xzf /tmp/crane.tar.gz -C /tmp crane && sudo mv /tmp/crane /usr/local/bin/crane
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: 'v3.0.6'
+
+      - name: Generate the run's signing key
+        run: make ci-signing-key
+
       - name: Start stack
         run: make ci-stack-up
 
@@ -97,8 +122,29 @@ jobs:
         # so they always match what the auth container was started with.
         run: make ci-seed
 
+      - name: Publish fixtures through the shared publish scripts
+        # Signed keylessly on push and schedule; pull requests (forks have no
+        # usable OIDC token) publish unsigned and skip the signature check.
+        env:
+          COSIGN_SIGN: ${{ github.event_name != 'pull_request' && '1' || '0' }}
+          OWN_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/integration.yml@${{ github.ref }}
+        run: make ci-publish-fixtures
+
       - name: Run observability tests (AC1–AC4)
         run: make e2e-observability
+
+      - name: Run RPM subscriber test
+        # dnf and apt-get install into a private root, which still needs root.
+        # -E keeps COMPOSE_* and the seeded key visible to the make target.
+        run: sudo -E make e2e-rpm
+
+      - name: Run DEB subscriber test
+        run: sudo -E make e2e-deb
+
+      - name: Run OCI subscriber test
+        env:
+          COSIGN_SKIP: ${{ github.event_name == 'pull_request' && '1' || '0' }}
+        run: make e2e-oci
 
       - name: Dump service logs on failure
         if: failure()
