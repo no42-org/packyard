@@ -18,7 +18,7 @@ UNAME_S := $(shell uname -s)
 .PHONY: help docs-install docs-serve docs-build docs-clean check-node test-rpm-publish test-publish-scripts \
         admin-ui admin-ui-install admin-ui-test admin-ui-dev admin-ui-clean \
         build build-clean test lint lint-workflows build-image-auth build-image-rpm build-images \
-        ci-guard ci-stack-up ci-stack-down ci-stack-logs ci-seed ci-verify-env e2e-observability
+        ci-guard ci-signing-key ci-stack-up ci-stack-down ci-stack-logs ci-seed ci-verify-env ci-publish-fixtures e2e-observability e2e-rpm e2e-deb e2e-oci
 
 ## help: Show this help
 help:
@@ -147,8 +147,12 @@ CI_REVISION := $(shell r=$$(git rev-parse HEAD 2>/dev/null) && { git diff --quie
 endif
 export CI_REVISION
 
+## ci-signing-key: Generate the run's ephemeral GPG signing key under ci/ (idempotent)
+ci-signing-key:
+	bash scripts/ci/signing-key.sh
+
 ## ci-stack-up: Build the images under test, start the CI compose stack, wait for routing and health
-ci-stack-up: ci-guard
+ci-stack-up: ci-guard ci-signing-key
 	docker compose build
 	docker compose up -d
 	bash scripts/ci/wait-for-stack.sh
@@ -167,6 +171,26 @@ ci-stack-logs: ci-guard
 ## ci-seed: Seed an operator session, CI components, an account and a subscription key via the admin API
 ci-seed: ci-guard
 	bash scripts/ci/seed-integration.sh
+
+## ci-publish-fixtures: Publish an RPM, a DEB and a multi-arch image into the CI stack through scripts/publish (needs rpm, crane, cosign)
+ci-publish-fixtures: ci-guard
+	bash scripts/ci/publish-fixtures.sh
+
+## e2e-rpm: RPM subscriber test against the CI stack and its fixture
+e2e-rpm: ci-guard
+	VALID_KEY="$${VALID_KEY:-$$(cat .ci-valid-key 2>/dev/null)}" BASE_URL="$${BASE_URL:-http://localhost}" \
+	PACKAGE=packyard-fixture bash tests/e2e/rpm-subscriber.sh
+
+## e2e-deb: DEB subscriber test against the CI stack and its fixture
+e2e-deb: ci-guard
+	VALID_KEY="$${VALID_KEY:-$$(cat .ci-valid-key 2>/dev/null)}" BASE_URL="$${BASE_URL:-http://localhost}" \
+	PACKAGE=packyard-fixture bash tests/e2e/deb-subscriber.sh
+
+## e2e-oci: OCI subscriber test against the CI stack and its fixture (COSIGN_SKIP=1 when the fixture is unsigned)
+e2e-oci: ci-guard
+	BASE_URL="$${BASE_URL:-http://localhost}" OCI_IMAGE=fixture PRIVATE_COMPONENT=minion \
+	COSIGN_CERT_IDENTITY_REGEXP="$${COSIGN_CERT_IDENTITY_REGEXP:-https://github.com/no42-org/packyard/\\.github/workflows/integration\\.yml@.*}" \
+	bash tests/e2e/oci-subscriber.sh
 
 ## ci-verify-env: Assert PACKYARD_* variables reach the auth container with the expected values, and that compose rejects a missing ADMIN_DOMAIN
 ci-verify-env: ci-guard
