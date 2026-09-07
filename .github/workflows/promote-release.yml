@@ -146,6 +146,14 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
           echo "${{ secrets.SSH_KNOWN_HOST }}" >> ~/.ssh/known_hosts
 
+      - name: Upload the publish scripts to the host
+        # The same scripts CI runs against its own stack (make test-publish-scripts);
+        # production streams packages into them over SSH. Copied fresh every run.
+        run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/publish && mkdir -p /tmp/publish"
+          scp -q scripts/publish/rpm.sh scripts/publish/deb.sh deploy@${{ secrets.HOST }}:/tmp/publish/
+
       - name: Preflight the host
         # Fail before anything is downloaded or signed if the host is not
         # ready: checkout present, rpm and aptly running, rpm image current.
@@ -234,26 +242,14 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
         run: |
-          # The rpm container has a read-only root filesystem, which docker cp
-          # refuses, so each package is streamed as a tar over SSH straight into
-          # the container's /tmp tmpfs, published, and removed: tmpfs holds one
-          # package at a time. The tree is group 101, setgid and group-writable
-          # and the container has no capabilities, so publish as 0:101 and
-          # extract without ownership.
+          # One package per call keeps the container's tmpfs to one package.
           C="${DEPLOY_DIR}/compose.yml"
           for f in ./release/*.rpm; do
             n=$(basename "$f")
             echo "Publishing ${n} into ${RPM_TARGETS}"
             # shellcheck disable=SC2029  # client-side expansion is intended
-            tar -cf - -C ./release "$n" | ssh deploy@${{ secrets.HOST }} "
-              docker compose -f '${C}' exec -T --user 0:101 rpm bash -c '
-                set -euo pipefail
-                mkdir -p /tmp/rpm-stage
-                tar -xf - --no-same-owner -C /tmp/rpm-stage
-                /scripts/add-package.sh /tmp/rpm-stage/${n} ${COMPONENT} ${SERIES} ${RPM_TARGETS}
-                rm -f /tmp/rpm-stage/${n}
-              '
-            "
+            tar -cf - -C ./release "$n" | ssh deploy@${{ secrets.HOST }} \
+              "bash /tmp/publish/rpm.sh '${C}' '${COMPONENT}' '${SERIES}' ${RPM_TARGETS}"
           done
 
       - name: Publish DEBs through aptly
@@ -264,49 +260,18 @@ jobs:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          # The bundle carries the packages and the signing material; deb.sh
+          # extracts it straight into the aptly container's tmpfs, so neither
+          # the key nor a package touches the host filesystem.
           C="${DEPLOY_DIR}/compose.yml"
-          # The aptly container has a read-only root filesystem, which docker cp
-          # refuses: stream the packages as a tar over SSH into its /tmp tmpfs.
+          bundle=$(mktemp -d)
+          mkdir -p "${bundle}/packages" "${bundle}/signing"
+          cp ./release/*.deb "${bundle}/packages/"
+          (umask 077; printf '%s\n' "${GPG_PRIVATE_KEY}" > "${bundle}/signing/key.asc"; printf '%s\n' "${GPG_PASSPHRASE}" > "${bundle}/signing/passphrase")
           # shellcheck disable=SC2029  # client-side expansion is intended
-          (cd ./release && tar -cf - -- *.deb) | ssh deploy@${{ secrets.HOST }} "
-            docker compose -f '${C}' exec -T aptly sh -c '
-              rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage && tar -xf - --no-same-owner -C /tmp/deb-stage
-            '
-          "
-          # aptly signs Release inside its container: import the key into the
-          # container's tmpfs home and hand it the passphrase through a file.
-          # gpg reads a passphrase file only in loopback pinentry mode; without
-          # it, signing fails with "Inappropriate ioctl for device" (no tty).
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          printf '%s\n' "${GPG_PRIVATE_KEY}" | ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${C}' exec -T aptly sh -c '
-              mkdir -p /root/.gnupg && chmod 700 /root/.gnupg
-              printf \"pinentry-mode loopback\n\" > /root/.gnupg/gpg.conf
-              printf \"allow-loopback-pinentry\n\" > /root/.gnupg/gpg-agent.conf
-              gpg --batch --quiet --import
-            '"
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          printf '%s\n' "${GPG_PASSPHRASE}" | ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f '${C}' exec -T aptly sh -c 'umask 077; cat > /tmp/gpg-pass'"
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} "
-            set -euo pipefail
-            C='${C}'
-            first_distro=\$(set -- ${DEB_DISTROS}; echo \"\$1\")
-            SNAP=\$(docker compose -f \"\$C\" exec -T -e DEB_STAGE_DIR=/tmp/deb-stage aptly \
-              /scripts/create-snapshot.sh '${COMPONENT}' '${SERIES}' \"\$first_distro\")
-            [ -n \"\$SNAP\" ] || { echo 'ERROR: snapshot name is empty'; exit 1; }
-            echo \"snapshot: \$SNAP\"
-            for d in ${DEB_DISTROS}; do
-              docker compose -f \"\$C\" exec -T \
-                -e GPG_KEY_ID='${GPG_KEY_ID}' -e GPG_PASSPHRASE_FILE=/tmp/gpg-pass aptly \
-                /scripts/publish-snapshot.sh \"\$SNAP\" '${COMPONENT}' '${SERIES}' \"\$d\"
-              docker compose -f \"\$C\" exec -T aptly \
-                test -f \"/opt/aptly/public/${COMPONENT}/${SERIES}/dists/\$d/InRelease\" \
-                || { echo \"ERROR: InRelease missing for \$d\"; exit 1; }
-            done
-            docker compose -f \"\$C\" exec -T aptly /scripts/prune-snapshots.sh '${COMPONENT}' '${SERIES}'
-          "
+          tar -cf - -C "${bundle}" . | ssh deploy@${{ secrets.HOST }} \
+            "bash /tmp/publish/deb.sh '${C}' '${COMPONENT}' '${SERIES}' '${GPG_KEY_ID}' ${DEB_DISTROS}"
+          rm -rf "${bundle}"
 
       - name: Open Zot tunnel
         if: env.IMAGES != ''
@@ -320,27 +285,12 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
           SOURCE_REGISTRY: ${{ inputs.source_registry }}
+          COSIGN_SIGN: "1"
           OWN_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/promote-release.yml@${{ github.ref }}
         run: |
           for img in ${IMAGES}; do
-            src="${SOURCE_REGISTRY}/${img}:${VERSION}"
-            dst="${ZOT_REGISTRY}/lts-${COMPONENT}/${img}"
-            # Upstream signature first: never copy an image the source did not sign.
-            cosign verify \
-              --certificate-identity "${SOURCE_IDENTITY}" \
-              --certificate-oidc-issuer "${OIDC_ISSUER}" \
-              "${src}" > /dev/null
-            # Registry-to-registry by digest keeps the multi-arch index intact.
-            crane copy --insecure "${src}" "${dst}:${VERSION}"
-            crane tag --insecure "${dst}:${VERSION}" "${SERIES}"
-            digest=$(crane digest --insecure "${dst}:${VERSION}")
-            [ "$(crane digest "${src}")" = "${digest}" ] || { echo "ERROR: digest changed while copying ${img}"; exit 1; }
-            cosign sign --yes --allow-insecure-registry "${dst}@${digest}"
-            cosign verify --allow-insecure-registry \
-              --certificate-identity "${OWN_IDENTITY}" \
-              --certificate-oidc-issuer "${OIDC_ISSUER}" \
-              "${dst}:${SERIES}" > /dev/null
-            echo "Published and signed: lts-${COMPONENT}/${img}:${VERSION} (${SERIES} -> ${digest})"
+            SOURCE_REF="${SOURCE_REGISTRY}/${img}:${VERSION}" \
+              bash scripts/publish/oci.sh "${ZOT_REGISTRY}" "${COMPONENT}" "${img}" "${VERSION}" "${SERIES}"
           done
 
       - name: Verify through the public hostname
@@ -368,6 +318,7 @@ jobs:
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             C='${DEPLOY_DIR}/compose.yml'
+            rm -rf /tmp/publish
             docker compose -f \"\$C\" exec -T --user 0:101 rpm rm -rf /tmp/rpm-stage 2>/dev/null || true
             docker compose -f \"\$C\" exec -T aptly sh -c 'gpgconf --kill gpg-agent 2>/dev/null; rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg' 2>/dev/null || true
           " || echo "WARN: remote cleanup failed"

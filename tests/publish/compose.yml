@@ -1,0 +1,36 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# A two-service stand-in for the serving stack, hardened like compose.yml, so
+# scripts/publish/*.sh can be exercised without Traefik, auth or a network.
+# Used by tests/publish/publish-scripts-test.sh; not for anything else.
+services:
+  rpm:
+    image: packyard-rpm-test:local
+    user: "101:101"
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /run:uid=101,gid=101
+      - /var/cache/nginx:uid=101,gid=101
+      - /tmp
+    volumes:
+      - rpm-data:/usr/share/nginx/html
+  aptly:
+    image: packyard-aptly-test:local
+    cap_drop: [ALL]
+    security_opt:
+      - no-new-privileges:true
+    read_only: true
+    tmpfs:
+      - /root
+      - /tmp
+    volumes:
+      - aptly-data:/opt/aptly
+      - ../../aptly/aptly.conf:/etc/aptly.conf:ro
+      - ../../aptly/scripts:/scripts:ro
+volumes:
+  rpm-data:
+  aptly-data:
