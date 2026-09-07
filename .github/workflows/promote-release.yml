@@ -205,6 +205,8 @@ jobs:
             SHA256SUMS
           # Every downloaded package must be listed, and every listed one we have must match.
           for f in *.rpm *.deb; do
+            # Names are interpolated into remote shell commands later on.
+            [[ "$f" =~ ^[A-Za-z0-9][A-Za-z0-9._+~-]*$ ]] || { echo "ERROR: unsafe asset name: ${f}"; exit 1; }
             grep -qF "  ${f}" SHA256SUMS || { echo "ERROR: ${f} is not listed in SHA256SUMS"; exit 1; }
           done
           sha256sum --check --strict --ignore-missing SHA256SUMS
@@ -232,25 +234,27 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
         run: |
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/rpm-stage && mkdir -p /tmp/rpm-stage"
-          scp ./release/*.rpm deploy@${{ secrets.HOST }}:/tmp/rpm-stage/
-          # The tree is group 101, setgid and group-writable; the container has
-          # no capabilities, so publish as root with group 101 to write into
-          # directories created by either the auth service or the rpm image.
-          # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} "
-            set -euo pipefail
-            C='${DEPLOY_DIR}/compose.yml'
-            RPM_ID=\$(docker compose -f \"\$C\" ps -q rpm)
-            docker cp /tmp/rpm-stage/ \"\${RPM_ID}:/tmp/\"
-            docker compose -f \"\$C\" exec -T --user 0:101 rpm bash -c '
-              set -euo pipefail
-              for f in /tmp/rpm-stage/*.rpm; do
-                /scripts/add-package.sh \"\$f\" \"${COMPONENT}\" \"${SERIES}\" ${RPM_TARGETS}
-              done
-            '
-          "
+          # The rpm container has a read-only root filesystem, which docker cp
+          # refuses, so each package is streamed as a tar over SSH straight into
+          # the container's /tmp tmpfs, published, and removed: tmpfs holds one
+          # package at a time. The tree is group 101, setgid and group-writable
+          # and the container has no capabilities, so publish as 0:101 and
+          # extract without ownership.
+          C="${DEPLOY_DIR}/compose.yml"
+          for f in ./release/*.rpm; do
+            n=$(basename "$f")
+            echo "Publishing ${n} into ${RPM_TARGETS}"
+            # shellcheck disable=SC2029  # client-side expansion is intended
+            tar -cf - -C ./release "$n" | ssh deploy@${{ secrets.HOST }} "
+              docker compose -f '${C}' exec -T --user 0:101 rpm bash -c '
+                set -euo pipefail
+                mkdir -p /tmp/rpm-stage
+                tar -xf - --no-same-owner -C /tmp/rpm-stage
+                /scripts/add-package.sh /tmp/rpm-stage/${n} ${COMPONENT} ${SERIES} ${RPM_TARGETS}
+                rm -f /tmp/rpm-stage/${n}
+              '
+            "
+          done
 
       - name: Publish DEBs through aptly
         env:
@@ -260,12 +264,17 @@ jobs:
           GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
           GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
         run: |
+          C="${DEPLOY_DIR}/compose.yml"
+          # The aptly container has a read-only root filesystem, which docker cp
+          # refuses: stream the packages as a tar over SSH into its /tmp tmpfs.
           # shellcheck disable=SC2029  # client-side expansion is intended
-          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage"
-          scp ./release/*.deb deploy@${{ secrets.HOST }}:/tmp/deb-stage/
+          (cd ./release && tar -cf - -- *.deb) | ssh deploy@${{ secrets.HOST }} "
+            docker compose -f '${C}' exec -T aptly sh -c '
+              rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage && tar -xf - --no-same-owner -C /tmp/deb-stage
+            '
+          "
           # aptly signs Release inside its container: import the key into the
           # container's tmpfs home and hand it the passphrase through a file.
-          C="${DEPLOY_DIR}/compose.yml"
           # shellcheck disable=SC2029  # client-side expansion is intended
           printf '%s\n' "${GPG_PRIVATE_KEY}" | ssh deploy@${{ secrets.HOST }} \
             "docker compose -f '${C}' exec -T aptly gpg --batch --quiet --import"
@@ -276,8 +285,6 @@ jobs:
           ssh deploy@${{ secrets.HOST }} "
             set -euo pipefail
             C='${C}'
-            APTLY_ID=\$(docker compose -f \"\$C\" ps -q aptly)
-            docker cp /tmp/deb-stage/ \"\${APTLY_ID}:/tmp/\"
             first_distro=\$(set -- ${DEB_DISTROS}; echo \"\$1\")
             SNAP=\$(docker compose -f \"\$C\" exec -T -e DEB_STAGE_DIR=/tmp/deb-stage aptly \
               /scripts/create-snapshot.sh '${COMPONENT}' '${SERIES}' \"\$first_distro\")
@@ -352,7 +359,6 @@ jobs:
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             C='${DEPLOY_DIR}/compose.yml'
-            rm -rf /tmp/rpm-stage /tmp/deb-stage
             docker compose -f \"\$C\" exec -T --user 0:101 rpm rm -rf /tmp/rpm-stage 2>/dev/null || true
             docker compose -f \"\$C\" exec -T aptly rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg 2>/dev/null || true
           " 2>/dev/null || true
