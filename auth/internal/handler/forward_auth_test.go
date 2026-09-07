@@ -479,8 +479,8 @@ func (e *errComponentStore) CountActiveComponentKeys(ctx context.Context, compon
 func (e *errComponentStore) DeleteComponentWithRevoke(ctx context.Context, name string) (int64, error) {
 	return e.inner.DeleteComponentWithRevoke(ctx, name)
 }
-func (e *errComponentStore) UpdateComponentVisibility(ctx context.Context, name, vis string) (*store.Component, error) {
-	return e.inner.UpdateComponentVisibility(ctx, name, vis)
+func (e *errComponentStore) UpdateComponent(ctx context.Context, name string, patch store.ComponentPatch) (*store.Component, error) {
+	return e.inner.UpdateComponent(ctx, name, patch)
 }
 
 // FuzzExtractComponent checks the invariants extractComponent must hold for

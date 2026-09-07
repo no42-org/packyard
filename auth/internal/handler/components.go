@@ -257,14 +257,29 @@ func (h *ComponentsHandler) Delete(w http.ResponseWriter, r *http.Request) {
 }
 
 // updateComponentRequest is the JSON body for PATCH /api/v1/components/{name}.
+// Every field is optional; at least one must be present. A list replaces the
+// stored list.
 type updateComponentRequest struct {
-	Visibility string `json:"visibility"`
+	Visibility       *string   `json:"visibility"`
+	RPMSeries        *[]string `json:"rpm_series"`
+	RPMOSFamilies    *[]string `json:"rpm_os_families"`
+	RPMArchitectures *[]string `json:"rpm_architectures"`
 }
 
-// Update handles PATCH /api/v1/components/{name} — updates mutable component fields.
-// Currently only visibility ("public" or "private") may be changed.
-// The change is persisted immediately; forward-auth picks it up on the next request
-// without a service restart.
+// updateComponentResponse is the updated record plus the RPM targets
+// (series/family-arch) the patch stopped declaring. Their directories stay on
+// disk; the operator removes them, as with DELETE.
+type updateComponentResponse struct {
+	*store.Component
+	RPMTargetsRemoved []string `json:"rpm_targets_removed"`
+}
+
+// Update handles PATCH /api/v1/components/{name}: visibility and the three RPM
+// lists. New series × os_family × arch combinations are provisioned on disk
+// before the record changes, so a failed mkdir leaves the record untouched.
+// Combinations no longer declared are reported in rpm_targets_removed and
+// left on disk. The change is persisted immediately; forward-auth picks it up
+// on the next request without a service restart.
 func (h *ComponentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 	name := chi.URLParam(r, "name")
 	r.Body = http.MaxBytesReader(w, r.Body, 1<<20)
@@ -273,13 +288,79 @@ func (h *ComponentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 		writeError(w, http.StatusBadRequest, "INVALID_REQUEST", "request body must be valid JSON")
 		return
 	}
-	if req.Visibility != "public" && req.Visibility != "private" {
+	patch := store.ComponentPatch{
+		Visibility:       req.Visibility,
+		RPMSeries:        req.RPMSeries,
+		RPMOSFamilies:    req.RPMOSFamilies,
+		RPMArchitectures: req.RPMArchitectures,
+	}
+	if patch.IsEmpty() {
+		writeError(w, http.StatusBadRequest, "INVALID_REQUEST",
+			"at least one of visibility, rpm_series, rpm_os_families, rpm_architectures is required")
+		return
+	}
+	if req.Visibility != nil && *req.Visibility != "public" && *req.Visibility != "private" {
 		writeError(w, http.StatusBadRequest, "INVALID_VISIBILITY",
-			fmt.Sprintf("visibility %q is invalid; must be \"public\" or \"private\"", req.Visibility))
+			fmt.Sprintf("visibility %q is invalid; must be \"public\" or \"private\"", *req.Visibility))
+		return
+	}
+	for _, field := range []struct {
+		label  string
+		values *[]string
+	}{
+		{"rpm_series", req.RPMSeries},
+		{"rpm_os_families", req.RPMOSFamilies},
+		{"rpm_architectures", req.RPMArchitectures},
+	} {
+		if field.values == nil {
+			continue
+		}
+		for _, v := range *field.values {
+			if !pathSegmentRe.MatchString(v) {
+				writeError(w, http.StatusBadRequest, "INVALID_REQUEST",
+					fmt.Sprintf("%s contains invalid value %q", field.label, v))
+				return
+			}
+		}
+	}
+
+	current, err := h.Store.GetComponent(r.Context(), name)
+	if err != nil {
+		if errors.Is(err, store.ErrComponentNotFound) {
+			writeError(w, http.StatusNotFound, "COMPONENT_NOT_FOUND",
+				fmt.Sprintf("component %q not found", name))
+			return
+		}
+		h.Logger.Error("failed to load component", logsafe.Attr("name", name), slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "COMPONENT_UPDATE_FAILED", "failed to update component")
 		return
 	}
 
-	comp, err := h.Store.UpdateComponentVisibility(r.Context(), name, req.Visibility)
+	// The record as it will look after the patch, to provision new directories
+	// first and to compute what the patch stops declaring.
+	next := *current
+	if patch.Visibility != nil {
+		next.Visibility = *patch.Visibility
+	}
+	if patch.RPMSeries != nil {
+		next.RPMSeries = *patch.RPMSeries
+	}
+	if patch.RPMOSFamilies != nil {
+		next.RPMOSFamilies = *patch.RPMOSFamilies
+	}
+	if patch.RPMArchitectures != nil {
+		next.RPMArchitectures = *patch.RPMArchitectures
+	}
+	// Snapshot before the store call: a store may hand back the same object.
+	before := rpmTargets(current)
+	if err := h.initRPMTree(r.Context(), &next); err != nil {
+		h.Logger.Error("failed to provision RPM tree", logsafe.Attr("name", name), slog.String("error", err.Error()))
+		writeError(w, http.StatusInternalServerError, "RPM_INIT_FAILED",
+			fmt.Sprintf("RPM directory initialisation failed: %v", err))
+		return
+	}
+
+	updated, err := h.Store.UpdateComponent(r.Context(), name, patch)
 	if err != nil {
 		if errors.Is(err, store.ErrComponentNotFound) {
 			writeError(w, http.StatusNotFound, "COMPONENT_NOT_FOUND",
@@ -293,7 +374,39 @@ func (h *ComponentsHandler) Update(w http.ResponseWriter, r *http.Request) {
 
 	w.Header().Set("Content-Type", "application/json")
 	w.WriteHeader(http.StatusOK)
-	_ = json.NewEncoder(w).Encode(comp)
+	_ = json.NewEncoder(w).Encode(updateComponentResponse{
+		Component:         updated,
+		RPMTargetsRemoved: removedRPMTargets(before, updated),
+	})
+}
+
+// rpmTargets lists every series/family-arch combination a component declares.
+func rpmTargets(c *store.Component) []string {
+	var out []string
+	for _, series := range c.RPMSeries {
+		for _, family := range c.RPMOSFamilies {
+			for _, arch := range c.RPMArchitectures {
+				out = append(out, series+"/"+family+"-"+arch)
+			}
+		}
+	}
+	return out
+}
+
+// removedRPMTargets returns the targets in before that after no longer
+// declares, in before's order. Never nil, so the JSON field is [] not null.
+func removedRPMTargets(before []string, after *store.Component) []string {
+	keep := make(map[string]bool)
+	for _, t := range rpmTargets(after) {
+		keep[t] = true
+	}
+	removed := []string{}
+	for _, t := range before {
+		if !keep[t] {
+			removed = append(removed, t)
+		}
+	}
+	return removed
 }
 
 // pathSegmentRe bounds every value that becomes a directory name under

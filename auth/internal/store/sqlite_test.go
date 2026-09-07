@@ -421,7 +421,7 @@ func TestLoadComponentSets(t *testing.T) {
 	}
 }
 
-func TestUpdateComponentVisibility_Success(t *testing.T) {
+func TestUpdateComponent_VisibilitySuccess(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
@@ -429,9 +429,9 @@ func TestUpdateComponentVisibility_Success(t *testing.T) {
 		t.Fatalf("CreateComponent: %v", err)
 	}
 
-	updated, err := s.UpdateComponentVisibility(ctx, "core", "public")
+	updated, err := s.UpdateComponent(ctx, "core", ComponentPatch{Visibility: strPtr("public")})
 	if err != nil {
-		t.Fatalf("UpdateComponentVisibility: %v", err)
+		t.Fatalf("UpdateComponent: %v", err)
 	}
 	if updated.Visibility != "public" {
 		t.Errorf("expected visibility public, got %q", updated.Visibility)
@@ -450,9 +450,9 @@ func TestUpdateComponentVisibility_Success(t *testing.T) {
 	}
 }
 
-func TestUpdateComponentVisibility_NotFound(t *testing.T) {
+func TestUpdateComponent_NotFound(t *testing.T) {
 	s := newTestStore(t)
-	_, err := s.UpdateComponentVisibility(context.Background(), "nonexistent", "public")
+	_, err := s.UpdateComponent(context.Background(), "nonexistent", ComponentPatch{Visibility: strPtr("public")})
 	if err == nil {
 		t.Fatal("expected error, got nil")
 	}
@@ -461,7 +461,7 @@ func TestUpdateComponentVisibility_NotFound(t *testing.T) {
 	}
 }
 
-func TestUpdateComponentVisibility_RoundTrip(t *testing.T) {
+func TestUpdateComponent_VisibilityRoundTrip(t *testing.T) {
 	s := newTestStore(t)
 	ctx := context.Background()
 
@@ -471,9 +471,9 @@ func TestUpdateComponentVisibility_RoundTrip(t *testing.T) {
 
 	// public → private → public
 	for _, vis := range []string{"private", "public"} {
-		got, err := s.UpdateComponentVisibility(ctx, "core", vis)
+		got, err := s.UpdateComponent(ctx, "core", ComponentPatch{Visibility: strPtr(vis)})
 		if err != nil {
-			t.Fatalf("UpdateComponentVisibility(%q): %v", vis, err)
+			t.Fatalf("UpdateComponent(%q): %v", vis, err)
 		}
 		if got.Visibility != vis {
 			t.Errorf("returned visibility: want %q, got %q", vis, got.Visibility)
@@ -920,5 +920,55 @@ func TestCanonicalEmail(t *testing.T) {
 		if got := canonicalEmail(c.in); got != c.want {
 			t.Errorf("canonicalEmail(%q) = %q, want %q", c.in, got, c.want)
 		}
+	}
+}
+
+func strPtr(v string) *string { return &v }
+
+func TestUpdateComponent_RPMListsReplaceAndPersist(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	c := newTestComponent("core", "public")
+	c.RPMSeries = []string{"2025"}
+	c.RPMOSFamilies = []string{"el9"}
+	c.RPMArchitectures = []string{"x86_64"}
+	if _, err := s.CreateComponent(ctx, c); err != nil {
+		t.Fatalf("CreateComponent: %v", err)
+	}
+	series := []string{"2025", "38"}
+	got, err := s.UpdateComponent(ctx, "core", ComponentPatch{RPMSeries: &series})
+	if err != nil {
+		t.Fatalf("UpdateComponent: %v", err)
+	}
+	if len(got.RPMSeries) != 2 || got.RPMSeries[1] != "38" {
+		t.Errorf("rpm_series: want [2025 38], got %v", got.RPMSeries)
+	}
+	if len(got.RPMOSFamilies) != 1 || got.RPMOSFamilies[0] != "el9" {
+		t.Errorf("rpm_os_families must be untouched, got %v", got.RPMOSFamilies)
+	}
+	if got.Visibility != "public" {
+		t.Errorf("visibility must be untouched, got %q", got.Visibility)
+	}
+	again, err := s.GetComponent(ctx, "core")
+	if err != nil {
+		t.Fatalf("GetComponent: %v", err)
+	}
+	if len(again.RPMSeries) != 2 {
+		t.Errorf("persisted rpm_series: want 2 entries, got %v", again.RPMSeries)
+	}
+}
+
+func TestUpdateComponent_EmptyPatchIsNoOp(t *testing.T) {
+	s := newTestStore(t)
+	ctx := context.Background()
+	if _, err := s.CreateComponent(ctx, newTestComponent("core", "private")); err != nil {
+		t.Fatalf("CreateComponent: %v", err)
+	}
+	got, err := s.UpdateComponent(ctx, "core", ComponentPatch{})
+	if err != nil {
+		t.Fatalf("UpdateComponent: %v", err)
+	}
+	if got.Visibility != "private" {
+		t.Errorf("visibility changed by empty patch: %q", got.Visibility)
 	}
 }

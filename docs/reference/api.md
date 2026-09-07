@@ -258,16 +258,39 @@ before deleting the directory.
 
 ### Updating a component
 
-`PATCH /api/v1/components/{name}` updates mutable fields. Currently only
-`visibility` may be changed. The update is persisted immediately and takes
-effect on the next subscriber request — no restart required.
+`PATCH /api/v1/components/{name}` updates `visibility`, `rpm_series`, `rpm_os_families` and `rpm_architectures`.
+Every field is optional and at least one must be present; a list replaces the stored list.
+Values follow the same path-segment rule as creation.
+The update is persisted immediately and takes effect on the next subscriber request, no restart required.
+
+New `series × os_family × architecture` combinations are provisioned on disk before the record changes, so a failed directory creation (`RPM_INIT_FAILED`) leaves the record untouched.
+Combinations the patch stops declaring are returned in `rpm_targets_removed` as `<series>/<family>-<arch>`; their directories and packages stay on disk and keep being served until an operator removes them, the same rule as for `DELETE`.
 
 ```bash
-curl -s -X PATCH https://admin.pkg.example.org/api/v1/components/minion \
+curl -s -X PATCH https://admin.pkg.example.org/api/v1/components/bluebird \
   -H 'Content-Type: application/json' \
   --cookie "$COOKIE" \
-  -d '{"visibility":"public"}' | jq .
+  -d '{"rpm_series":["38","39"],"rpm_os_families":["el9"]}' | jq .
 ```
+
+```json
+{
+  "name": "bluebird",
+  "visibility": "public",
+  "rpm_series": ["38", "39"],
+  "rpm_os_families": ["el9"],
+  "rpm_architectures": ["x86_64"],
+  "created_at": "2026-09-07T13:25:59Z",
+  "rpm_targets_removed": ["38/el10-x86_64"]
+}
+```
+
+| Code | Status | When |
+|------|--------|------|
+| `INVALID_REQUEST` | 400 | Malformed JSON, empty patch, or a value that is not a single path segment |
+| `INVALID_VISIBILITY` | 400 | `visibility` is not `public` or `private` |
+| `COMPONENT_NOT_FOUND` | 404 | No such component |
+| `RPM_INIT_FAILED` | 500 | A new directory could not be created; the record is unchanged |
 
 ## Operators
 

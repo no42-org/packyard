@@ -703,23 +703,74 @@ func (s *SQLiteStore) DeleteComponentWithRevoke(ctx context.Context, name string
 	return revoked, nil
 }
 
-// UpdateComponentVisibility sets the visibility field for a component.
+// UpdateComponent applies a ComponentPatch in one transaction: nil fields are
+// left as they are, a non-nil list replaces the stored list. The updated
+// record is returned.
 // Returns the updated component record or ErrComponentNotFound if the component does not exist.
 // Uses RETURNING to read back the row in the same statement, avoiding a TOCTOU between
 // the UPDATE and a subsequent SELECT.
-func (s *SQLiteStore) UpdateComponentVisibility(ctx context.Context, name, visibility string) (*Component, error) {
-	row := s.db.QueryRowContext(ctx,
-		`UPDATE components SET visibility = ? WHERE name = ?
-		 RETURNING name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at`,
-		visibility, name)
-	c, err := scanComponent(row)
+func (s *SQLiteStore) UpdateComponent(ctx context.Context, name string, patch ComponentPatch) (*Component, error) {
+	tx, err := s.db.BeginTx(ctx, nil)
+	if err != nil {
+		return nil, fmt.Errorf("update component: begin: %w", err)
+	}
+	defer func() { _ = tx.Rollback() }()
+
+	current, err := scanComponent(tx.QueryRowContext(ctx,
+		`SELECT name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at
+		 FROM components WHERE name = ?`, name))
 	if errors.Is(err, sql.ErrNoRows) {
-		return nil, fmt.Errorf("update component visibility: %w", ErrComponentNotFound)
+		return nil, fmt.Errorf("update component: %w", ErrComponentNotFound)
 	}
 	if err != nil {
-		return nil, fmt.Errorf("update component visibility: %w", err)
+		return nil, fmt.Errorf("update component: %w", err)
 	}
-	return c, nil
+	if patch.Visibility != nil {
+		current.Visibility = *patch.Visibility
+	}
+	if patch.RPMSeries != nil {
+		current.RPMSeries = *patch.RPMSeries
+	}
+	if patch.RPMOSFamilies != nil {
+		current.RPMOSFamilies = *patch.RPMOSFamilies
+	}
+	if patch.RPMArchitectures != nil {
+		current.RPMArchitectures = *patch.RPMArchitectures
+	}
+	seriesJSON, err := json.Marshal(nonNil(current.RPMSeries))
+	if err != nil {
+		return nil, fmt.Errorf("marshal rpm_series: %w", err)
+	}
+	familiesJSON, err := json.Marshal(nonNil(current.RPMOSFamilies))
+	if err != nil {
+		return nil, fmt.Errorf("marshal rpm_os_families: %w", err)
+	}
+	archsJSON, err := json.Marshal(nonNil(current.RPMArchitectures))
+	if err != nil {
+		return nil, fmt.Errorf("marshal rpm_architectures: %w", err)
+	}
+	row := tx.QueryRowContext(ctx,
+		`UPDATE components
+		 SET visibility = ?, rpm_series = ?, rpm_os_families = ?, rpm_architectures = ?
+		 WHERE name = ?
+		 RETURNING name, visibility, rpm_series, rpm_os_families, rpm_architectures, created_at`,
+		current.Visibility, string(seriesJSON), string(familiesJSON), string(archsJSON), name)
+	updated, err := scanComponent(row)
+	if err != nil {
+		return nil, fmt.Errorf("update component: %w", err)
+	}
+	if err := tx.Commit(); err != nil {
+		return nil, fmt.Errorf("update component: commit: %w", err)
+	}
+	return updated, nil
+}
+
+// nonNil turns a nil slice into an empty one so JSON stores [] rather than null.
+func nonNil(v []string) []string {
+	if v == nil {
+		return []string{}
+	}
+	return v
 }
 
 // LoadComponentSets queries the components table and returns two maps for O(1) lookups:

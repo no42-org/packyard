@@ -27,7 +27,7 @@ import (
 type stubComponentStore struct {
 	comps    map[string]*store.Component
 	keys     map[string]int64 // component → active key count (for impact preview)
-	updateFn func(ctx context.Context, name, visibility string) (*store.Component, error)
+	updateFn func(ctx context.Context, name string, patch store.ComponentPatch) (*store.Component, error)
 }
 
 func newStubComponentStore() *stubComponentStore {
@@ -109,15 +109,26 @@ func (s *stubComponentStore) DeleteComponentWithRevoke(ctx context.Context, name
 	return n, nil
 }
 
-func (s *stubComponentStore) UpdateComponentVisibility(ctx context.Context, name, visibility string) (*store.Component, error) {
+func (s *stubComponentStore) UpdateComponent(ctx context.Context, name string, patch store.ComponentPatch) (*store.Component, error) {
 	if s.updateFn != nil {
-		return s.updateFn(ctx, name, visibility)
+		return s.updateFn(ctx, name, patch)
 	}
 	c, ok := s.comps[name]
 	if !ok {
 		return nil, store.ErrComponentNotFound
 	}
-	c.Visibility = visibility
+	if patch.Visibility != nil {
+		c.Visibility = *patch.Visibility
+	}
+	if patch.RPMSeries != nil {
+		c.RPMSeries = *patch.RPMSeries
+	}
+	if patch.RPMOSFamilies != nil {
+		c.RPMOSFamilies = *patch.RPMOSFamilies
+	}
+	if patch.RPMArchitectures != nil {
+		c.RPMArchitectures = *patch.RPMArchitectures
+	}
 	s.comps[name] = c // explicit re-store so callers see the mutation via map lookup
 	return c, nil
 }
@@ -445,7 +456,7 @@ func TestComponentUpdate_PrivateToPublic(t *testing.T) {
 		RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{},
 	})
 
-	body, _ := json.Marshal(updateComponentRequest{Visibility: "public"})
+	body, _ := json.Marshal(map[string]string{"visibility": "public"})
 	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", body)
 	w := httptest.NewRecorder()
 	h.Update(w, r)
@@ -470,7 +481,7 @@ func TestComponentUpdate_PublicToPrivate(t *testing.T) {
 		RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{},
 	})
 
-	body, _ := json.Marshal(updateComponentRequest{Visibility: "private"})
+	body, _ := json.Marshal(map[string]string{"visibility": "private"})
 	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", body)
 	w := httptest.NewRecorder()
 	h.Update(w, r)
@@ -489,7 +500,7 @@ func TestComponentUpdate_PublicToPrivate(t *testing.T) {
 
 func TestComponentUpdate_NotFound(t *testing.T) {
 	h, _ := newTestComponentsHandler(t)
-	body, _ := json.Marshal(updateComponentRequest{Visibility: "public"})
+	body, _ := json.Marshal(map[string]string{"visibility": "public"})
 	r := chiRequest(http.MethodPatch, "/api/v1/components/unknown", "unknown", body)
 	w := httptest.NewRecorder()
 	h.Update(w, r)
@@ -502,7 +513,7 @@ func TestComponentUpdate_NotFound(t *testing.T) {
 
 func TestComponentUpdate_InvalidVisibility(t *testing.T) {
 	h, _ := newTestComponentsHandler(t)
-	body, _ := json.Marshal(updateComponentRequest{Visibility: "restricted"})
+	body, _ := json.Marshal(map[string]string{"visibility": "restricted"})
 	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", body)
 	w := httptest.NewRecorder()
 	h.Update(w, r)
@@ -527,11 +538,15 @@ func TestComponentUpdate_MalformedBody(t *testing.T) {
 
 func TestComponentUpdate_StoreError(t *testing.T) {
 	h, cs := newTestComponentsHandler(t)
-	cs.updateFn = func(_ context.Context, _, _ string) (*store.Component, error) {
+	_, _ = cs.CreateComponent(context.Background(), &store.Component{
+		Name: "core", Visibility: "private",
+		RPMSeries: []string{}, RPMOSFamilies: []string{}, RPMArchitectures: []string{},
+	})
+	cs.updateFn = func(_ context.Context, _ string, _ store.ComponentPatch) (*store.Component, error) {
 		return nil, errors.New("database locked")
 	}
 
-	body, _ := json.Marshal(updateComponentRequest{Visibility: "public"})
+	body, _ := json.Marshal(map[string]string{"visibility": "public"})
 	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", body)
 	w := httptest.NewRecorder()
 	h.Update(w, r)
@@ -553,4 +568,99 @@ func assertErrorCode(t *testing.T, w *httptest.ResponseRecorder, code string) {
 	if e.Code != code {
 		t.Errorf("error code: want %q, got %q", code, e.Code)
 	}
+}
+
+func TestComponentUpdate_AddSeriesProvisionsDirectories(t *testing.T) {
+	h, st := newTestComponentsHandler(t)
+	ctx := context.Background()
+	_, _ = st.CreateComponent(ctx, &store.Component{
+		Name: "bluebird", Visibility: "public",
+		RPMSeries: []string{"38"}, RPMOSFamilies: []string{"el9"}, RPMArchitectures: []string{"x86_64"},
+	})
+
+	body, _ := json.Marshal(map[string][]string{"rpm_series": {"38", "39"}})
+	r := chiRequest(http.MethodPatch, "/api/v1/components/bluebird", "bluebird", body)
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp updateComponentResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.RPMSeries) != 2 || resp.RPMSeries[1] != "39" {
+		t.Errorf("rpm_series: want [38 39], got %v", resp.RPMSeries)
+	}
+	if len(resp.RPMTargetsRemoved) != 0 {
+		t.Errorf("rpm_targets_removed: want none, got %v", resp.RPMTargetsRemoved)
+	}
+	if _, err := os.Stat(filepath.Join(h.RPMDataRoot, "rpm", "bluebird", "39", "el9-x86_64")); err != nil {
+		t.Errorf("new series directory not provisioned: %v", err)
+	}
+}
+
+func TestComponentUpdate_RemovedTargetReportedNotDeleted(t *testing.T) {
+	h, st := newTestComponentsHandler(t)
+	ctx := context.Background()
+	comp := &store.Component{
+		Name: "bluebird", Visibility: "public",
+		RPMSeries: []string{"38"}, RPMOSFamilies: []string{"el9", "el10"}, RPMArchitectures: []string{"x86_64"},
+	}
+	_, _ = st.CreateComponent(ctx, comp)
+	if err := h.initRPMTree(ctx, comp); err != nil {
+		t.Fatalf("initRPMTree: %v", err)
+	}
+
+	body, _ := json.Marshal(map[string][]string{"rpm_os_families": {"el9"}})
+	r := chiRequest(http.MethodPatch, "/api/v1/components/bluebird", "bluebird", body)
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusOK {
+		t.Fatalf("status: want 200, got %d: %s", w.Code, w.Body.String())
+	}
+	var resp updateComponentResponse
+	if err := json.NewDecoder(w.Body).Decode(&resp); err != nil {
+		t.Fatalf("decode: %v", err)
+	}
+	if len(resp.RPMTargetsRemoved) != 1 || resp.RPMTargetsRemoved[0] != "38/el10-x86_64" {
+		t.Errorf("rpm_targets_removed: want [38/el10-x86_64], got %v", resp.RPMTargetsRemoved)
+	}
+	if _, err := os.Stat(filepath.Join(h.RPMDataRoot, "rpm", "bluebird", "38", "el10-x86_64")); err != nil {
+		t.Errorf("removed target directory must stay on disk: %v", err)
+	}
+}
+
+func TestComponentUpdate_InvalidSegmentRejected(t *testing.T) {
+	h, st := newTestComponentsHandler(t)
+	_, _ = st.CreateComponent(context.Background(), &store.Component{
+		Name: "bluebird", Visibility: "public",
+		RPMSeries: []string{"38"}, RPMOSFamilies: []string{"el9"}, RPMArchitectures: []string{"x86_64"},
+	})
+	body, _ := json.Marshal(map[string][]string{"rpm_series": {"../39"}})
+	r := chiRequest(http.MethodPatch, "/api/v1/components/bluebird", "bluebird", body)
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status: want 400, got %d", w.Code)
+	}
+	assertErrorCode(t, w, "INVALID_REQUEST")
+	if _, err := os.Stat(filepath.Join(h.RPMDataRoot, "rpm", "bluebird")); err == nil {
+		t.Errorf("no directory may be created for a rejected patch")
+	}
+}
+
+func TestComponentUpdate_EmptyPatchRejected(t *testing.T) {
+	h, _ := newTestComponentsHandler(t)
+	r := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", []byte("{}"))
+	w := httptest.NewRecorder()
+	h.Update(w, r)
+
+	if w.Code != http.StatusBadRequest {
+		t.Errorf("status: want 400, got %d", w.Code)
+	}
+	assertErrorCode(t, w, "INVALID_REQUEST")
 }

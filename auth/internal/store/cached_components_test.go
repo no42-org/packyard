@@ -26,7 +26,7 @@ type countingComponentStore struct {
 	comps     map[string]*Component
 	getCalls  int
 	err       error // returned by GetComponent when non-nil
-	updateErr error // returned by UpdateComponentVisibility when non-nil
+	updateErr error // returned by UpdateComponent when non-nil
 	gate      chan struct{}
 }
 
@@ -93,7 +93,7 @@ func (s *countingComponentStore) GetComponent(ctx context.Context, name string) 
 	return c, nil
 }
 
-func (s *countingComponentStore) UpdateComponentVisibility(_ context.Context, name, visibility string) (*Component, error) {
+func (s *countingComponentStore) UpdateComponent(_ context.Context, name string, patch ComponentPatch) (*Component, error) {
 	s.mu.Lock()
 	defer s.mu.Unlock()
 	if s.updateErr != nil {
@@ -103,7 +103,9 @@ func (s *countingComponentStore) UpdateComponentVisibility(_ context.Context, na
 	if !ok {
 		return nil, ErrComponentNotFound
 	}
-	c.Visibility = visibility
+	if patch.Visibility != nil {
+		c.Visibility = *patch.Visibility
+	}
 	cp := *c
 	return &cp, nil
 }
@@ -253,7 +255,7 @@ func TestCached_PublicToPrivateEvictsImmediately(t *testing.T) {
 		cs := NewCachedComponentStore(context.Background(), inner, testTTL)
 
 		mustGet(t, cs, "core")
-		if _, err := cs.UpdateComponentVisibility(context.Background(), "core", "private"); err != nil {
+		if _, err := cs.UpdateComponent(context.Background(), "core", ComponentPatch{Visibility: ptr("private")}); err != nil {
 			t.Fatal(err)
 		}
 		c := mustGet(t, cs, "core")
@@ -295,7 +297,7 @@ func TestCached_FailedWriteDoesNotEvict(t *testing.T) {
 		mustGet(t, cs, "core")
 
 		inner.setUpdateErr(errors.New("disk full"))
-		if _, err := cs.UpdateComponentVisibility(context.Background(), "core", "private"); err == nil {
+		if _, err := cs.UpdateComponent(context.Background(), "core", ComponentPatch{Visibility: ptr("private")}); err == nil {
 			t.Fatal("expected write error")
 		}
 		mustGet(t, cs, "core")
@@ -402,7 +404,7 @@ func TestCached_WriteDuringInFlightLookupIsNotResurrected(t *testing.T) {
 
 		// Operator flips visibility while the read is in flight.
 		inner.setGate(nil)
-		if _, err := cs.UpdateComponentVisibility(context.Background(), "core", "private"); err != nil {
+		if _, err := cs.UpdateComponent(context.Background(), "core", ComponentPatch{Visibility: ptr("private")}); err != nil {
 			t.Fatal(err)
 		}
 		close(gate) // stale "public" result now returns to the decorator
@@ -451,3 +453,5 @@ func TestCached_GaugeTracksLen(t *testing.T) {
 		}
 	})
 }
+
+func ptr(v string) *string { return &v }
