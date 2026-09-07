@@ -45,12 +45,20 @@ echo "== sign the RPM with the ephemeral key (rpmsign, loopback passphrase)"
 export GNUPGHOME="${WORK}/gnupg"; mkdir -p "${GNUPGHOME}"; chmod 700 "${GNUPGHOME}"
 printf 'pinentry-mode loopback\n' > "${GNUPGHOME}/gpg.conf"; printf 'allow-loopback-pinentry\n' > "${GNUPGHOME}/gpg-agent.conf"
 gpg --batch --quiet --import "${REPO_ROOT}/ci/key.asc"
-gpg --batch --yes --passphrase-file "${REPO_ROOT}/ci/passphrase" -u "${KEYID}" --sign --output /dev/null - </dev/null
-rpmsign --addsign --define "_gpg_name ${KEYID}" --define "_gpg_path ${GNUPGHOME}" "${RPM}" >/dev/null
-# rpm -K reports a signer it does not know as NOT OK, so ask for the header.
-sig=$(rpm -qp --qf '%{SIGPGP:pgpsig}' "${RPM}" 2>/dev/null || true)
-case "${sig}" in ""|"(none)") echo "ERROR: RPM is not signed" >&2; exit 1 ;; esac
-echo "   signed: ${sig}"
+# rpm's default gpg command runs with --pinentry-mode error, so hand it the
+# passphrase through the extra-args hook; the later --pinentry-mode wins.
+rpmsign --addsign \
+  --define "__gpg /usr/bin/gpg" \
+  --define "_gpg_name ${KEYID}" \
+  --define "_gpg_path ${GNUPGHOME}" \
+  --define "_gpg_sign_cmd_extra_args --pinentry-mode loopback --passphrase-file ${REPO_ROOT}/ci/passphrase" \
+  "${RPM}"
+# rpm -K reports a signer it does not know as NOT OK, and modern rpmsign
+# writes a header signature rather than the legacy SIGPGP tag, so look for
+# the signature line itself. Verified on ubuntu:24.04, the runner's image.
+sig=$(rpm -Kv "${RPM}" 2>/dev/null | grep -E "Signature, key ID" | head -1 || true)
+[ -n "${sig}" ] || { echo "ERROR: RPM is not signed" >&2; rpm -Kv "${RPM}" >&2 || true; exit 1; }
+echo "   signed:${sig}"
 
 echo "== rpm.sh -> ${COMPONENT}/${SERIES}/${RPM_TARGET}"
 tar -cf - -C "${WORK}/pkg" "$(basename "${RPM}")" | bash "${REPO_ROOT}/scripts/publish/rpm.sh" "${COMPOSE_FILE_MAIN}" "${COMPONENT}" "${SERIES}" "${RPM_TARGET}"
