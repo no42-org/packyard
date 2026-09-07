@@ -3,16 +3,9 @@ import type {SidebarsConfig} from '@docusaurus/plugin-content-docs';
 // Three independent sidebars, one per top-level section. The navbar items in
 // docusaurus.config.ts select which sidebar to render via `sidebarId`.
 const sidebars: SidebarsConfig = {
-  gettingStarted: [
-    {
-      type: 'category',
-      label: 'Getting Started',
-      collapsed: false,
-      items: [
-        'getting-started/quick-start',
-      ],
-    },
-  ],
+  // Single page, so no category wrapper: the navbar item already carries the
+  // "Getting Started" label and a category would repeat it in the mobile menu.
+  gettingStarted: ['getting-started/quick-start'],
 
   operations: [
     {
