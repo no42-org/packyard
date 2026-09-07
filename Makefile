@@ -15,7 +15,7 @@ UNAME_S := $(shell uname -s)
 
 .DEFAULT_GOAL := help
 
-.PHONY: help docs-install docs-serve docs-build docs-clean check-node \
+.PHONY: help docs-install docs-serve docs-build docs-clean check-node test-rpm-publish \
         admin-ui admin-ui-install admin-ui-dev admin-ui-clean \
         build build-clean test lint lint-workflows build-image-auth build-image-rpm build-images \
         ci-guard ci-stack-up ci-stack-down ci-stack-logs ci-seed ci-verify-env e2e-observability
@@ -91,6 +91,10 @@ build-clean:
 ## test: Run the auth service unit tests
 test:
 	cd auth && $(GO) test ./...
+
+## test-rpm-publish: Build the rpm image and publish a fixture RPM into two OS targets (needs Docker)
+test-rpm-publish:
+	bash tests/rpm/add-package-test.sh
 
 ## lint: Check gofmt formatting and run go vet on the auth service
 lint:

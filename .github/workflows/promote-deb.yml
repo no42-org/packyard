@@ -7,7 +7,7 @@ on:
         description: "LTS component name (must be provisioned via POST /api/v1/components)"
         required: true
       series:
-        description: "LTS series (e.g. 2025)"
+        description: "Series label, e.g. an LTS year (2025) or a major version (38)"
         required: true
       distro:
         description: "Debian distro (bookworm|trixie|jammy|noble)"
@@ -20,6 +20,9 @@ concurrency:
 env:
   AWS_DEFAULT_REGION: us-east-1
   RUSTFS_ENDPOINT: http://localhost:9000
+  # Compose checkout on the host. Set the repository variable DEPLOY_DIR when
+  # the deployment does not live at the documented default.
+  DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/packyard' }}
 
 permissions:
   contents: read
@@ -33,10 +36,34 @@ jobs:
         with:
           persist-credentials: false
 
-      - name: Verify GPG key is not a placeholder
+      - name: Validate inputs
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+          TARGET: ${{ inputs.distro }}
         run: |
-          grep -q 'BEGIN PGP PUBLIC KEY BLOCK' ./static/content/gpg/lts.asc \
-            || { echo "ERROR: lts.asc is still a placeholder — replace with real GPG key before promoting"; exit 1; }
+          # Inputs end up in remote shell commands and filesystem paths: one
+          # path segment each, no traversal, no quotes.
+          re='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+          for v in "$COMPONENT" "$SERIES" "$TARGET"; do
+            [[ "$v" =~ $re ]] && [[ "$v" != *..* ]] || { echo "ERROR: invalid input value: $v"; exit 1; }
+          done
+
+      - name: Verify the signing key is the key subscribers download
+        # The public key lives on the deployment (static/content/gpg/lts.asc is
+        # a placeholder in this repository). Compare fingerprints with what the
+        # host serves, so packages are never signed with a key subscribers
+        # cannot verify.
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          HOST: ${{ secrets.HOST }}
+        run: |
+          served=$(curl -fsSL "https://${HOST}/gpg/lts.asc" | gpg --show-keys --with-colons | awk -F: '/^fpr/{print $10}')
+          [ -n "$served" ] || { echo "ERROR: https://${HOST}/gpg/lts.asc is not a GPG public key"; exit 1; }
+          want=$(tr '[:lower:]' '[:upper:]' <<< "${GPG_KEY_ID}")
+          grep -qx "${want}" <<< "${served}" \
+            || { echo "ERROR: GPG_KEY_ID does not match any fingerprint served at https://${HOST}/gpg/lts.asc"; exit 1; }
+          echo "signing key ${want} is served by the host"
 
       - name: Set up SSH
         run: |
@@ -104,8 +131,9 @@ jobs:
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage"
           scp ./staging/*.deb deploy@${{ secrets.HOST }}:/tmp/deb-stage/
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
-            APTLY_ID=\$(docker compose -f /opt/packyard/compose.yml ps -q aptly)
+            APTLY_ID=\$(docker compose -f '${DEPLOY_DIR}/compose.yml' ps -q aptly)
             docker cp /tmp/deb-stage/ \"\${APTLY_ID}:/tmp/\"
           "
 
@@ -117,7 +145,7 @@ jobs:
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           SNAPSHOT_NAME=$(ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f /opt/packyard/compose.yml exec -T \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T \
               -e COMPONENT='${COMPONENT}' -e SERIES='${SERIES}' -e DISTRO='${DISTRO}' \
               -e DEB_STAGE_DIR=/tmp/deb-stage \
               aptly /scripts/create-snapshot.sh '${COMPONENT}' '${SERIES}' '${DISTRO}'")
@@ -133,7 +161,7 @@ jobs:
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f /opt/packyard/compose.yml exec -T aptly \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               /scripts/publish-snapshot.sh \
               '${SNAPSHOT_NAME}' '${COMPONENT}' '${SERIES}' '${DISTRO}'"
 
@@ -145,7 +173,7 @@ jobs:
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
-            docker compose -f /opt/packyard/compose.yml exec -T aptly \
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               test -f '/opt/aptly/public/${COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease' \
               && echo 'SMOKE TEST PASS' \
               || { echo 'SMOKE TEST FAIL'; exit 1; }
@@ -158,16 +186,17 @@ jobs:
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f /opt/packyard/compose.yml exec -T aptly \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               /scripts/prune-snapshots.sh '${COMPONENT}' '${SERIES}'"
 
       - name: Cleanup
         if: always()
         run: |
           rm -f ~/.ssh/id_ed25519
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             rm -rf /tmp/deb-stage
-            docker compose -f /opt/packyard/compose.yml exec -T aptly \
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               rm -rf /tmp/deb-stage 2>/dev/null || true
           " 2>/dev/null || true
           pkill -f 'ssh -fN -L 9000' || true

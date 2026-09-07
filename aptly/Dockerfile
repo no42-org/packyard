@@ -1,11 +1,14 @@
 FROM debian:bookworm-slim@sha256:88200866dfff7ea7f5cbcb6ec7c8a701889efe6fe859fe64d6990e4b07ea4171
 ARG APTLY_VERSION=1.6.2
 
+# bzip2 and xz-utils: aptly publish shells out to them to compress index files.
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    bzip2 \
     ca-certificates \
     curl \
     gnupg \
     unzip \
+    xz-utils \
     && rm -rf /var/lib/apt/lists/*
 
 # Download the architecture-appropriate aptly binary from GitHub releases.

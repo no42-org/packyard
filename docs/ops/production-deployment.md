@@ -240,6 +240,23 @@ cat ~/.ssh/packyard_deploy
 ssh-keyscan pkg.example.org
 ```
 
+### What the promotion workflows need on the host
+
+The promotion workflows (`promote-rpm.yml`, `promote-deb.yml`, `promote-oci.yml`, `promote-release.yml`) log in as `deploy` and run `docker compose -f $DEPLOY_DIR/compose.yml exec ...` against the running services. Three things make that work:
+
+- **`DEPLOY_DIR`** is a GitHub repository variable naming the checkout on the host. It defaults to `/opt/packyard` when unset. Set it under Settings, Secrets and variables, Actions, Variables if the checkout lives elsewhere, for example `/etc/docker/pkgs`.
+- **`COMPOSE_PROJECT_NAME`** in `.env` pins the Compose project name. Without it Compose derives the name from the checkout's directory, so renaming or moving the checkout, or reaching it through a symlink, changes the project name and `docker compose ... ps -q aptly` finds nothing. Pinning it makes the name independent of the path.
+- **`.env` must be readable by `deploy`.** Compose interpolates `${ADMIN_DOMAIN:?}` and friends from `.env` on every invocation, including `exec`. Make it `root:deploy` with mode `0640`:
+
+```bash
+chgrp deploy /path/to/checkout/.env
+chmod 640 /path/to/checkout/.env
+```
+
+`deploy` is in the `docker` group. On a Docker host that is equivalent to root, so readable `.env` grants nothing the user does not already have. Treat the `SSH_PRIVATE_KEY` secret accordingly: it is a root credential for the package host.
+
+The RPM tree lives in the `rpm-data` volume and is written from inside the `rpm` container, which ships `createrepo_c`. The host needs no RPM tooling.
+
 ---
 
 ## 6. Pre-Deployment Checklist
@@ -250,7 +267,8 @@ ssh-keyscan pkg.example.org
 - [ ] Docker + Compose plugin v2 installed on VM
 - [ ] `deploy` user created, added to `docker` group, SSH key authorized (§5)
 - [ ] GPG LTS signing key generated (§4.1); `lts.asc` committed to `static/content/gpg/`
-- [ ] `.env` file written on VM with production values (§3)
+- [ ] `.env` file written on VM with production values (§3), including `COMPOSE_PROJECT_NAME`, owned `root:deploy` mode `0640` (§5)
+- [ ] Repository variable `DEPLOY_DIR` set if the checkout is not `/opt/packyard` (§5)
 - [ ] All 8 GitHub Actions secrets set in repository settings (§3)
 
 ---

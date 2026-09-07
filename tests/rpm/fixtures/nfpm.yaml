@@ -1,0 +1,16 @@
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Minimal package definition used by tests/rpm/add-package-test.sh to build a
+# fixture RPM with nfpm. The content is one text file; only the RPM envelope
+# matters to createrepo_c.
+name: packyard-fixture
+arch: x86_64
+version: 1.0.0
+release: 1
+maintainer: Packyard tests <noreply@no42.org>
+description: Fixture package for Packyard RPM publishing tests
+license: GPL-3.0-or-later
+contents:
+  - src: ./hello.txt
+    dst: /usr/share/packyard-fixture/hello.txt

@@ -1,0 +1,359 @@
+name: Promote release
+
+# Ingests one upstream GitHub Release into one component and series: RPMs and
+# DEBs from the release assets, images copied registry-to-registry from the
+# upstream registry into Zot. Everything is re-signed with Packyard's own
+# identities (GPG for packages, keyless cosign for images).
+#
+# Triggered by the upstream release job with a token limited to Actions:write
+# on this repository, or by hand for a re-run. See
+# docs/ops/upstream-release-dispatch.md and docs/reference/promotion-pipeline.md.
+
+on:
+  workflow_dispatch:
+    inputs:
+      source_repo:
+        description: "Upstream repository owner/name whose GitHub Release is promoted"
+        required: true
+        default: Bluebird-Community/opennms
+      tag:
+        description: "Release tag in the upstream repository, e.g. v38.1.0"
+        required: true
+      component:
+        description: "Packyard component (must exist, see POST /api/v1/components)"
+        required: true
+        default: bluebird
+      series:
+        description: "Series label under the component, e.g. 38 or 2025"
+        required: true
+        default: "38"
+      rpm_targets:
+        description: "Comma-separated RPM os-arch targets; each must be provisioned on the component"
+        required: true
+        default: el9-x86_64,el10-x86_64
+      deb_distros:
+        description: "Comma-separated Debian/Ubuntu distributions to publish"
+        required: true
+        default: bookworm,trixie,jammy,noble
+      images:
+        description: "Comma-separated image names to copy; each becomes lts-<component>/<image>. Empty skips images"
+        required: false
+        default: core,minion,sentinel
+      source_registry:
+        description: "Registry path holding the upstream images as <source_registry>/<image>:<version>"
+        required: true
+        default: quay.io/bluebird
+      source_workflow:
+        description: "Upstream workflow file that signed the release (cosign identity)"
+        required: true
+        default: main.yml
+
+# One promotion per component and series at a time, never cancelled: a
+# cancelled run can leave a published index without a signature.
+concurrency:
+  group: promote-release-${{ inputs.component }}-${{ inputs.series }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+env:
+  # Compose checkout on the host. Set the repository variable DEPLOY_DIR when
+  # the deployment does not live at the documented default.
+  DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/packyard' }}
+  ZOT_REGISTRY: localhost:5000
+  OIDC_ISSUER: https://token.actions.githubusercontent.com
+
+jobs:
+  promote:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 90
+    permissions:
+      contents: read
+      id-token: write  # cosign keyless: Fulcio certificate bound to this workflow's OIDC identity
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
+        with:
+          persist-credentials: false
+
+      - name: Validate inputs
+        env:
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          TAG: ${{ inputs.tag }}
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+          RPM_TARGETS_IN: ${{ inputs.rpm_targets }}
+          DEB_DISTROS_IN: ${{ inputs.deb_distros }}
+          IMAGES_IN: ${{ inputs.images }}
+          SOURCE_REGISTRY: ${{ inputs.source_registry }}
+          SOURCE_WORKFLOW: ${{ inputs.source_workflow }}
+        run: |
+          # Every value ends up in a remote shell command, a filesystem path or
+          # a registry reference: one path segment each, no traversal, no quotes.
+          seg='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+          check() { [[ "$2" =~ $seg ]] && [[ "$2" != *..* ]] || { echo "ERROR: invalid $1: '$2'"; exit 1; }; }
+          check tag "$TAG"; check component "$COMPONENT"; check series "$SERIES"
+          [[ "$SOURCE_REPO" =~ ^[A-Za-z0-9._-]+/[A-Za-z0-9._-]+$ ]] || { echo "ERROR: invalid source_repo"; exit 1; }
+          [[ "$SOURCE_REGISTRY" =~ ^[a-z0-9.:-]+(/[a-z0-9._-]+)*$ ]] || { echo "ERROR: invalid source_registry"; exit 1; }
+          check source_workflow "$SOURCE_WORKFLOW"
+          split() { tr ',' ' ' <<< "$1" | xargs; }
+          RPM_TARGETS=$(split "$RPM_TARGETS_IN"); DEB_DISTROS=$(split "$DEB_DISTROS_IN"); IMAGES=$(split "$IMAGES_IN")
+          [ -n "$RPM_TARGETS" ] || { echo "ERROR: rpm_targets is empty"; exit 1; }
+          [ -n "$DEB_DISTROS" ] || { echo "ERROR: deb_distros is empty"; exit 1; }
+          for v in $RPM_TARGETS; do check rpm_target "$v"; done
+          for v in $DEB_DISTROS; do check deb_distro "$v"; done
+          for v in $IMAGES; do check image "$v"; done
+          {
+            echo "VERSION=${TAG#v}"
+            echo "RPM_TARGETS=$RPM_TARGETS"
+            echo "DEB_DISTROS=$DEB_DISTROS"
+            echo "IMAGES=$IMAGES"
+            echo "SOURCE_IDENTITY=https://github.com/${SOURCE_REPO}/.github/workflows/${SOURCE_WORKFLOW}@refs/tags/${TAG}"
+          } >> "$GITHUB_ENV"
+          echo "Promoting ${SOURCE_REPO}@${TAG} -> ${COMPONENT}/${SERIES} (version ${TAG#v})"
+          echo "  rpm targets: ${RPM_TARGETS}"
+          echo "  deb distros: ${DEB_DISTROS}"
+          echo "  images:      ${IMAGES:-none}"
+
+      - name: Install signing tools
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y -qq --no-install-recommends rpm dpkg-sig
+          rpmsign --version
+          dpkg-sig --version | head -1
+
+      - name: Install crane
+        env:
+          CRANE_VERSION: v0.20.2
+          CRANE_SHA256: c14340087103ba9dadf61d45acd20675490fd0ccbd56ac7901fc1b502137f44b
+        run: |
+          curl -fsSL "https://github.com/google/go-containerregistry/releases/download/${CRANE_VERSION}/go-containerregistry_Linux_x86_64.tar.gz" \
+            -o /tmp/crane.tar.gz
+          echo "${CRANE_SHA256}  /tmp/crane.tar.gz" | sha256sum --check --strict
+          tar -xzf /tmp/crane.tar.gz -C /tmp crane
+          sudo mv /tmp/crane /usr/local/bin/crane
+          crane version
+
+      - uses: sigstore/cosign-installer@6f9f17788090df1f26f669e9d70d6ae9567deba6  # v4.1.2
+        with:
+          cosign-release: 'v3.0.6'
+
+      - name: Set up SSH
+        run: |
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/id_ed25519
+          chmod 600 ~/.ssh/id_ed25519
+          echo "${{ secrets.SSH_KNOWN_HOST }}" >> ~/.ssh/known_hosts
+
+      - name: Preflight the host
+        # Fail before anything is downloaded or signed if the host is not
+        # ready: checkout present, rpm and aptly running, rpm image current.
+        run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "
+            set -euo pipefail
+            C='${DEPLOY_DIR}/compose.yml'
+            [ -f \"\$C\" ] || { echo \"ERROR: \$C not found; set the DEPLOY_DIR repository variable\"; exit 1; }
+            for svc in rpm aptly zot; do
+              [ -n \"\$(docker compose -f \"\$C\" ps -q \"\$svc\")\" ] || { echo \"ERROR: service \$svc is not running\"; exit 1; }
+            done
+            docker compose -f \"\$C\" exec -T rpm test -x /scripts/add-package.sh \
+              || { echo 'ERROR: the running rpm container has no /scripts/add-package.sh; pull the current rpm image (docker compose up -d rpm)'; exit 1; }
+            echo 'host preflight OK'
+          "
+
+      - name: Verify the signing key is the key subscribers download
+        # The public key lives on the deployment (static/content/gpg/lts.asc is
+        # a placeholder in this repository). Compare fingerprints with what the
+        # host serves, so packages are never signed with a key subscribers
+        # cannot verify.
+        env:
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          HOST: ${{ secrets.HOST }}
+        run: |
+          served=$(curl -fsSL "https://${HOST}/gpg/lts.asc" | gpg --show-keys --with-colons | awk -F: '/^fpr/{print $10}')
+          [ -n "$served" ] || { echo "ERROR: https://${HOST}/gpg/lts.asc is not a GPG public key"; exit 1; }
+          want=$(tr '[:lower:]' '[:upper:]' <<< "${GPG_KEY_ID}")
+          grep -qx "${want}" <<< "${served}" \
+            || { echo "ERROR: GPG_KEY_ID does not match any fingerprint served at https://${HOST}/gpg/lts.asc"; exit 1; }
+          echo "signing key ${want} is served by the host"
+
+      - name: Download and verify release assets
+        env:
+          GH_TOKEN: ${{ github.token }}
+          SOURCE_REPO: ${{ inputs.source_repo }}
+          TAG: ${{ inputs.tag }}
+        run: |
+          mkdir -p ./release
+          gh release download "${TAG}" -R "${SOURCE_REPO}" -D ./release \
+            -p '*.rpm' -p '*.deb' -p 'SHA256SUMS' -p 'SHA256SUMS.sig' -p 'SHA256SUMS.pem'
+          cd ./release
+          ls -l
+          rpms=$(find . -maxdepth 1 -name '*.rpm' | wc -l); debs=$(find . -maxdepth 1 -name '*.deb' | wc -l)
+          [ "$rpms" -gt 0 ] || { echo "ERROR: release ${TAG} has no .rpm assets"; exit 1; }
+          [ "$debs" -gt 0 ] || { echo "ERROR: release ${TAG} has no .deb assets"; exit 1; }
+          [ -f SHA256SUMS ] || { echo "ERROR: release ${TAG} has no SHA256SUMS"; exit 1; }
+          # The checksums file is itself signed by the upstream release workflow.
+          cosign verify-blob \
+            --certificate SHA256SUMS.pem --signature SHA256SUMS.sig \
+            --certificate-identity "${SOURCE_IDENTITY}" \
+            --certificate-oidc-issuer "${OIDC_ISSUER}" \
+            SHA256SUMS
+          # Every downloaded package must be listed, and every listed one we have must match.
+          for f in *.rpm *.deb; do
+            grep -qF "  ${f}" SHA256SUMS || { echo "ERROR: ${f} is not listed in SHA256SUMS"; exit 1; }
+          done
+          sha256sum --check --strict --ignore-missing SHA256SUMS
+
+      - name: Import GPG key (ephemeral) and sign packages
+        env:
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          echo "${GPG_PRIVATE_KEY}" | gpg --batch --import
+          gpg --list-secret-keys "${GPG_KEY_ID}"
+          # Pre-cache the passphrase in gpg-agent via loopback pinentry. A wrong
+          # passphrase fails here with gpg's own message rather than later
+          # from rpmsign or dpkg-sig. Passphrase on fd 3; stdin is the empty
+          # message to sign.
+          gpg --batch --yes --pinentry-mode loopback --passphrase-fd 3 -u "${GPG_KEY_ID}" \
+            --sign --output /dev/null - < /dev/null 3< <(printf '%s\n' "${GPG_PASSPHRASE}")
+          for rpm in ./release/*.rpm; do
+            rpmsign --addsign --define "_gpg_name ${GPG_KEY_ID}" "$rpm"
+            echo "Signed: $(basename "$rpm")"
+          done
+          for deb in ./release/*.deb; do
+            dpkg-sig --sign builder -k "${GPG_KEY_ID}" "$deb"
+            echo "Signed: $(basename "$deb")"
+          done
+
+      - name: Publish RPMs inside the rpm container
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+        run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/rpm-stage && mkdir -p /tmp/rpm-stage"
+          scp ./release/*.rpm deploy@${{ secrets.HOST }}:/tmp/rpm-stage/
+          # The rpm service runs as uid 101 but the auth service creates the
+          # component tree as root, so publish as root inside the container.
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "
+            set -euo pipefail
+            C='${DEPLOY_DIR}/compose.yml'
+            RPM_ID=\$(docker compose -f \"\$C\" ps -q rpm)
+            docker cp /tmp/rpm-stage/ \"\${RPM_ID}:/tmp/\"
+            docker compose -f \"\$C\" exec -T --user 0 rpm bash -c '
+              set -euo pipefail
+              for f in /tmp/rpm-stage/*.rpm; do
+                /scripts/add-package.sh \"\$f\" \"${COMPONENT}\" \"${SERIES}\" ${RPM_TARGETS}
+              done
+            '
+          "
+
+      - name: Publish DEBs through aptly
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+          GPG_PRIVATE_KEY: ${{ secrets.GPG_PRIVATE_KEY }}
+          GPG_KEY_ID: ${{ secrets.GPG_KEY_ID }}
+          GPG_PASSPHRASE: ${{ secrets.GPG_PASSPHRASE }}
+        run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage"
+          scp ./release/*.deb deploy@${{ secrets.HOST }}:/tmp/deb-stage/
+          # aptly signs Release inside its container: import the key into the
+          # container's tmpfs home and hand it the passphrase through a file.
+          C="${DEPLOY_DIR}/compose.yml"
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          printf '%s\n' "${GPG_PRIVATE_KEY}" | ssh deploy@${{ secrets.HOST }} \
+            "docker compose -f '${C}' exec -T aptly gpg --batch --quiet --import"
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          printf '%s\n' "${GPG_PASSPHRASE}" | ssh deploy@${{ secrets.HOST }} \
+            "docker compose -f '${C}' exec -T aptly sh -c 'umask 077; cat > /tmp/gpg-pass'"
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "
+            set -euo pipefail
+            C='${C}'
+            APTLY_ID=\$(docker compose -f \"\$C\" ps -q aptly)
+            docker cp /tmp/deb-stage/ \"\${APTLY_ID}:/tmp/\"
+            first_distro=\$(set -- ${DEB_DISTROS}; echo \"\$1\")
+            SNAP=\$(docker compose -f \"\$C\" exec -T -e DEB_STAGE_DIR=/tmp/deb-stage aptly \
+              /scripts/create-snapshot.sh '${COMPONENT}' '${SERIES}' \"\$first_distro\")
+            [ -n \"\$SNAP\" ] || { echo 'ERROR: snapshot name is empty'; exit 1; }
+            echo \"snapshot: \$SNAP\"
+            for d in ${DEB_DISTROS}; do
+              docker compose -f \"\$C\" exec -T \
+                -e GPG_KEY_ID='${GPG_KEY_ID}' -e GPG_PASSPHRASE_FILE=/tmp/gpg-pass aptly \
+                /scripts/publish-snapshot.sh \"\$SNAP\" '${COMPONENT}' '${SERIES}' \"\$d\"
+              docker compose -f \"\$C\" exec -T aptly \
+                test -f \"/opt/aptly/public/${COMPONENT}/${SERIES}/dists/\$d/InRelease\" \
+                || { echo \"ERROR: InRelease missing for \$d\"; exit 1; }
+            done
+            docker compose -f \"\$C\" exec -T aptly /scripts/prune-snapshots.sh '${COMPONENT}' '${SERIES}'
+          "
+
+      - name: Open Zot tunnel
+        if: env.IMAGES != ''
+        run: |
+          ssh -fN -L 5000:localhost:5000 deploy@${{ secrets.HOST }}
+          timeout 15 bash -c 'until nc -z localhost 5000 2>/dev/null; do sleep 1; done'
+
+      - name: Copy images into Zot and sign them
+        if: env.IMAGES != ''
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+          SOURCE_REGISTRY: ${{ inputs.source_registry }}
+          OWN_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/promote-release.yml@${{ github.ref }}
+        run: |
+          for img in ${IMAGES}; do
+            src="${SOURCE_REGISTRY}/${img}:${VERSION}"
+            dst="${ZOT_REGISTRY}/lts-${COMPONENT}/${img}"
+            # Upstream signature first: never copy an image the source did not sign.
+            cosign verify \
+              --certificate-identity "${SOURCE_IDENTITY}" \
+              --certificate-oidc-issuer "${OIDC_ISSUER}" \
+              "${src}" > /dev/null
+            # Registry-to-registry by digest keeps the multi-arch index intact.
+            crane copy --insecure "${src}" "${dst}:${VERSION}"
+            crane tag --insecure "${dst}:${VERSION}" "${SERIES}"
+            digest=$(crane digest --insecure "${dst}:${VERSION}")
+            [ "$(crane digest "${src}")" = "${digest}" ] || { echo "ERROR: digest changed while copying ${img}"; exit 1; }
+            cosign sign --yes --allow-insecure-registry "${dst}@${digest}"
+            cosign verify --allow-insecure-registry \
+              --certificate-identity "${OWN_IDENTITY}" \
+              --certificate-oidc-issuer "${OIDC_ISSUER}" \
+              "${dst}:${SERIES}" > /dev/null
+            echo "Published and signed: lts-${COMPONENT}/${img}:${VERSION} (${SERIES} -> ${digest})"
+          done
+
+      - name: Verify through the public hostname
+        # Public components answer 200; private ones answer 401 without a key.
+        # Either proves routing and content exist. 404 or 5xx is a failure.
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+          HOST: ${{ secrets.HOST }}
+        run: |
+          check() {
+            code=$(curl -s -o /dev/null -w '%{http_code}' "$1")
+            case "$code" in 200|401) echo "  $code  $1" ;; *) echo "  $code  $1  <-- FAIL"; exit 1 ;; esac
+          }
+          for t in ${RPM_TARGETS}; do check "https://${HOST}/rpm/${COMPONENT}/${SERIES}/${t}/repodata/repomd.xml"; done
+          for d in ${DEB_DISTROS}; do check "https://${HOST}/deb/${COMPONENT}/${SERIES}/dists/${d}/InRelease"; done
+          for i in ${IMAGES}; do check "https://${HOST}/oci/v2/lts-${COMPONENT}/${i}/manifests/${VERSION}"; done
+
+      - name: Cleanup
+        if: always()
+        run: |
+          rm -f ~/.ssh/id_ed25519
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "
+            C='${DEPLOY_DIR}/compose.yml'
+            rm -rf /tmp/rpm-stage /tmp/deb-stage
+            docker compose -f \"\$C\" exec -T --user 0 rpm rm -rf /tmp/rpm-stage 2>/dev/null || true
+            docker compose -f \"\$C\" exec -T aptly rm -rf /tmp/deb-stage /tmp/gpg-pass /root/.gnupg 2>/dev/null || true
+          " 2>/dev/null || true
+          pkill -f 'ssh -fN -L 5000' || true

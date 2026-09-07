@@ -131,6 +131,7 @@ services:
     tmpfs:
       - /run:uid=101,gid=101                    # nginx PID and lock files
       - /var/cache/nginx:uid=101,gid=101        # client/proxy/fastcgi temp dirs
+      - /tmp                                    # createrepo_c scratch during promotion
     volumes:
       - rpm-data:/usr/share/nginx/html  # rw — init script creates directory tree on first start
     networks:
