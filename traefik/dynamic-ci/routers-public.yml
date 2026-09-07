@@ -51,7 +51,7 @@ http:
     # which anonymous clients accept.
     oci-v2-authenticated:
       entryPoints:
-        - websecure
+        - web
       rule: 'PathPrefix(`/v2/`) && (Method(`GET`) || Method(`HEAD`))'
       middlewares:
         - packyard-v2-to-oci  # MUST be first — turns /v2/oci/... into /oci/v2/...

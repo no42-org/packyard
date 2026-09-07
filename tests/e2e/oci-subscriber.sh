@@ -20,6 +20,7 @@
 # OPTIONAL ENV VARS:
 #   COMPONENT           — public component (default: core)
 #   SERIES              — series tag to pull (default: 2025)
+#   OCI_REGISTRY        — registry reference for docker/crane (default: BASE_URL host)
 #   OCI_IMAGE           — image name under lts-<component>/ (default: unset, the
 #                         legacy lts-<component>:<series> reference)
 #   PRIVATE_COMPONENT   — a private component for the 401 check (default: minion)
@@ -37,9 +38,12 @@ COMPONENT="${COMPONENT:-core}"
 SERIES="${SERIES:-2025}"
 PRIVATE_COMPONENT="${PRIVATE_COMPONENT:-minion}"
 
-# Strip the scheme: docker and crane use bare registry references, and treat
-# localhost as an insecure (plain HTTP) registry, which is what CI serves.
+# Strip the scheme: docker and crane use bare registry references. OCI_REGISTRY
+# overrides the derived host; CI needs "localhost:80", because crane reads a
+# bare "localhost" as a Docker Hub namespace, and both clients treat localhost
+# with any port as an insecure (plain HTTP) registry, which is what CI serves.
 REGISTRY="${BASE_URL#https://}"; REGISTRY="${REGISTRY#http://}"
+REGISTRY="${OCI_REGISTRY:-${REGISTRY}}"
 if [ -n "${OCI_IMAGE:-}" ]; then
   REPO_PATH="lts-${COMPONENT}/${OCI_IMAGE}"
 else

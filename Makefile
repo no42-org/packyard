@@ -188,7 +188,7 @@ e2e-deb: ci-guard
 
 ## e2e-oci: OCI subscriber test against the CI stack and its fixture (COSIGN_SKIP=1 when the fixture is unsigned)
 e2e-oci: ci-guard
-	BASE_URL="$${BASE_URL:-http://localhost}" OCI_IMAGE=fixture PRIVATE_COMPONENT=minion \
+	BASE_URL="$${BASE_URL:-http://localhost}" OCI_REGISTRY="$${OCI_REGISTRY:-localhost:80}" OCI_IMAGE=fixture PRIVATE_COMPONENT=minion \
 	COSIGN_CERT_IDENTITY_REGEXP="$${COSIGN_CERT_IDENTITY_REGEXP:-https://github.com/no42-org/packyard/\\.github/workflows/integration\\.yml@.*}" \
 	bash tests/e2e/oci-subscriber.sh
 
