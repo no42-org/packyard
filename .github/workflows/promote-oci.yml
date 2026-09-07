@@ -7,7 +7,7 @@ on:
         description: "LTS component name (must be provisioned via POST /api/v1/components)"
         required: true
       series:
-        description: "LTS series (e.g. 2025)"
+        description: "Series label, e.g. an LTS year (2025) or a major version (38)"
         required: true
 
 env:

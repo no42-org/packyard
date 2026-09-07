@@ -7,7 +7,7 @@ on:
         description: "LTS component name (must be provisioned via POST /api/v1/components)"
         required: true
       series:
-        description: "LTS series (e.g. 2025)"
+        description: "Series label, e.g. an LTS year (2025) or a major version (38)"
         required: true
       os:
         description: "OS target (el8-x86_64|el9-x86_64|el10-x86_64|centos10-x86_64)"
@@ -20,6 +20,9 @@ concurrency:
 env:
   AWS_DEFAULT_REGION: us-east-1
   RUSTFS_ENDPOINT: http://localhost:9000
+  # Compose checkout on the host. Set the repository variable DEPLOY_DIR when
+  # the deployment does not live at the documented default.
+  DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/packyard' }}
 
 permissions:
   contents: read
@@ -32,6 +35,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Validate inputs
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+          TARGET: ${{ inputs.os }}
+        run: |
+          # Inputs end up in remote shell commands and filesystem paths: one
+          # path segment each, no traversal, no quotes.
+          re='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+          for v in "$COMPONENT" "$SERIES" "$TARGET"; do
+            [[ "$v" =~ $re ]] && [[ "$v" != *..* ]] || { echo "ERROR: invalid input value: $v"; exit 1; }
+          done
 
       - name: Verify GPG key is not a placeholder
         run: |
@@ -116,26 +132,36 @@ jobs:
             echo "Signed: $(basename "$rpm")"
           done
 
-      - name: Create staging directory on host
-        run: ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/rpm-stage && mkdir -p /tmp/rpm-stage"
+      - name: Upload signed RPMs to host and copy into the rpm container
+        run: |
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/rpm-stage && mkdir -p /tmp/rpm-stage"
+          scp ./staging/*.rpm deploy@${{ secrets.HOST }}:/tmp/rpm-stage/
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "
+            RPM_ID=\$(docker compose -f '${DEPLOY_DIR}/compose.yml' ps -q rpm)
+            [ -n \"\$RPM_ID\" ] || { echo 'ERROR: rpm service is not running'; exit 1; }
+            docker cp /tmp/rpm-stage/ \"\${RPM_ID}:/tmp/\"
+          "
 
-      - name: Upload signed RPMs to host
-        run: scp ./staging/*.rpm deploy@${{ secrets.HOST }}:/tmp/rpm-stage/
-
-      - name: Publish to host
+      - name: Publish inside the rpm container
         env:
           # P1: route inputs through env vars to avoid GHA text interpolation into remote shell
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
           OS: ${{ inputs.os }}
         run: |
+          # createrepo_c and the publish scripts live in the rpm image. The
+          # service runs as uid 101 but the auth service creates component
+          # directories as root, so publish as root inside the container.
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
-            set -euo pipefail
-            for f in /tmp/rpm-stage/*.rpm; do
-              /opt/packyard/rpm/scripts/add-package.sh \"\$f\" \
-                '${COMPONENT}' '${SERIES}' '${OS}'
-            done
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0 rpm bash -c '
+              set -euo pipefail
+              for f in /tmp/rpm-stage/*.rpm; do
+                /scripts/add-package.sh \"\$f\" \"${COMPONENT}\" \"${SERIES}\" \"${OS}\"
+              done
+            '
           "
 
       - name: Cleanup
@@ -143,7 +169,12 @@ jobs:
         run: |
           # P3: remove SSH private key from disk
           rm -f ~/.ssh/id_ed25519
-          # P5: remove staged RPMs from host (handles failure mid-loop)
-          ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/rpm-stage" 2>/dev/null || true
+          # P5: remove staged RPMs from host and container (handles failure mid-loop)
+          # shellcheck disable=SC2029  # client-side expansion is intended
+          ssh deploy@${{ secrets.HOST }} "
+            rm -rf /tmp/rpm-stage
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T --user 0 rpm \
+              rm -rf /tmp/rpm-stage 2>/dev/null || true
+          " 2>/dev/null || true
           # Close SSH tunnel
           pkill -f 'ssh -fN -L 9000' || true

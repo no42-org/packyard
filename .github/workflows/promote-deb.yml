@@ -7,7 +7,7 @@ on:
         description: "LTS component name (must be provisioned via POST /api/v1/components)"
         required: true
       series:
-        description: "LTS series (e.g. 2025)"
+        description: "Series label, e.g. an LTS year (2025) or a major version (38)"
         required: true
       distro:
         description: "Debian distro (bookworm|trixie|jammy|noble)"
@@ -20,6 +20,9 @@ concurrency:
 env:
   AWS_DEFAULT_REGION: us-east-1
   RUSTFS_ENDPOINT: http://localhost:9000
+  # Compose checkout on the host. Set the repository variable DEPLOY_DIR when
+  # the deployment does not live at the documented default.
+  DEPLOY_DIR: ${{ vars.DEPLOY_DIR || '/opt/packyard' }}
 
 permissions:
   contents: read
@@ -32,6 +35,19 @@ jobs:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # v7.0.1
         with:
           persist-credentials: false
+
+      - name: Validate inputs
+        env:
+          COMPONENT: ${{ inputs.component }}
+          SERIES: ${{ inputs.series }}
+          TARGET: ${{ inputs.distro }}
+        run: |
+          # Inputs end up in remote shell commands and filesystem paths: one
+          # path segment each, no traversal, no quotes.
+          re='^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$'
+          for v in "$COMPONENT" "$SERIES" "$TARGET"; do
+            [[ "$v" =~ $re ]] && [[ "$v" != *..* ]] || { echo "ERROR: invalid input value: $v"; exit 1; }
+          done
 
       - name: Verify GPG key is not a placeholder
         run: |
@@ -104,8 +120,9 @@ jobs:
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "rm -rf /tmp/deb-stage && mkdir -p /tmp/deb-stage"
           scp ./staging/*.deb deploy@${{ secrets.HOST }}:/tmp/deb-stage/
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
-            APTLY_ID=\$(docker compose -f /opt/packyard/compose.yml ps -q aptly)
+            APTLY_ID=\$(docker compose -f '${DEPLOY_DIR}/compose.yml' ps -q aptly)
             docker cp /tmp/deb-stage/ \"\${APTLY_ID}:/tmp/\"
           "
 
@@ -117,7 +134,7 @@ jobs:
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           SNAPSHOT_NAME=$(ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f /opt/packyard/compose.yml exec -T \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T \
               -e COMPONENT='${COMPONENT}' -e SERIES='${SERIES}' -e DISTRO='${DISTRO}' \
               -e DEB_STAGE_DIR=/tmp/deb-stage \
               aptly /scripts/create-snapshot.sh '${COMPONENT}' '${SERIES}' '${DISTRO}'")
@@ -133,7 +150,7 @@ jobs:
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f /opt/packyard/compose.yml exec -T aptly \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               /scripts/publish-snapshot.sh \
               '${SNAPSHOT_NAME}' '${COMPONENT}' '${SERIES}' '${DISTRO}'"
 
@@ -145,7 +162,7 @@ jobs:
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
-            docker compose -f /opt/packyard/compose.yml exec -T aptly \
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               test -f '/opt/aptly/public/${COMPONENT}/${SERIES}/dists/${DISTRO}/InRelease' \
               && echo 'SMOKE TEST PASS' \
               || { echo 'SMOKE TEST FAIL'; exit 1; }
@@ -158,16 +175,17 @@ jobs:
         run: |
           # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} \
-            "docker compose -f /opt/packyard/compose.yml exec -T aptly \
+            "docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               /scripts/prune-snapshots.sh '${COMPONENT}' '${SERIES}'"
 
       - name: Cleanup
         if: always()
         run: |
           rm -f ~/.ssh/id_ed25519
+          # shellcheck disable=SC2029  # client-side expansion is intended
           ssh deploy@${{ secrets.HOST }} "
             rm -rf /tmp/deb-stage
-            docker compose -f /opt/packyard/compose.yml exec -T aptly \
+            docker compose -f '${DEPLOY_DIR}/compose.yml' exec -T aptly \
               rm -rf /tmp/deb-stage 2>/dev/null || true
           " 2>/dev/null || true
           pkill -f 'ssh -fN -L 9000' || true
