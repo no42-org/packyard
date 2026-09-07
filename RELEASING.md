@@ -87,6 +87,10 @@ Every push to `main` that touches a service runs the quality gates and then push
 Each build overwrites the previous one.
 Preview images are signed with cosign but never receive `X.Y.Z`, `X.Y` or `latest` tags.
 
+The `aptly` and `backup` images wrap an upstream tool and are versioned by that tool, not by Packyard.
+Pushes to `main` that touch them publish only the upstream version tag, for example `ghcr.io/no42-org/packyard-aptly:1.6.2`, and `compose.yml` pins that tag.
+They are not part of the release matrix and never receive `latest`.
+
 ## Verifying signatures and provenance
 
 Images are signed keylessly by the `Release` workflow. Verify against the workflow identity:

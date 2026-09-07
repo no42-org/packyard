@@ -1,5 +1,8 @@
 name: Build and publish backup image
 
+# The image is versioned by the upstream tool it wraps, not by Packyard, so
+# it carries only that version tag. `latest` is reserved for release.yml.
+
 on:
   push:
     branches: [main]
@@ -62,6 +65,5 @@ jobs:
           push: true
           tags: |
             ${{ env.IMAGE }}:${{ steps.version.outputs.backup_version }}
-            ${{ env.IMAGE }}:latest
           cache-from: type=gha
           cache-to: type=gha,mode=max
