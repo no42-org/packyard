@@ -21,9 +21,11 @@ if ! [[ "$COMPONENT" =~ ^[a-zA-Z0-9_-]+$ ]]; then
   echo "       Allowed: letters, digits, hyphens, underscores"
   exit 1
 fi
-SERIES="${2:?series required (e.g. 2025)}"
-if ! [[ "$SERIES" =~ ^[0-9]{4}$ ]]; then
-  echo "ERROR: series must be a 4-digit number (got: ${SERIES})"
+SERIES="${2:?series required (e.g. 2025 or 38)}"
+# Any single path segment, same rule as the component API. A series is a
+# label (an LTS year, a major version), not necessarily a year.
+if ! [[ "$SERIES" =~ ^[A-Za-z0-9][A-Za-z0-9._-]{0,63}$ ]] || [[ "$SERIES" == *..* ]]; then
+  echo "ERROR: series must be a single path segment of letters, digits, dot, hyphen, underscore (got: ${SERIES})"
   exit 1
 fi
 FORMAT="${3:?format required (rpm|deb|oci)}"
