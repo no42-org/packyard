@@ -50,6 +50,9 @@ else
   REPO_PATH="lts-${COMPONENT}"
 fi
 IMAGE="${REGISTRY}/oci/${REPO_PATH}:${SERIES}"
+# crane needs to be told a plain-HTTP registry is intended; docker infers it for localhost.
+CRANE_OPTS=()
+case "${REGISTRY}" in localhost*|127.0.0.1*) CRANE_OPTS=(--insecure) ;; esac
 
 FAILED=0
 pass() { echo "PASS: $*"; }
@@ -79,7 +82,7 @@ fi
 echo ""
 echo "=== AC2: Multi-arch index resolution ==="
 MANIFEST_RC=0
-MANIFEST_JSON=$(crane manifest "${IMAGE}" 2>&1) || MANIFEST_RC=$?
+MANIFEST_JSON=$(crane manifest "${CRANE_OPTS[@]}" "${IMAGE}" 2>&1) || MANIFEST_RC=$?
 if [ "${MANIFEST_RC}" -ne 0 ]; then
   fail "AC2 — crane manifest failed: ${MANIFEST_JSON}"
 else
@@ -101,20 +104,11 @@ fi
 echo ""
 echo "=== AC3: Auth middleware order and 401 check ==="
 
-# AC3a — forwardAuth sees the full /oci/v2/ path (not the stripped /v2/) in auth logs
-AUTH_CONTAINER=$(docker ps --filter "label=com.docker.compose.service=auth" --filter "status=running" \
-  --format "{{.Names}}" 2>/dev/null | head -1 || true)
-if [ -n "${AUTH_CONTAINER}" ]; then
-  AUTH_LOGS=$(docker logs "${AUTH_CONTAINER}" --tail 50 2>&1 || true)
-  if echo "${AUTH_LOGS}" | grep -qE '/oci/v2/'; then
-    pass "AC3a — auth service received the full /oci/v2/ path (forwardAuth fires before stripPrefix)"
-  else
-    fail "AC3a — /oci/v2/ not found in auth logs (last 50 lines); middleware order may be incorrect"
-  fi
-else
-  fail "AC3a — no running container matching 'auth' found via docker ps"
-fi
-
+# AC3a used to grep the auth logs for "/oci/v2/", but the auth service logs
+# its own request path (/auth), not the forwarded URI, so that could never
+# match. The middleware order is proven by AC3b instead: a private
+# component can only answer 401 on the /v2/oci/... shape if forward-auth
+# saw the rewritten, unstripped /oci/v2/lts-<component>/ path.
 # AC3b — a private component answers 401 to an invalid key, on both path shapes
 for path in "oci/v2/lts-${PRIVATE_COMPONENT}/manifests/${SERIES}" "v2/oci/lts-${PRIVATE_COMPONENT}/manifests/${SERIES}"; do
   HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -u "subscriber:invalidkey9999" "${BASE_URL}/${path}" || true)
