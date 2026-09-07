@@ -581,3 +581,70 @@ func TestForwardAuth_PublicComponentCache_SurvivesOutage(t *testing.T) {
 		run(t, 0, http.StatusServiceUnavailable)
 	})
 }
+
+// A subscriber path is read-only. Traefik refuses write methods at the router,
+// and forward-auth refuses them again so a router change cannot re-open writes
+// into the serving containers, which have no authentication of their own.
+func TestForwardAuth_WriteMethodRefused(t *testing.T) {
+	for _, method := range []string{"POST", "PUT", "PATCH", "DELETE"} {
+		t.Run(method, func(t *testing.T) {
+			h := newTestHandler(&mockStore{
+				getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
+					return &store.Key{ID: value, Component: "core", Active: true}, nil
+				},
+			})
+			req := httptest.NewRequest("GET", "/auth", nil)
+			req.Header.Set("Authorization", basicAuthHeader(validKey))
+			req.Header.Set("X-Forwarded-Uri", "/oci/v2/lts-core/blobs/uploads/")
+			req.Header.Set("X-Forwarded-Method", method)
+			w := httptest.NewRecorder()
+			h.ServeHTTP(w, req)
+
+			if w.Code != http.StatusMethodNotAllowed {
+				t.Errorf("expected 405, got %d", w.Code)
+			}
+			if got := w.Header().Get("Allow"); got != "GET, HEAD" {
+				t.Errorf("expected Allow: GET, HEAD; got %q", got)
+			}
+			if w.Body.Len() != 0 {
+				t.Errorf("expected empty body, got %q", w.Body.String())
+			}
+		})
+	}
+}
+
+// A public component is allowed without credentials, but not for a write.
+func TestForwardAuth_WriteMethodRefusedOnPublicComponent(t *testing.T) {
+	cs := newStubComponentStore()
+	cs.comps["core"] = &store.Component{Name: "core", Visibility: "public"}
+	h := newTestHandler(&mockStore{})
+	h.ComponentStore = cs
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("X-Forwarded-Uri", "/oci/v2/lts-core/manifests/2025")
+	req.Header.Set("X-Forwarded-Method", "PUT")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusMethodNotAllowed {
+		t.Errorf("expected 405, got %d", w.Code)
+	}
+}
+
+// HEAD is how docker and apt probe; it must stay allowed.
+func TestForwardAuth_HeadAllowed(t *testing.T) {
+	h := newTestHandler(&mockStore{
+		getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
+			return &store.Key{ID: value, Component: "core", Active: true}, nil
+		},
+	})
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("Authorization", basicAuthHeader(validKey))
+	req.Header.Set("X-Forwarded-Uri", "/rpm/core/2025/el9-x86_64/")
+	req.Header.Set("X-Forwarded-Method", "HEAD")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+}

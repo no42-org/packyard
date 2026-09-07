@@ -20,7 +20,8 @@ import (
 )
 
 // ForwardAuthHandler validates subscriber credentials for Traefik forwardAuth.
-// GET /auth — returns 200 (allow), 401 (deny), or 503 (error/fail-closed).
+// GET /auth — returns 200 (allow), 401 (deny), 405 (write method on a
+// subscriber path), or 503 (error/fail-closed).
 // Component visibility is resolved via a live DB lookup on every request so that
 // visibility changes take effect immediately without a service restart.
 //
@@ -57,6 +58,24 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 	defer func() {
 		metrics.RequestDuration.Observe(time.Since(start).Seconds())
 	}()
+
+	// Subscribers only read. The Traefik routers already refuse write methods,
+	// but forward-auth is the second line: a new route or an edited rule must
+	// not silently re-open writes into the serving containers, none of which
+	// authenticate on their own. Traefik puts the original method in
+	// X-Forwarded-Method; when the header is absent, the request method is the
+	// only thing to go on.
+	method := r.Header.Get("X-Forwarded-Method")
+	if method == "" {
+		method = r.Method
+	}
+	if method != http.MethodGet && method != http.MethodHead {
+		h.Logger.Warn("write method refused on a subscriber path", logsafe.Attr("method", method))
+		metrics.RequestsTotal.WithLabelValues("denied-method").Inc()
+		w.Header().Set("Allow", "GET, HEAD")
+		w.WriteHeader(http.StatusMethodNotAllowed)
+		return
+	}
 
 	requestedComponent, ok := extractComponent(r.Header.Get("X-Forwarded-Uri"))
 	if !ok {
