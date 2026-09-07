@@ -27,7 +27,8 @@ http:
         - websecure
       rule: 'Host(`{{ env "PKG_DOMAIN" }}`) && PathPrefix(`/deb/`)'
       middlewares:
-        - packyard-auth
+        - packyard-auth       # MUST be first — forwardAuth sees the full /deb/<component>/... path
+        - packyard-strip-deb
       service: packyard-deb-svc
       tls:
         certResolver: letsencrypt

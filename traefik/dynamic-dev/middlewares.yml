@@ -9,6 +9,14 @@ http:
         # authResponseHeaders omitted — auth service returns no headers to pass downstream
         # fail-closed: Traefik returns 503 if auth service is unreachable (NFR11)
 
+    packyard-strip-deb:
+      stripPrefix:
+        prefixes:
+          - "/deb"
+        # nginx serves aptly's publish tree at its root, so /deb/<component>/<series>/
+        # becomes /<component>/<series>/. Applied AFTER packyard-auth, which needs
+        # the full path for component scope enforcement.
+
     packyard-strip-oci:
       stripPrefix:
         prefixes:

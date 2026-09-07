@@ -24,7 +24,8 @@ http:
         - web
       rule: "PathPrefix(`/deb/`)"
       middlewares:
-        - packyard-auth
+        - packyard-auth       # MUST be first — forwardAuth sees the full /deb/<component>/... path
+        - packyard-strip-deb
       service: packyard-deb-svc
       # No tls: — CI uses plaintext HTTP
 

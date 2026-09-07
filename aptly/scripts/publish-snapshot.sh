@@ -34,7 +34,7 @@ if aptly publish show "${DISTRO}" "${PUBLISH_POINT}" > /dev/null 2>&1; then
   echo "Switching published snapshot at ${PUBLISH_POINT} to ${SNAPSHOT_NAME}..."
   aptly publish switch \
     "${SIGN_ARGS[@]}" \
-    -component="${COMPONENT}" \
+    -component=main \
     "${DISTRO}" \
     "${PUBLISH_POINT}" \
     "${SNAPSHOT_NAME}"
@@ -44,7 +44,7 @@ else
   aptly publish snapshot \
     "${SIGN_ARGS[@]}" \
     -distribution="${DISTRO}" \
-    -component="${COMPONENT}" \
+    -component=main \
     "${SNAPSHOT_NAME}" \
     "${PUBLISH_POINT}"
 fi
