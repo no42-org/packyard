@@ -95,13 +95,16 @@ if ( cd "${DOWNLOAD_DIR}" && apt-get "${APT_OPTS[@]}" download "${PACKAGE}" 2>&1
     python3 - "${DEB_FILE}" "${TAMPERED}" <<'EOF'
 import sys
 data = bytearray(open(sys.argv[1], 'rb').read())
-# Flip a byte inside the payload; a small fixture package is shorter than 4 KiB.
-i = min(4096, len(data) - 1)
+# Flip a byte inside the compressed payload, not the archive trailer; a small
+# fixture package is shorter than 4 KiB.
+i = min(4096, len(data) // 2)
 data[i] ^= 0xFF
 open(sys.argv[2], 'wb').write(data)
 EOF
     INSTALL_RC=0
-    INSTALL_OUT=$(DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install --assume-yes "${TAMPERED}" 2>&1) || INSTALL_RC=$?
+    # AC1 installed this exact version, so without --reinstall apt would answer
+    # "already the newest version" and never unpack the tampered file.
+    INSTALL_OUT=$(DEBIAN_FRONTEND=noninteractive apt-get "${APT_OPTS[@]}" install --reinstall --assume-yes "${TAMPERED}" 2>&1) || INSTALL_RC=$?
     if [ "${INSTALL_RC}" -ne 0 ]; then
       pass "AC2 — tampered DEB rejected by apt-get install (exit non-zero): ${INSTALL_OUT}"
     else
