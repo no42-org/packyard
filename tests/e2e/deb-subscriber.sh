@@ -95,7 +95,9 @@ if ( cd "${DOWNLOAD_DIR}" && apt-get "${APT_OPTS[@]}" download "${PACKAGE}" 2>&1
     python3 - "${DEB_FILE}" "${TAMPERED}" <<'EOF'
 import sys
 data = bytearray(open(sys.argv[1], 'rb').read())
-data[4096] ^= 0xFF
+# Flip a byte inside the payload; a small fixture package is shorter than 4 KiB.
+i = min(4096, len(data) - 1)
+data[i] ^= 0xFF
 open(sys.argv[2], 'wb').write(data)
 EOF
     INSTALL_RC=0
