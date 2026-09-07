@@ -35,11 +35,23 @@ export function useCreateComponent() {
   });
 }
 
+// Fields PATCH /api/v1/components/{name} accepts. A list replaces the stored
+// list; at least one field must be present.
+export type ComponentPatch = Partial<
+  Pick<Component, "visibility" | "rpm_series" | "rpm_os_families" | "rpm_architectures">
+>;
+
+// The updated record plus the series/family-arch targets the patch stopped
+// declaring. Their directories stay on disk (operator responsibility).
+export interface ComponentUpdateResult extends Component {
+  rpm_targets_removed: string[];
+}
+
 export function useUpdateComponent(name: string) {
   const qc = useQueryClient();
   return useMutation({
-    mutationFn: (body: Partial<Pick<Component, "visibility">>) =>
-      apiFetch<Component>(`/api/v1/components/${encodeURIComponent(name)}`, {
+    mutationFn: (body: ComponentPatch) =>
+      apiFetch<ComponentUpdateResult>(`/api/v1/components/${encodeURIComponent(name)}`, {
         method: "PATCH",
         body: JSON.stringify(body),
       }),

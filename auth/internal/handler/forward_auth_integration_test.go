@@ -65,7 +65,7 @@ func TestForwardAuthIntegration_PrivateToPublic(t *testing.T) {
 	}
 
 	// --- Step 3: PATCH visibility to "public" via ComponentsHandler ---
-	patchBody, _ := json.Marshal(updateComponentRequest{Visibility: "public"})
+	patchBody, _ := json.Marshal(map[string]string{"visibility": "public"})
 	patchReq := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", patchBody)
 	patchRec := httptest.NewRecorder()
 	compHandler.Update(patchRec, patchReq)
@@ -120,7 +120,7 @@ func TestForwardAuthIntegration_PublicToPrivate(t *testing.T) {
 	}
 
 	// --- Step 3: PATCH visibility to "private" via ComponentsHandler ---
-	patchBody, _ := json.Marshal(updateComponentRequest{Visibility: "private"})
+	patchBody, _ := json.Marshal(map[string]string{"visibility": "private"})
 	patchReq := chiRequest(http.MethodPatch, "/api/v1/components/core", "core", patchBody)
 	patchRec := httptest.NewRecorder()
 	compHandler.Update(patchRec, patchReq)

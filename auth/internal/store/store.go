@@ -87,6 +87,20 @@ type Component struct {
 	CreatedAt        time.Time `json:"created_at"`
 }
 
+// ComponentPatch carries the mutable component fields for UpdateComponent.
+// A nil field is left unchanged; a non-nil slice replaces the stored list.
+type ComponentPatch struct {
+	Visibility       *string
+	RPMSeries        *[]string
+	RPMOSFamilies    *[]string
+	RPMArchitectures *[]string
+}
+
+// IsEmpty reports whether the patch changes nothing.
+func (p ComponentPatch) IsEmpty() bool {
+	return p.Visibility == nil && p.RPMSeries == nil && p.RPMOSFamilies == nil && p.RPMArchitectures == nil
+}
+
 // ComponentStore is the interface for component provisioning storage.
 type ComponentStore interface {
 	CreateComponent(ctx context.Context, comp *Component) (*Component, error)
@@ -96,7 +110,7 @@ type ComponentStore interface {
 	RevokeComponentKeys(ctx context.Context, component string) (int64, error)
 	CountActiveComponentKeys(ctx context.Context, component string) (int64, error)
 	DeleteComponentWithRevoke(ctx context.Context, name string) (int64, error)
-	UpdateComponentVisibility(ctx context.Context, name, visibility string) (*Component, error)
+	UpdateComponent(ctx context.Context, name string, patch ComponentPatch) (*Component, error)
 }
 
 // AccountStatus values that align with the accounts.status CHECK constraint.

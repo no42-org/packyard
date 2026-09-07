@@ -174,9 +174,9 @@ func (c *CachedComponentStore) evict(name string) {
 	metrics.ComponentCacheEntries.Set(float64(len(c.entries)))
 }
 
-// UpdateComponentVisibility passes through and evicts the name on success.
-func (c *CachedComponentStore) UpdateComponentVisibility(ctx context.Context, name, visibility string) (*Component, error) {
-	comp, err := c.ComponentStore.UpdateComponentVisibility(ctx, name, visibility)
+// UpdateComponent passes through and evicts the name on success.
+func (c *CachedComponentStore) UpdateComponent(ctx context.Context, name string, patch ComponentPatch) (*Component, error) {
+	comp, err := c.ComponentStore.UpdateComponent(ctx, name, patch)
 	if err == nil && c.enabled() {
 		c.evict(name)
 	}

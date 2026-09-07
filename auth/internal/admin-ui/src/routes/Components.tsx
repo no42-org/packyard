@@ -148,10 +148,24 @@ function CreateComponentModal({ open, onClose }: { open: boolean; onClose: () =>
 function EditComponentModal({ component, onClose }: { component: Component; onClose: () => void }) {
   const update = useUpdateComponent(component.name);
   const [visibility, setVisibility] = useState(component.visibility);
+  const [series, setSeries] = useState(component.rpm_series.join(","));
+  const [families, setFamilies] = useState(component.rpm_os_families.join(","));
+  const [archs, setArchs] = useState(component.rpm_architectures.join(","));
+  const [removed, setRemoved] = useState<string[] | null>(null);
 
   const submit = async () => {
     try {
-      await update.mutateAsync({ visibility });
+      const result = await update.mutateAsync({
+        visibility,
+        rpm_series: csv(series),
+        rpm_os_families: csv(families),
+        rpm_architectures: csv(archs),
+      });
+      if (result.rpm_targets_removed.length > 0) {
+        // Keep the dialog open: the operator should see what stays on disk.
+        setRemoved(result.rpm_targets_removed);
+        return;
+      }
       onClose();
     } catch {
       /* error rendered below */
@@ -166,28 +180,62 @@ function EditComponentModal({ component, onClose }: { component: Component; onCl
       actions={
         <>
           <button className="btn-secondary" onClick={onClose}>
-            Cancel
+            {removed ? "Close" : "Cancel"}
           </button>
-          <button onClick={submit} disabled={update.isPending}>
-            Save
-          </button>
+          {!removed && (
+            <button onClick={submit} disabled={update.isPending}>
+              Save
+            </button>
+          )}
         </>
       }
     >
-      <div className="field">
-        <label>Visibility</label>
-        <select
-          value={visibility}
-          onChange={(e) => setVisibility(e.target.value as "public" | "private")}
-        >
-          <option value="private">private</option>
-          <option value="public">public</option>
-        </select>
-      </div>
-      <p className="muted">
-        Other fields (series / OS families / architectures) are immutable per the components API.
-      </p>
-      <ErrorBanner error={update.error} />
+      {removed ? (
+        <div className="field">
+          <p>Saved. These RPM targets are no longer declared on the component:</p>
+          <ul>
+            {removed.map((t) => (
+              <li key={t}>
+                <code>{t}</code>
+              </li>
+            ))}
+          </ul>
+          <p className="muted">
+            Their directories and packages remain on disk and keep being served. Remove them by hand if
+            they should disappear.
+          </p>
+        </div>
+      ) : (
+        <>
+          <div className="field">
+            <label>Visibility</label>
+            <select
+              value={visibility}
+              onChange={(e) => setVisibility(e.target.value as "public" | "private")}
+            >
+              <option value="private">private</option>
+              <option value="public">public</option>
+            </select>
+          </div>
+          <div className="field">
+            <label>RPM series (comma-separated, e.g. 38,39)</label>
+            <input type="text" value={series} onChange={(e) => setSeries(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>OS families (comma-separated, e.g. el9,el10)</label>
+            <input type="text" value={families} onChange={(e) => setFamilies(e.target.value)} />
+          </div>
+          <div className="field">
+            <label>Architectures (comma-separated, e.g. x86_64,aarch64)</label>
+            <input type="text" value={archs} onChange={(e) => setArchs(e.target.value)} />
+          </div>
+          <p className="muted">
+            New series, OS family and architecture combinations are provisioned on save. Removing one
+            leaves its directory on disk.
+          </p>
+          <ErrorBanner error={update.error} />
+        </>
+      )}
     </Modal>
   );
 }
