@@ -1,21 +1,25 @@
 #!/bin/sh
-# init-rpm-tree.sh — creates the series-versioned, per-OS RPM directory tree on first start
-# Runs via /docker-entrypoint.d/ before nginx starts (nginx:alpine entrypoint pattern)
-# Idempotent: mkdir -p is safe to run on every container start
-
+# Copyright 2026 Ronny Trommer <ronny@no42.org>
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# init-rpm-tree.sh — prepare the RPM tree root on container start.
+#
+# Runs as the nginx user (uid 101) from /docker-entrypoint.d. The tree is
+# shared with two other writers that run as root with every capability
+# dropped: the auth service, which creates component directories from the
+# component record, and the promotion exec that publishes packages. Root
+# without CAP_DAC_OVERRIDE is bound by ordinary permissions, so the tree is
+# owned by group 101, setgid so new entries inherit the group, and
+# group-writable. auth joins group 101 via group_add in compose.yml; the
+# promotion exec runs as 0:101.
+#
+# Component and series directories are NOT created here. The component
+# record owns them (POST /api/v1/components).
 set -e
-
-COMPONENTS="core minion sentinel"
-SERIES="2025"
-OS_TARGETS="el8-x86_64 el9-x86_64 el10-x86_64 centos10-x86_64"
 ROOT="/usr/share/nginx/html"
-
-for component in $COMPONENTS; do
-    for series in $SERIES; do
-        for os in $OS_TARGETS; do
-            mkdir -p "${ROOT}/rpm/${component}/${series}/${os}"
-        done
-    done
-done
-
-echo "RPM directory tree initialised under ${ROOT}/rpm/"
+mkdir -p "${ROOT}/rpm"
+chmod 2775 "${ROOT}/rpm"
+# Normalise directories this user owns from earlier image versions, which
+# created them 0755 and therefore unwritable for the other writers.
+find "${ROOT}/rpm" -type d -user "$(id -u)" ! -perm 2775 -exec chmod 2775 {} + 2>/dev/null || true
+echo "RPM tree root ready at ${ROOT}/rpm/ (group $(id -g), setgid, group-writable)"
