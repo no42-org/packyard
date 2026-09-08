@@ -5,6 +5,10 @@ http:
         address: "http://auth:8080/auth"
         authRequestHeaders:
           - "Authorization"
+        # The auth service answers with an empty body on every path, so 1 KiB is
+        # generous. Unset means unlimited, which lets a hung or compromised auth
+        # service exhaust Traefik's memory. Over the limit the request gets 401.
+        maxResponseBodySize: 1024
         # The entryPoint sanitises X-Forwarded-* from every client not listed in
         # forwardedHeaders.trustedIPs, and no entryPoint here lists any, so
         # nothing a client sends survives to this middleware. What reaches the

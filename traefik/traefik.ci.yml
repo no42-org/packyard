@@ -16,6 +16,13 @@ accessLog:
 entryPoints:
   web:
     address: "0.0.0.0:80"
+    http:
+      # Go splits header names on dashes only, so X_Forwarded_Uri and
+      # X.Forwarded.Uri are distinct headers to it while a backend deriving
+      # variable names (nginx, CGI) reads them as the same one. `delete` drops
+      # any header whose name carries a character other than a letter, a digit
+      # or a dash, before routing.
+      aliasHeadersStrategy: delete
   metrics:
     address: "127.0.0.1:8082"  # Traefik's own /metrics; loopback-only inside the container, internal only in CI
 
