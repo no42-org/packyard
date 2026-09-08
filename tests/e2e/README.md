@@ -108,6 +108,9 @@ VALID_KEY=your-subscription-key \
 bash tests/e2e/rpm-subscriber.sh
 ```
 
+AC4 repeats the 401 check with `X-Forwarded-Uri`, `X-Forwarded-Prefix` and `X-Forwarded-For` set by the client, pointing at the public component.
+The entryPoint trusts no client, so forward-auth still sees the real path and the private component still answers 401.
+
 ### DEB subscriber test (Story 5.2)
 
 **Prerequisites:** `apt-get`, `dpkg`, `python3`, `curl`, `gpg` installed (requires Debian/Ubuntu host or container).

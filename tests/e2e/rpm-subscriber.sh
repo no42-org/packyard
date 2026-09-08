@@ -143,6 +143,26 @@ else
   fail "AC3 — expected HTTP 401 for invalid key; got HTTP ${HTTP_STATUS}"
 fi
 
+# ─── AC4: Forwarded headers from the client cannot move the scope ────────────
+# forward-auth scopes on X-Forwarded-Uri. The entryPoint trusts no client, so a
+# client-supplied X-Forwarded-* never reaches the auth service and the private
+# component still answers 401. Regression test for the trustForwardHeader
+# migration and, in shape, for GHSA-6384-m2mw-rf54.
+
+echo ""
+echo "=== AC4: Spoofed forwarded headers do not change the scope decision ==="
+SPOOF_URL="$(echo "${BASE_URL}" | sed 's|://|://subscriber:invalidkey9999@|')/rpm/${PRIVATE_COMPONENT}/${SERIES}/${OS_ARCH}/repodata/repomd.xml"
+HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' \
+  -H "X-Forwarded-Uri: /rpm/${COMPONENT}/${SERIES}/${OS_ARCH}/repodata/repomd.xml" \
+  -H "X-Forwarded-Prefix: /rpm/${COMPONENT}" \
+  -H "X-Forwarded-For: 127.0.0.1" \
+  "${SPOOF_URL}" || true)
+if [ "${HTTP_STATUS}" = "401" ]; then
+  pass "AC4 — spoofed X-Forwarded-* headers still return 401 on '${PRIVATE_COMPONENT}'"
+else
+  fail "AC4 — spoofed X-Forwarded-* headers returned ${HTTP_STATUS}; the client must not reach '${COMPONENT}' scope"
+fi
+
 # ─── Summary ─────────────────────────────────────────────────────────────────
 
 echo ""

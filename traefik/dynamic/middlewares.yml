@@ -5,7 +5,14 @@ http:
         address: "http://auth:8080/auth"
         authRequestHeaders:
           - "Authorization"
-        trustForwardHeader: false
+        # The entryPoint sanitises X-Forwarded-* from every client not listed in
+        # forwardedHeaders.trustedIPs, and no entryPoint here lists any, so
+        # nothing a client sends survives to this middleware. What reaches the
+        # auth service is Traefik's own header set, which is what `true` trusts.
+        # `false` is deprecated since 3.6.14, the release that patched
+        # GHSA-6384-m2mw-rf54: it forwarded a client's X-Forwarded-Prefix
+        # untouched. Leaving the option unset logs a warning on every start.
+        trustForwardHeader: true
         # authResponseHeaders omitted — auth service returns no headers to pass downstream
         # fail-closed: Traefik returns 503 if auth service is unreachable (NFR11)
 
