@@ -206,8 +206,8 @@ startup (restart required to pick up new components in those paths).
 | `PATCH`  | `/api/v1/components/{name}`       | Update component visibility              |
 | `DELETE` | `/api/v1/components/{name}`       | Deprovision a component (safe-lock)      |
 
-A key scoped to `core` grants access only to `/rpm/core/`, `/deb/core/`,
-and `lts-core` OCI paths. Cross-component access is denied — a `core` key
+A key scoped to `core` grants access only to `/rpm/core/`, `/deb/core/`
+and `/oci/core/` paths. Cross-component access is denied — a `core` key
 cannot access `/rpm/minion/`. The component name in the key must match the
 path segment exactly.
 

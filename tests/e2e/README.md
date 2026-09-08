@@ -71,8 +71,8 @@ docker compose exec aptly /scripts/publish-snapshot.sh core 2025 bookworm
 
 # Option B: Manual (for local dev only — requires SSH tunnel to Zot on port 5000)
 ssh -fN -L 5000:localhost:5000 deploy@HOST
-crane push /tmp/test-amd64.tar localhost:5000/lts-core:2025-x86_64 --insecure
-crane push /tmp/test-arm64.tar localhost:5000/lts-core:2025-arm64 --insecure
+crane push /tmp/test-amd64.tar localhost:5000/core:2025-x86_64 --insecure
+crane push /tmp/test-arm64.tar localhost:5000/core:2025-arm64 --insecure
 ```
 
 ---

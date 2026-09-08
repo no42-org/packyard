@@ -20,8 +20,8 @@ import (
 )
 
 // ForwardAuthHandler validates subscriber credentials for Traefik forwardAuth.
-// GET /auth — returns 200 (allow), 401 (deny), 405 (write method on a
-// subscriber path), or 503 (error/fail-closed).
+// GET /auth — returns 200 (allow), 401 (deny), 404 (path shape not served),
+// 405 (write method on a subscriber path), or 503 (error/fail-closed).
 // Component visibility is resolved via a live DB lookup on every request so that
 // visibility changes take effect immediately without a service restart.
 //
@@ -77,10 +77,27 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	requestedComponent, ok := extractComponent(r.Header.Get("X-Forwarded-Uri"))
-	if !ok {
+	forwardedURI := r.Header.Get("X-Forwarded-Uri")
+
+	// The registry version check carries no repository, so it has no component
+	// to scope. The distribution spec wants 200 or 401 here and clients treat
+	// anything else as a broken registry: crane refuses to talk to a registry
+	// whose /v2/ answers 404. 401 is the "authenticate if you can" signal that
+	// docker, crane and cosign all continue past.
+	if isRegistryPing(forwardedURI) {
 		metrics.RequestsTotal.WithLabelValues("denied").Inc()
 		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
+	// A path matching none of the served shapes carries no component to reason
+	// about. 404 says so; 401 would tell a subscriber their key is wrong when
+	// their path is. Unknown components below keep answering 401, which is
+	// what the enumeration guard is for.
+	requestedComponent, ok := extractComponent(forwardedURI)
+	if !ok {
+		metrics.RequestsTotal.WithLabelValues("denied-path").Inc()
+		w.WriteHeader(http.StatusNotFound)
 		return
 	}
 
@@ -193,15 +210,34 @@ func isHex(s string) bool {
 	return true
 }
 
+// isRegistryPing reports whether the path is the OCI distribution version
+// check, which every registry client issues before its first request. Traefik
+// forwards it as /v2/ on the registry router and /oci/v2/ on the path router;
+// neither names a repository.
+func isRegistryPing(path string) bool {
+	switch strings.TrimSuffix(path, "/") {
+	case "/v2", "/oci/v2":
+		return true
+	}
+	return false
+}
+
 // extractComponent parses the LTS component name from an X-Forwarded-Uri path.
 //
 // Supported formats:
 //
 //	/rpm/{component}/{series}/{os-arch}/...   → component at index 1
 //	/deb/{component}/{series}/...             → component at index 1
-//	/oci/v2/lts-{component}/...               → strip "lts-" prefix from index 2
+//	/oci/v2/{component}/{image}/...           → component at index 2
 //
-// Returns ("", false) if the path is unrecognised or too short.
+// The component is the name it carries in the admin UI in all three, with no
+// prefix added or stripped. Registry repositories used to be named
+// lts-{component}; a path in that shape now denotes a component literally
+// named "lts-{component}", which is normally unknown and therefore denied.
+//
+// Returns ("", false) if the path is unrecognised or too short. Callers answer
+// 404 for that, not 401: a path shape reveals nothing about which components
+// exist, so hiding it behind the enumeration guard only misleads.
 func extractComponent(path string) (string, bool) {
 	// TrimPrefix removes the leading slash so SplitN gives clean segments.
 	parts := strings.SplitN(strings.TrimPrefix(path, "/"), "/", 5)
@@ -215,19 +251,16 @@ func extractComponent(path string) (string, bool) {
 		// /deb/{component}/{series}/...
 		comp = parts[1]
 	case "oci":
-		// /oci/v2/lts-{component}/...
-		if len(parts) < 3 {
+		// /oci/v2/{component}/{image}/... — Traefik only ever forwards the
+		// /oci/v2/ shape, so anything else under /oci/ is not a served path.
+		if len(parts) < 3 || parts[1] != "v2" {
 			return "", false
 		}
-		after, found := strings.CutPrefix(parts[2], "lts-")
-		if !found {
-			return "", false
-		}
-		comp = after
+		comp = parts[2]
 	default:
 		return "", false
 	}
-	// An empty segment (e.g. "/rpm//x" or "/oci/v2/lts-/x") is not a component.
+	// An empty segment (e.g. "/rpm//x" or "/oci/v2//x") is not a component.
 	if comp == "" {
 		return "", false
 	}

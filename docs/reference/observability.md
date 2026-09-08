@@ -6,7 +6,7 @@ Metrics are exposed by the auth service at `http://auth:9090/metrics` (Docker-in
 
 | Metric | Type | Description |
 |--------|------|-------------|
-| `packyard_auth_requests_total{status="allowed\|allowed-public\|denied\|denied-method\|error"}` | Counter | forwardAuth request outcomes |
+| `packyard_auth_requests_total{status="allowed\|allowed-public\|denied\|denied-method\|denied-path\|error"}` | Counter | forwardAuth request outcomes |
 | `packyard_auth_duration_seconds` | Histogram | forwardAuth latency |
 | `packyard_auth_component_cache_requests_total` | Counter | Component lookups through the public-component cache (forward-auth and admin reads) |
 | `packyard_auth_component_cache_hits_total` | Counter | Lookups answered from the cache without a store call; hit ratio is hits / requests |
