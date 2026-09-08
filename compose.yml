@@ -1,7 +1,7 @@
 services:
 
   traefik:
-    image: traefik:3.6.12@sha256:171c9c3565b29f6c133f1c1b43c5d4e5853415198e9e1078c001f8702ff66aec
+    image: traefik:v3.7.13@sha256:f86a2cab1b5c649070c49f883c743dd32d8485a56e3368c5f93b9e91f1e91259
     restart: unless-stopped
     cap_drop: [ALL]
     cap_add:
