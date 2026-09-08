@@ -2,7 +2,10 @@
 # Copyright 2026 Ronny Trommer <ronny@no42.org>
 # SPDX-License-Identifier: GPL-3.0-or-later
 #
-# oci.sh — copy an image into Zot as lts-<component>/<image> and sign it.
+# oci.sh — copy an image into Zot as <component>/<image> and sign it.
+#
+# The repository is the component name verbatim, the same name the admin UI,
+# /rpm/<component>/ and /deb/<component>/ use (#237).
 #
 # Usage: oci.sh <zot-registry> <component> <image> <version> <series>
 #
@@ -36,7 +39,7 @@ for v in "${COMPONENT}" "${IMAGE}" "${VERSION}" "${SERIES}"; do
 done
 for cmd in crane cosign; do command -v "$cmd" >/dev/null || { echo "ERROR: $cmd not found" >&2; exit 1; }; done
 
-dst="${ZOT}/lts-${COMPONENT}/${IMAGE}"
+dst="${ZOT}/${COMPONENT}/${IMAGE}"
 
 if [ -n "${SOURCE_IDENTITY:-}" ]; then
   # Never copy an image the source did not sign.

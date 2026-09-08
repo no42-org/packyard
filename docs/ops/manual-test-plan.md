@@ -259,30 +259,35 @@ Expected: first three `401`, last one `200`.
 
 ### 5.1 OCI component extraction
 
-OCI paths use the format `/oci/v2/lts-{component}/...`. The auth service strips the `lts-` prefix.
+OCI paths use the format `/oci/v2/{component}/...`, the component named exactly as it is everywhere else.
 
 ```bash
 # core key on OCI core repo
 curl -u "subscriber:${CORE_KEY}" \
   -o /dev/null -w "%{http_code}\n" \
-  "http://localhost/oci/v2/lts-core/tags/list"
+  "http://localhost/oci/v2/core/tags/list"
 
 # core key on OCI minion repo — denied
 curl -u "subscriber:${CORE_KEY}" \
   -o /dev/null -w "%{http_code}\n" \
-  "http://localhost/oci/v2/lts-minion/tags/list"
+  "http://localhost/oci/v2/minion/tags/list"
 ```
 
 Expected: first `200` or `404` (Zot has no images pushed yet), second `401`.
 
 ```bash
-# Path without lts- prefix — should be denied (unrecognised format)
+# Unknown component — denied, and indistinguishable from a wrong key
 curl -u "subscriber:${CORE_KEY}" \
   -o /dev/null -w "%{http_code}\n" \
   "http://localhost/oci/v2/someother-repo/tags/list"
+
+# Not a served path shape — 404, so a mistyped path is not read as a bad key
+curl -u "subscriber:${CORE_KEY}" \
+  -o /dev/null -w "%{http_code}\n" \
+  "http://localhost/oci/core/tags/list"
 ```
 
-Expected: `401`.
+Expected: first `401`, second `404`.
 
 ---
 

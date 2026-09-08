@@ -30,7 +30,7 @@ deb [signed-by=/usr/share/keyrings/lts.gpg] \
 
 ## OCI (Docker / Kubernetes)
 
-Images are published as `lts-<component>/<image>` with an immutable version tag and a floating series tag that follows the newest version in that series.
+Images are published as `<component>/<image>`, the component named exactly as it is in the admin UI and in the RPM and DEB paths, with an immutable version tag and a floating series tag that follows the newest version in that series.
 
 ```bash
 # Authenticate (not needed for a public component). The registry host is
@@ -40,8 +40,8 @@ docker login pkg.example.org \
   --password KEY
 
 # Pull a specific version, or the newest version of a series
-docker pull pkg.example.org/oci/lts-bluebird/core:38.1.0
-docker pull pkg.example.org/oci/lts-bluebird/core:38
+docker pull pkg.example.org/oci/bluebird/core:38.1.0
+docker pull pkg.example.org/oci/bluebird/core:38
 
 # Verify the signature. Images are signed keylessly by the promoting
 # workflow, so you pin the signing workflow's identity rather than a key.
@@ -49,10 +49,12 @@ docker pull pkg.example.org/oci/lts-bluebird/core:38
 cosign verify \
   --certificate-identity-regexp 'https://github.com/no42-org/packyard/\.github/workflows/promote-release\.yml@refs/heads/main' \
   --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-  pkg.example.org/oci/lts-bluebird/core:38.1.0
+  pkg.example.org/oci/bluebird/core:38.1.0
 ```
 
-Images promoted from staged tarballs with the older `promote-oci.yml` workflow are named `lts-<component>:<series>` and verify against `promote-oci\.yml` in the identity above.
+Images promoted from staged tarballs with the older `promote-oci.yml` workflow are named `<component>:<series>` and verify against `promote-oci\.yml` in the identity above.
+
+Images promoted before Packyard 0.6.2 were published as `lts-<component>/<image>`, a leftover of an earlier product name. That prefix is gone: `<host>/oci/lts-<component>/…` now names a component called `lts-<component>`, which does not exist, and answers `401`.
 
 The signature is stored in the registry next to the image, so `docker pull` and `cosign verify` both go through the same `/oci/` endpoint.
 

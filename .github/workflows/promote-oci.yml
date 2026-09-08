@@ -109,7 +109,7 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
         run: |
-          IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
+          IMAGE_BASE="${ZOT_REGISTRY}/${COMPONENT}"
           for arch in x86_64 arm64; do
             tarcount=$(find "./staging/${arch}" -maxdepth 1 -name '*.tar' 2>/dev/null | wc -l)
             [ "$tarcount" -eq 1 ] || { echo "Expected exactly 1 .tar for ${arch}, found ${tarcount}"; exit 1; }
@@ -123,7 +123,7 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
         run: |
-          IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
+          IMAGE_BASE="${ZOT_REGISTRY}/${COMPONENT}"
           crane index append \
             --tag "${IMAGE_BASE}:${SERIES}" \
             --manifest "${IMAGE_BASE}:${SERIES}-x86_64" \
@@ -140,7 +140,7 @@ jobs:
           COMPONENT: ${{ inputs.component }}
           SERIES: ${{ inputs.series }}
         run: |
-          IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
+          IMAGE_BASE="${ZOT_REGISTRY}/${COMPONENT}"
           for tag in "${SERIES}-x86_64" "${SERIES}-arm64" "${SERIES}"; do
             digest=$(crane digest --insecure "${IMAGE_BASE}:${tag}")
             cosign sign --yes --allow-insecure-registry "${IMAGE_BASE}@${digest}"
@@ -153,7 +153,7 @@ jobs:
           SERIES: ${{ inputs.series }}
           CERT_IDENTITY: https://github.com/${{ github.repository }}/.github/workflows/promote-oci.yml@${{ github.ref }}
         run: |
-          IMAGE_BASE="${ZOT_REGISTRY}/lts-${COMPONENT}"
+          IMAGE_BASE="${ZOT_REGISTRY}/${COMPONENT}"
           if cosign verify \
             --allow-insecure-registry \
             --certificate-identity "${CERT_IDENTITY}" \

@@ -72,8 +72,8 @@ bash scripts/stage-artifact.sh sentinel 2025 rpm el9-x86_64  ./packyard-sentinel
 bash scripts/stage-artifact.sh core 2025 deb noble-amd64 ./packyard-core-2025_amd64.deb
 
 # OCI — stage x86_64 and arm64 archives separately
-bash scripts/stage-artifact.sh core 2025 oci x86_64 ./lts-core-x86_64.tar
-bash scripts/stage-artifact.sh core 2025 oci arm64  ./lts-core-arm64.tar
+bash scripts/stage-artifact.sh core 2025 oci x86_64 ./core-x86_64.tar
+bash scripts/stage-artifact.sh core 2025 oci arm64  ./core-arm64.tar
 ```
 
 Confirm the artifacts are in the bucket:

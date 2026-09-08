@@ -294,22 +294,92 @@ func TestForwardAuth_MalformedAuthHeader(t *testing.T) {
 }
 
 func TestForwardAuth_UnrecognisedForwardedUri(t *testing.T) {
-	// Handler's !ok branch from extractComponent — e.g. /gpg/ path has no auth middleware
-	// but if it somehow reaches /auth, or an empty header is sent, the handler must return 401.
+	// Handler's !ok branch from extractComponent. A path matching none of the
+	// served shapes carries no component, so it answers 404: the enumeration
+	// guard that makes an unknown component 401 has nothing to hide here, and
+	// 401 would tell a subscriber their key is wrong when their path is.
 	h := newTestHandler(&mockStore{
 		getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
 			return &store.Key{ID: value, Component: "core", Active: true}, nil
 		},
 	})
-	cases := []string{"", "/", "/gpg/lts.asc", "/unknown/path"}
+	cases := []string{"", "/", "/gpg/lts.asc", "/unknown/path", "/oci/core/manifests/2025", "/oci/v2"}
 	for _, uri := range cases {
 		req := httptest.NewRequest("GET", "/auth", nil)
 		req.Header.Set("Authorization", basicAuthHeader(validKey))
 		req.Header.Set("X-Forwarded-Uri", uri)
 		w := httptest.NewRecorder()
 		h.ServeHTTP(w, req)
-		if w.Code != http.StatusUnauthorized {
-			t.Errorf("uri=%q: expected 401, got %d", uri, w.Code)
+		if w.Code != http.StatusNotFound {
+			t.Errorf("uri=%q: expected 404, got %d", uri, w.Code)
+		}
+		if w.Body.Len() != 0 {
+			t.Errorf("uri=%q: expected empty body, got %q", uri, w.Body.String())
+		}
+	}
+}
+
+// The registry addresses a component by its own name: /oci/v2/<component>/...
+// with no prefix. A component named <c> is served at /rpm/<c>/, /deb/<c>/ and
+// <host>/oci/<c>/<image>.
+func TestForwardAuth_OCIPathUsesComponentNameVerbatim(t *testing.T) {
+	h := newTestHandler(&mockStore{
+		getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
+			return &store.Key{ID: value, Component: "core", Active: true}, nil
+		},
+	})
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("Authorization", basicAuthHeader(validKey))
+	req.Header.Set("X-Forwarded-Uri", "/oci/v2/core/fixture/manifests/2025")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusOK {
+		t.Errorf("expected 200 for a key scoped to 'core', got %d", w.Code)
+	}
+}
+
+// The former repository shape is not special-cased: it names a component
+// "lts-core", which does not exist, so it gets the unknown-component 401.
+func TestForwardAuth_OCIPrefixedPathIsAnUnknownComponent(t *testing.T) {
+	h := newTestHandler(&mockStore{
+		getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
+			return &store.Key{ID: value, Component: "core", Active: true}, nil
+		},
+	})
+	req := httptest.NewRequest("GET", "/auth", nil)
+	req.Header.Set("Authorization", basicAuthHeader(validKey))
+	req.Header.Set("X-Forwarded-Uri", "/oci/v2/lts-core/manifests/2025")
+	w := httptest.NewRecorder()
+	h.ServeHTTP(w, req)
+
+	if w.Code != http.StatusUnauthorized {
+		t.Errorf("expected 401 for the unknown component 'lts-core', got %d", w.Code)
+	}
+}
+
+func TestExtractComponent(t *testing.T) {
+	cases := []struct {
+		path string
+		want string
+		ok   bool
+	}{
+		{"/rpm/core/2025/el9-x86_64/x.rpm", "core", true},
+		{"/deb/core/2025/dists/bookworm/InRelease", "core", true},
+		{"/oci/v2/core/fixture/manifests/2025", "core", true},
+		{"/oci/v2/bluebird/core/manifests/38", "bluebird", true},
+		{"/oci/v2/lts-bluebird/core/manifests/38", "lts-bluebird", true},
+		{"/oci/v2//manifests/38", "", false},
+		{"/oci/v2", "", false},
+		{"/oci/bluebird/core/manifests/38", "", false},
+		{"/gpg/lts.asc", "", false},
+		{"/", "", false},
+		{"", "", false},
+	}
+	for _, c := range cases {
+		got, ok := extractComponent(c.path)
+		if got != c.want || ok != c.ok {
+			t.Errorf("extractComponent(%q) = (%q, %v); want (%q, %v)", c.path, got, ok, c.want, c.ok)
 		}
 	}
 }
@@ -490,8 +560,8 @@ func FuzzExtractComponent(f *testing.F) {
 	for _, seed := range []string{
 		"/rpm/core/2025/el9-x86_64/Packages/x.rpm",
 		"/deb/core/2025/dists/bookworm/InRelease",
+		"/oci/v2/core/fixture/manifests/2025",
 		"/oci/v2/lts-core/manifests/2025",
-		"/oci/v2/core/manifests/2025",
 		"/gpg/lts.asc",
 		"/",
 		"",
@@ -595,7 +665,7 @@ func TestForwardAuth_WriteMethodRefused(t *testing.T) {
 			})
 			req := httptest.NewRequest("GET", "/auth", nil)
 			req.Header.Set("Authorization", basicAuthHeader(validKey))
-			req.Header.Set("X-Forwarded-Uri", "/oci/v2/lts-core/blobs/uploads/")
+			req.Header.Set("X-Forwarded-Uri", "/oci/v2/core/fixture/blobs/uploads/")
 			req.Header.Set("X-Forwarded-Method", method)
 			w := httptest.NewRecorder()
 			h.ServeHTTP(w, req)
@@ -620,7 +690,7 @@ func TestForwardAuth_WriteMethodRefusedOnPublicComponent(t *testing.T) {
 	h := newTestHandler(&mockStore{})
 	h.ComponentStore = cs
 	req := httptest.NewRequest("GET", "/auth", nil)
-	req.Header.Set("X-Forwarded-Uri", "/oci/v2/lts-core/manifests/2025")
+	req.Header.Set("X-Forwarded-Uri", "/oci/v2/core/fixture/manifests/2025")
 	req.Header.Set("X-Forwarded-Method", "PUT")
 	w := httptest.NewRecorder()
 	h.ServeHTTP(w, req)

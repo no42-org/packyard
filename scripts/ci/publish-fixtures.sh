@@ -68,7 +68,7 @@ mkdir -p "${WORK}/bundle/packages" "${WORK}/bundle/signing"
 cp "${DEB}" "${WORK}/bundle/packages/"; cp "${REPO_ROOT}/ci/key.asc" "${WORK}/bundle/signing/key.asc"; cp "${REPO_ROOT}/ci/passphrase" "${WORK}/bundle/signing/passphrase"
 tar -cf - -C "${WORK}/bundle" . | bash "${REPO_ROOT}/scripts/publish/deb.sh" "${COMPOSE_FILE_MAIN}" "${COMPONENT}" "${SERIES}" "${KEYID}" "${DEB_DISTRO}"
 
-echo "== oci.sh -> lts-${COMPONENT}/${IMAGE}:${SERIES} (COSIGN_SIGN=${COSIGN_SIGN:-0})"
+echo "== oci.sh -> ${COMPONENT}/${IMAGE}:${SERIES} (COSIGN_SIGN=${COSIGN_SIGN:-0})"
 SOURCE_REF="${FIXTURE_IMAGE_REF}" COSIGN_SIGN="${COSIGN_SIGN:-0}" OWN_IDENTITY="${OWN_IDENTITY:-}" \
   bash "${REPO_ROOT}/scripts/publish/oci.sh" "${ZOT_REGISTRY}" "${COMPONENT}" "${IMAGE}" "${SERIES}" "${SERIES}"
 echo "fixtures published"

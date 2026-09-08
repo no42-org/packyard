@@ -36,7 +36,7 @@ on:
         required: true
         default: bookworm,trixie,jammy,noble
       images:
-        description: "Comma-separated image names to copy; each becomes lts-<component>/<image>. Empty skips images"
+        description: "Comma-separated image names to copy; each becomes <component>/<image>. Empty skips images"
         required: false
         default: core,minion,sentinel
       source_registry:
@@ -307,7 +307,7 @@ jobs:
           }
           for t in ${RPM_TARGETS}; do check "https://${HOST}/rpm/${COMPONENT}/${SERIES}/${t}/repodata/repomd.xml"; done
           for d in ${DEB_DISTROS}; do check "https://${HOST}/deb/${COMPONENT}/${SERIES}/dists/${d}/InRelease"; done
-          for i in ${IMAGES}; do check "https://${HOST}/oci/v2/lts-${COMPONENT}/${i}/manifests/${VERSION}"; done
+          for i in ${IMAGES}; do check "https://${HOST}/oci/v2/${COMPONENT}/${i}/manifests/${VERSION}"; done
 
       - name: Cleanup
         if: always()

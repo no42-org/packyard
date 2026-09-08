@@ -21,8 +21,8 @@
 #   COMPONENT           — public component (default: core)
 #   SERIES              — series tag to pull (default: 2025)
 #   OCI_REGISTRY        — registry reference for docker/crane (default: BASE_URL host)
-#   OCI_IMAGE           — image name under lts-<component>/ (default: unset, the
-#                         legacy lts-<component>:<series> reference)
+#   OCI_IMAGE           — image name under <component>/ (default: unset, the
+#                         legacy single-segment <component>:<series> reference)
 #   PRIVATE_COMPONENT   — a private component for the 401 check (default: minion)
 #   COSIGN_CERT_IDENTITY_REGEXP — signing identity to verify (default: promote-release on main)
 #   COSIGN_SKIP         — "1" skips the signature check (pull requests in CI, where
@@ -45,9 +45,9 @@ PRIVATE_COMPONENT="${PRIVATE_COMPONENT:-minion}"
 REGISTRY="${BASE_URL#https://}"; REGISTRY="${REGISTRY#http://}"
 REGISTRY="${OCI_REGISTRY:-${REGISTRY}}"
 if [ -n "${OCI_IMAGE:-}" ]; then
-  REPO_PATH="lts-${COMPONENT}/${OCI_IMAGE}"
+  REPO_PATH="${COMPONENT}/${OCI_IMAGE}"
 else
-  REPO_PATH="lts-${COMPONENT}"
+  REPO_PATH="${COMPONENT}"
 fi
 IMAGE="${REGISTRY}/oci/${REPO_PATH}:${SERIES}"
 # crane needs to be told a plain-HTTP registry is intended; docker infers it for localhost.
@@ -108,9 +108,9 @@ echo "=== AC3: Auth middleware order and 401 check ==="
 # its own request path (/auth), not the forwarded URI, so that could never
 # match. The middleware order is proven by AC3b instead: a private
 # component can only answer 401 on the /v2/oci/... shape if forward-auth
-# saw the rewritten, unstripped /oci/v2/lts-<component>/ path.
+# saw the rewritten, unstripped /oci/v2/<component>/ path.
 # AC3b — a private component answers 401 to an invalid key, on both path shapes
-for path in "oci/v2/lts-${PRIVATE_COMPONENT}/manifests/${SERIES}" "v2/oci/lts-${PRIVATE_COMPONENT}/manifests/${SERIES}"; do
+for path in "oci/v2/${PRIVATE_COMPONENT}/manifests/${SERIES}" "v2/oci/${PRIVATE_COMPONENT}/manifests/${SERIES}"; do
   HTTP_STATUS=$(curl -s -o /dev/null -w '%{http_code}' -u "subscriber:invalidkey9999" "${BASE_URL}/${path}" || true)
   if [ "${HTTP_STATUS}" = "401" ]; then
     pass "AC3b — invalid key returns 401 on /${path}"

@@ -26,7 +26,7 @@ GitHub Release                                 1. validate inputs, preflight the
 quay.io/bluebird/core:38.1.0      ──────────► 4. rpm container:  add-package.sh into every rpm_target
   (cosign-signed)                              5. aptly container: one snapshot, published per deb_distro
                                                6. cosign verify upstream, crane copy into Zot as
-                                                  lts-<component>/<image>:<version> and :<series>,
+                                                  <component>/<image>:<version> and :<series>,
                                                   cosign sign with this workflow's identity
                                                7. curl every published path through the public hostname
 ```
