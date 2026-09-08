@@ -303,7 +303,7 @@ func TestForwardAuth_UnrecognisedForwardedUri(t *testing.T) {
 			return &store.Key{ID: value, Component: "core", Active: true}, nil
 		},
 	})
-	cases := []string{"", "/", "/gpg/lts.asc", "/unknown/path", "/oci/core/manifests/2025", "/oci/v2"}
+	cases := []string{"", "/", "/gpg/lts.asc", "/unknown/path", "/oci/core/manifests/2025", "/oci/v2//manifests/38"}
 	for _, uri := range cases {
 		req := httptest.NewRequest("GET", "/auth", nil)
 		req.Header.Set("Authorization", basicAuthHeader(validKey))
@@ -358,6 +358,26 @@ func TestForwardAuth_OCIPrefixedPathIsAnUnknownComponent(t *testing.T) {
 	}
 }
 
+// Every registry client pings /v2/ before its first request. The distribution
+// spec wants 200 or 401 there; crane treats 404 as a broken registry and gives
+// up, which is how the 404-for-unparseable-paths change first showed up in CI.
+func TestForwardAuth_RegistryPingStays401(t *testing.T) {
+	h := newTestHandler(&mockStore{
+		getByValueFn: func(_ context.Context, value string) (*store.Key, error) {
+			return &store.Key{ID: value, Component: "core", Active: true}, nil
+		},
+	})
+	for _, uri := range []string{"/v2/", "/v2", "/oci/v2/", "/oci/v2"} {
+		req := httptest.NewRequest("GET", "/auth", nil)
+		req.Header.Set("X-Forwarded-Uri", uri)
+		w := httptest.NewRecorder()
+		h.ServeHTTP(w, req)
+		if w.Code != http.StatusUnauthorized {
+			t.Errorf("uri=%q: expected 401 for the registry ping, got %d", uri, w.Code)
+		}
+	}
+}
+
 func TestExtractComponent(t *testing.T) {
 	cases := []struct {
 		path string
@@ -371,6 +391,7 @@ func TestExtractComponent(t *testing.T) {
 		{"/oci/v2/lts-bluebird/core/manifests/38", "lts-bluebird", true},
 		{"/oci/v2//manifests/38", "", false},
 		{"/oci/v2", "", false},
+		{"/v2/", "", false},
 		{"/oci/bluebird/core/manifests/38", "", false},
 		{"/gpg/lts.asc", "", false},
 		{"/", "", false},

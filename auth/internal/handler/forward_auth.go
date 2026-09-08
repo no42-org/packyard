@@ -77,11 +77,24 @@ func (h *ForwardAuthHandler) ServeHTTP(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	forwardedURI := r.Header.Get("X-Forwarded-Uri")
+
+	// The registry version check carries no repository, so it has no component
+	// to scope. The distribution spec wants 200 or 401 here and clients treat
+	// anything else as a broken registry: crane refuses to talk to a registry
+	// whose /v2/ answers 404. 401 is the "authenticate if you can" signal that
+	// docker, crane and cosign all continue past.
+	if isRegistryPing(forwardedURI) {
+		metrics.RequestsTotal.WithLabelValues("denied").Inc()
+		w.WriteHeader(http.StatusUnauthorized)
+		return
+	}
+
 	// A path matching none of the served shapes carries no component to reason
 	// about. 404 says so; 401 would tell a subscriber their key is wrong when
 	// their path is. Unknown components below keep answering 401, which is
 	// what the enumeration guard is for.
-	requestedComponent, ok := extractComponent(r.Header.Get("X-Forwarded-Uri"))
+	requestedComponent, ok := extractComponent(forwardedURI)
 	if !ok {
 		metrics.RequestsTotal.WithLabelValues("denied-path").Inc()
 		w.WriteHeader(http.StatusNotFound)
@@ -195,6 +208,18 @@ func isHex(s string) bool {
 		}
 	}
 	return true
+}
+
+// isRegistryPing reports whether the path is the OCI distribution version
+// check, which every registry client issues before its first request. Traefik
+// forwards it as /v2/ on the registry router and /oci/v2/ on the path router;
+// neither names a repository.
+func isRegistryPing(path string) bool {
+	switch strings.TrimSuffix(path, "/") {
+	case "/v2", "/oci/v2":
+		return true
+	}
+	return false
 }
 
 // extractComponent parses the LTS component name from an X-Forwarded-Uri path.
