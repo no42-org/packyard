@@ -24,9 +24,27 @@ updates:
       - dependencies
       - github-actions
 
-  # Docker base images — service Dockerfiles only (auth, rpm, backup, aptly, static).
-  # Images declared in compose.yml are not scanned by Dependabot's docker ecosystem,
-  # and the repository root has no Dockerfile.
+  # Container images declared in compose.yml. `docker-compose` is a separate
+  # ecosystem from `docker`, generally available since February 2025. Its file
+  # matcher is /(docker-)?compose(-\w+)?(\.[\w-]+)?\.ya?ml/, which covers
+  # compose.yml but not compose.override.<name>.yml; scripts/lint-image-pins.sh
+  # keeps the arm64 override's Zot pin in step and rejects any unpinned image.
+  - package-ecosystem: docker-compose
+    directory: /
+    schedule:
+      interval: weekly
+    cooldown:
+      default-days: 7
+    labels:
+      - dependencies
+      - docker
+    ignore:
+      # First-party images. Their tag is written by the release process
+      # (RELEASING.md § 1), never by a bot.
+      - dependency-name: "ghcr.io/no42-org/packyard-*"
+
+  # Docker base images — service Dockerfiles (auth, rpm, backup, aptly, static).
+  # The repository root has no Dockerfile, so each service gets its own entry.
   - package-ecosystem: docker
     directory: /auth
     schedule:

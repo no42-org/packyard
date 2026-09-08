@@ -1,7 +1,7 @@
 services:
 
   traefik:
-    image: traefik:3.6.12
+    image: traefik:3.6.12@sha256:171c9c3565b29f6c133f1c1b43c5d4e5853415198e9e1078c001f8702ff66aec
     restart: unless-stopped
     cap_drop: [ALL]
     cap_add:
@@ -108,7 +108,7 @@ services:
       - backend  # promotion-only; not Traefik-proxied for subscribers
 
   deb:
-    image: nginx:alpine
+    image: nginx:1.31-alpine@sha256:72ba65eb42c10344912a84ff42408db7d34f2feb642204570ab8fc5ffd29f1d3
     restart: unless-stopped
     user: "101:101"             # run directly as nginx user — no privilege drop, no cap_add needed
     cap_drop: [ALL]
@@ -144,7 +144,7 @@ services:
       - proxy
 
   zot:
-    image: ghcr.io/project-zot/zot-linux-amd64:v2.1.2
+    image: ghcr.io/project-zot/zot-linux-amd64:v2.1.2@sha256:073f30d99fbdbcd8869334231c9ca45c75e535e4bdc6e28cc8a1541abe7a3f71
     restart: unless-stopped
     cap_drop: [ALL]
     security_opt:
@@ -162,7 +162,7 @@ services:
       - proxy
 
   rustfs:
-    image: rustfs/rustfs:latest
+    image: rustfs/rustfs:v1.0.0-rc.5@sha256:b7014e0ce2bc703c1316b3ef760e29dfae61fe4a50d1a66fa89638e0f8ea211f
     restart: unless-stopped
     cap_drop: [ALL]
     security_opt:
@@ -189,7 +189,7 @@ services:
       - backend  # promotion-only; not Traefik-proxied for subscribers
 
   rustfs-init:
-    image: amazon/aws-cli:latest
+    image: amazon/aws-cli:2.36.40@sha256:b6aeb95d19d7f5a8cae4eb814cb16739b6b2a4f2f46f427ada6a8c9a20d9881d
     depends_on:
       rustfs:
         condition: service_healthy
