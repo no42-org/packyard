@@ -70,6 +70,21 @@ Every new source file starts with an SPDX header matching the repository license
 
 Use the comment syntax of the language. Leave existing headers as they are.
 
+## Container image pins
+
+Every third-party image, in a `Dockerfile` or a compose file, is pinned by tag and digest:
+
+```yaml
+image: traefik:3.6.12@sha256:171c9c3565b29f6c133f1c1b43c5d4e5853415198e9e1078c001f8702ff66aec
+```
+
+A tag alone is mutable, and the deployment host runs watchtower, which re-pulls a tag that moved.
+`make lint-image-pins` fails the build on an unpinned image and on a Zot version that differs between `compose.yml` and `compose.override.arm64.yml`.
+The `ghcr.io/no42-org/packyard-*` images are the exception: the release process writes their tag, so they carry no digest.
+
+Dependabot maintains the pins weekly: the `docker-compose` ecosystem for `compose.yml` and the `docker` ecosystem for each service `Dockerfile`.
+Its compose matcher does not see `compose.override.<name>.yml`, so a bump there is manual and the lint check is what catches a forgotten one.
+
 ## Releases
 
 Maintainers cut releases from `main` by tag. The procedure is in [RELEASING.md](RELEASING.md).
