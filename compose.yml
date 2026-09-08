@@ -31,7 +31,7 @@ services:
       - proxy
 
   auth:
-    image: ghcr.io/no42-org/packyard-auth:0.6.1
+    image: ghcr.io/no42-org/packyard-auth:0.6.2-rc
     restart: unless-stopped
     cap_drop: [ALL]
     security_opt:
@@ -127,7 +127,7 @@ services:
       - proxy
 
   rpm:
-    image: ghcr.io/no42-org/packyard-rpm:0.6.1
+    image: ghcr.io/no42-org/packyard-rpm:0.6.2-rc
     restart: unless-stopped
     user: "101:101"             # run directly as nginx user — no privilege drop, no cap_add needed
     cap_drop: [ALL]
@@ -230,7 +230,7 @@ services:
       - backend
 
   static:
-    image: ghcr.io/no42-org/packyard-static:0.6.1
+    image: ghcr.io/no42-org/packyard-static:0.6.2-rc
     restart: unless-stopped
     user: "101:101"             # run directly as nginx user — no privilege drop, no cap_add needed
     cap_drop: [ALL]
