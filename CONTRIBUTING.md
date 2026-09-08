@@ -84,6 +84,7 @@ The `ghcr.io/no42-org/packyard-*` images are the exception: the release process 
 
 Dependabot maintains the pins weekly: the `docker-compose` ecosystem for `compose.yml` and the `docker` ecosystem for each service `Dockerfile`.
 Its compose matcher does not see `compose.override.<name>.yml`, so a bump there is manual and the lint check is what catches a forgotten one.
+In practice that means one thing: when Dependabot bumps Zot in `compose.yml`, push the matching `zot-linux-arm64` change onto its branch before merging, or the gate stays red.
 
 ## Releases
 
