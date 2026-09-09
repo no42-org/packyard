@@ -14,7 +14,7 @@ Always go through `make`. CI runs the same targets, so they must stay in sync.
 |------|---------|
 | Build the auth binary with the embedded admin UI | `make build` |
 | Run the auth unit tests | `make test` |
-| Run one test | `cd auth && go test ./internal/handler -run TestName` |
+| Run one test | `make test-one RUN=TestName [PKG=./internal/handler]` |
 | gofmt check and go vet | `make lint` |
 | Lint workflow files | `make lint-workflows` |
 | Build the docs site (fails on broken links) | `make docs-build` |

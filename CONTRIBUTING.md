@@ -16,6 +16,7 @@ Requirements: Docker Compose v2, Go (version in `auth/go.mod`), Node 20 (version
 | Build the auth binary with the embedded SPA | `make build` |
 | Run the auth unit tests | `make test` |
 | Run the admin SPA unit tests | `make admin-ui-test` |
+| Run a single auth test | `make test-one RUN=TestName [PKG=./internal/handler]` |
 | Bring up the full stack and smoke-test it | `docker compose up -d && bash verify.sh` |
 
 Run `make help` to list every target.

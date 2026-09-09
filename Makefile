@@ -17,7 +17,7 @@ UNAME_S := $(shell uname -s)
 
 .PHONY: help docs-install docs-serve docs-build docs-clean check-node test-rpm-publish test-publish-scripts \
         admin-ui admin-ui-install admin-ui-test admin-ui-dev admin-ui-clean \
-        build build-clean test lint lint-workflows lint-image-pins build-image-auth build-image-rpm build-images \
+        build build-clean test test-one lint lint-workflows lint-image-pins build-image-auth build-image-rpm build-images \
         ci-guard ci-signing-key ci-stack-up ci-stack-down ci-stack-logs ci-seed ci-verify-env ci-publish-fixtures e2e-observability e2e-rpm e2e-deb e2e-oci
 
 ## help: Show this help
@@ -95,6 +95,24 @@ build-clean:
 ## test: Run the auth service unit tests
 test:
 	cd auth && $(GO) test ./...
+
+# Both need a default: --warn-undefined-variables (top of this file) fires on
+# a bare $(RUN) when the caller omits it.
+# PKG narrows the search when a test name is ambiguous or ./... is too slow.
+RUN ?=
+PKG ?= ./...
+
+## test-one: Run a single auth test, e.g. make test-one RUN=TestName [PKG=./internal/handler]
+test-one:
+	@test -n "$(RUN)" || { echo "test-one: set RUN to a test name or regexp, e.g. make test-one RUN=TestName"; exit 1; }
+	@# `go test -run` exits 0 when the pattern matches nothing, so a typo'd
+	@# name reports success and hides that no test ran. -list is the cheap
+	@# pre-flight: it reports what would match without running it.
+	@cd auth && test "$$($(GO) test $(PKG) -list '$(RUN)' 2>/dev/null | grep -c '^Test')" -gt 0 \
+	  || { echo "test-one: no test matches RUN='$(RUN)' in PKG=$(PKG)"; exit 1; }
+	# -count=1 defeats the test cache: this target is for an edit-run-edit
+	# loop, where a "(cached)" ok would hide the change under test.
+	cd auth && $(GO) test $(PKG) -run '$(RUN)' -count=1 -v
 
 ## test-rpm-publish: Build the rpm image and publish a fixture RPM into two OS targets (needs Docker)
 test-rpm-publish:
