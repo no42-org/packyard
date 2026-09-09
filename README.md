@@ -36,17 +36,25 @@ Promotion pipeline (GitHub Actions):
 
 **Services:**
 
+Every image is pinned by tag and digest in `compose.yml`, which Dependabot keeps current.
+Versions are deliberately left out of this table so it cannot drift from those pins.
+
 | Service | Image | Role |
 |---------|-------|------|
-| `traefik` | `traefik:3.6.12` | TLS, routing, forwardAuth middleware |
-| `auth` | built from `./auth` | Subscription key validation, admin API, Prometheus metrics |
-| `rpm` | built from `./rpm` | nginx serving signed RPM repos |
-| `deb` | `nginx:alpine` | nginx serving Aptly-published DEB repos |
-| `zot` | `ghcr.io/project-zot/zot-linux-amd64:v2.1.2` | OCI registry with keyless cosign signatures |
-| `aptly` | `ghcr.io/no42-org/packyard-aptly:1.6.2` | DEB repo management and signing (multi-arch) |
-| `rustfs` | `rustfs/rustfs:latest` | S3-compatible staging storage for promotion pipeline |
-| `static` | `nginx:alpine` | Public GPG key hosting |
-| `backup` | `keinos/sqlite3:latest` | Daily SQLite backup of the key store |
+| `traefik` | upstream `traefik` | TLS, routing, forwardAuth middleware |
+| `auth` | `ghcr.io/no42-org/packyard-auth`, built from `./auth` | Subscription key validation, admin API, Prometheus metrics |
+| `rpm` | `ghcr.io/no42-org/packyard-rpm`, built from `./rpm` | nginx serving signed RPM repos |
+| `deb` | upstream `nginx` | nginx serving Aptly-published DEB repos |
+| `zot` | upstream `ghcr.io/project-zot/zot-linux-amd64` | OCI registry with keyless cosign signatures |
+| `aptly` | `ghcr.io/no42-org/packyard-aptly`, built from `./aptly` | DEB repo management and signing (multi-arch) |
+| `rustfs` | upstream `rustfs/rustfs` | S3-compatible staging storage for promotion pipeline |
+| `rustfs-init` | upstream `amazon/aws-cli` | One-shot bucket provisioning for RustFS |
+| `static` | `ghcr.io/no42-org/packyard-static`, built from `./static` | Public GPG key hosting |
+| `backup` | `ghcr.io/no42-org/packyard-backup`, built from `./backup` | Daily SQLite backup of the key store |
+
+The five `packyard-*` images are published by this project.
+`auth`, `rpm` and `static` are released by tag alongside Packyard itself; `aptly` and `backup` carry the version of the upstream tool they wrap.
+See [RELEASING.md](RELEASING.md).
 
 ## Documentation
 
@@ -56,9 +64,12 @@ Full documentation: https://no42-org.github.io/packyard/
 
 Requires Docker Compose v2, `curl`, `jq`.
 
+`main` tracks the next `-rc` preview, so bring up a release tag rather than the branch tip.
+
 ```bash
 git clone https://github.com/no42-org/packyard.git
 cd packyard
+git checkout "$(git describe --tags --abbrev=0)"   # latest release; omit to run the preview
 cp .env.example .env        # set ACME_EMAIL, PKG_DOMAIN, ADMIN_DOMAIN and the OAuth provider
 docker compose up -d
 bash verify.sh
