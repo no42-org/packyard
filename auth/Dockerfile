@@ -1,6 +1,7 @@
-# Stage 1: SPA build — Vite + TypeScript + React per D12. Output is copied
-# into auth/internal/adminui/dist where the Go build's //go:embed picks it
-# up.
+# Stage 1: SPA build — Vite + TypeScript + React. Output is copied into
+# auth/internal/adminui/dist where the Go build's //go:embed picks it up,
+# so the runtime artefact stays a single Go binary: one container, one
+# port, one TLS cert. Node and npm are build-time only.
 #
 # TODO(release-hardening): pin base images to immutable digests (node@sha256:…,
 # golang@sha256:…, distroless@sha256:…) before tagging a production release.

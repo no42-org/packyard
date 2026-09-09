@@ -3,14 +3,15 @@
  * SPDX-License-Identifier: GPL-3.0-or-later
  */
 
-// Package adminui serves the embedded React + TypeScript SPA at /admin/*
-// per D12 of change 2026-05-21-admin-ui-account-lifecycle. Static assets
-// (the Vite-built bundle) are served straight from the embedded FS;
-// the SPA shell at /admin/ returns the index.html with the per-request
-// CSP nonce already set on the response header by middleware.AdminCSP.
+// Package adminui serves the embedded React + TypeScript SPA at /admin/*,
+// so the auth service ships as a single binary rather than a second Node
+// service. Static assets (the Vite-built bundle) are served straight from
+// the embedded FS; the SPA shell at /admin/ returns the index.html with
+// the per-request CSP nonce already set on the response header by
+// middleware.AdminCSP.
 //
 // CSP authorisation: the policy is `script-src 'self'` + `style-src
-// 'self'` (D22), which already authorises every bundled asset since
+// 'self'`, which already authorises every bundled asset since
 // they're all served same-origin from /admin/assets/. The per-request
 // nonce header is set unconditionally so a future inline runtime-config
 // `<script nonce="…">` block can be added without policy churn.
