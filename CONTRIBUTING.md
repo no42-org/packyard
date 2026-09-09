@@ -25,7 +25,7 @@ Run `make help` to list every target.
 2. Branch from `main`. Use `<type>/<short-description>`, for example `fix/forward-auth-401`.
 3. Keep one logical change per pull request.
 4. Pull requests are squash-merged. The PR title becomes the commit subject on `main`, so give it a Conventional Commit title.
-5. CI must be green before merge. The required checks are the auth unit tests, the Docker image build and the docs build.
+5. CI must be green before merge. The `main` ruleset requires five checks: `Auth lint`, `Auth unit tests`, `Build Docker images`, `Build docs` and `Workflow lint`. The first four are path-filtered and skip when nothing they watch changed; `Workflow lint` runs on every pull request.
 
 ## Commit messages
 
