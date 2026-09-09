@@ -14,7 +14,8 @@ Requirements: Docker Compose v2, Go (version in `auth/go.mod`), Node 20 (version
 | Preview the docs with live reload | `make docs-serve` |
 | Build the admin SPA into the Go embed directory | `make admin-ui` |
 | Build the auth binary with the embedded SPA | `make build` |
-| Run the auth unit tests | `cd auth && go test ./...` |
+| Run the auth unit tests | `make test` |
+| Run the admin SPA unit tests | `make admin-ui-test` |
 | Bring up the full stack and smoke-test it | `docker compose up -d && bash verify.sh` |
 
 Run `make help` to list every target.
@@ -56,6 +57,21 @@ Signed-off-by: Jane Doe <jane@example.org>
 ```
 
 The human signer reviews all AI-generated code and remains responsible for its correctness and license compliance.
+
+### Keeping the trailer through the merge
+
+Repeat both trailers at the end of the pull request description, not only on the branch commit.
+
+Pull requests here are squash-merged, and GitHub builds the squash commit message from the pull request description rather than from the branch commits.
+A trailer that lives only on a branch commit is dropped when the pull request merges, so `Assisted-by` disappears from `main` even though the branch carried it correctly.
+
+GitHub appends its own `Signed-off-by` after the description, separated by a blank line.
+That blank line splits the two into separate trailer blocks, so `git log --format='%(trailers)'` reports only the sign-off.
+Search the message body instead:
+
+```bash
+git log --format='%H %s' --grep='^Assisted-by:' main
+```
 
 ## Source file headers
 

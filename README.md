@@ -82,7 +82,7 @@ See [Getting Started](https://no42-org.github.io/packyard/getting-started/quick-
 
 | Task | Command |
 |------|---------|
-| Auth unit tests | `cd auth && go test ./...` |
+| Auth unit tests | `make test` |
 | Auth binary with embedded admin UI | `make build` |
 | Docs site with live reload | `make docs-serve` |
 
