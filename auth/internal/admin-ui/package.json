@@ -3,7 +3,7 @@
   "version": "0.0.0",
   "private": true,
   "license": "GPL-3.0-or-later",
-  "description": "Admin SPA for Packyard auth service (D12). Built with Vite, embedded into the auth Go binary at compile time.",
+  "description": "Admin SPA for the Packyard auth service. Built with Vite, embedded into the auth Go binary at compile time.",
   "type": "module",
   "scripts": {
     "dev": "vite",
