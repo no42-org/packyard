@@ -5,7 +5,7 @@ go 1.26.2
 require (
 	github.com/go-chi/chi/v5 v5.3.2
 	github.com/prometheus/client_golang v1.24.1
-	golang.org/x/sync v0.22.0
+	golang.org/x/sync v0.23.0
 	modernc.org/sqlite v1.58.0
 )
 
