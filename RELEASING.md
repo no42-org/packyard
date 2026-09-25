@@ -23,18 +23,21 @@ Commit as `chore(release): vX.Y.Z`, open a PR and merge it.
 
 ```bash
 git checkout main && git pull
+make release-check TAG=v1.2.3
 git tag -a v1.2.3 -m "v1.2.3"
 git push origin v1.2.3
 ```
 
 Pushing the tag triggers the `Release` workflow (`.github/workflows/release.yml`). It:
 
-1. Runs every quality gate (`quality-gates.yml` with `all: true`). Nothing publishes on red.
-2. Builds and pushes the three images for `linux/amd64` and `linux/arm64`.
-3. Signs each image with cosign keyless and attaches SLSA build provenance to the registry.
-4. Generates an SPDX SBOM per image.
-5. Creates a **draft** GitHub Release with the SBOMs, a `checksums.txt` and its Sigstore bundle (`checksums.txt.sigstore.json`) attached.
-6. Only then moves `latest` to the released images and dispatches `docs.yml` so the landing page shows the new version.
+1. Refuses the tag unless the four places from step 1 carry its version (`make release-check`). A prerelease tag `v1.2.3-rc1` needs the development version `1.2.3-rc`.
+   A tag pushed on a commit without the bump fails here, before any image is built.
+2. Runs every quality gate (`quality-gates.yml` with `all: true`). Nothing publishes on red.
+3. Builds and pushes the three images for `linux/amd64` and `linux/arm64`.
+4. Signs each image with cosign keyless and attaches SLSA build provenance to the registry.
+5. Generates an SPDX SBOM per image.
+6. Creates a **draft** GitHub Release with the SBOMs, a `checksums.txt` and its Sigstore bundle (`checksums.txt.sigstore.json`) attached.
+7. Only then moves `latest` to the released images and dispatches `docs.yml` so the landing page shows the new version.
    `latest` is written last on purpose: a failure anywhere earlier leaves `latest` on the previous release rather than on a half-published build.
 
 | Image | Tags written for `v1.2.3` |

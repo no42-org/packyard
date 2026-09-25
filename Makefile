@@ -17,7 +17,7 @@ UNAME_S := $(shell uname -s)
 
 .PHONY: help docs-install docs-serve docs-build docs-clean check-node test-rpm-publish test-publish-scripts \
         admin-ui admin-ui-install admin-ui-test admin-ui-dev admin-ui-clean \
-        build build-clean test test-one lint lint-workflows lint-image-pins build-image-auth build-image-rpm build-images \
+        build build-clean test test-one lint lint-workflows lint-image-pins release-check build-image-auth build-image-rpm build-images \
         ci-guard ci-signing-key ci-stack-up ci-stack-down ci-stack-logs ci-seed ci-verify-env ci-publish-fixtures e2e-observability e2e-rpm e2e-deb e2e-oci
 
 ## help: Show this help
@@ -134,6 +134,13 @@ lint-workflows:
 ## lint-image-pins: Assert every third-party compose image is pinned by digest
 lint-image-pins:
 	bash scripts/lint-image-pins.sh
+
+TAG ?=
+
+## release-check: Assert the tree carries the version of a release tag, e.g. make release-check TAG=v1.2.3
+release-check:
+	@test -n "$(TAG)" || { echo "release-check: set TAG to the release tag, e.g. make release-check TAG=v1.2.3"; exit 1; }
+	bash scripts/check-release-version.sh '$(TAG)'
 
 ## build-image-auth: Build the auth container image locally (no push)
 build-image-auth:
