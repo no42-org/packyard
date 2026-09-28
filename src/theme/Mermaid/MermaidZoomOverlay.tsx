@@ -6,12 +6,22 @@
 import React, {useEffect, useRef} from 'react';
 import {createPortal} from 'react-dom';
 import BrowserOnly from '@docusaurus/BrowserOnly';
+import DOMPurify from 'dompurify';
 import styles from './styles.module.css';
 
 type Props = {
   svg: string | null;
   onClose: () => void;
 };
+
+function sanitizeHtml(html: string | null | undefined): string {
+  return html
+    ? DOMPurify.sanitize(html, {
+        ALLOWED_TAGS: ['span', 'p'],
+        ALLOWED_ATTR: ['class'],
+      })
+    : '';
+}
 
 function OverlayBody({svg, onClose}: {svg: string; onClose: () => void}) {
   const overlayRef = useRef<HTMLDivElement>(null);
@@ -46,7 +56,7 @@ function OverlayBody({svg, onClose}: {svg: string; onClose: () => void}) {
       <div
         className={styles.inner}
         onClick={(e) => e.stopPropagation()}
-        dangerouslySetInnerHTML={{__html: svg}}
+        dangerouslySetInnerHTML={{__html: sanitizeHtml(svg)}}
       />
     </div>,
     document.body,
