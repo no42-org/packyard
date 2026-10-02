@@ -23,6 +23,11 @@ updates:
     labels:
       - dependencies
       - github-actions
+    groups:
+      # codeql-action/init and /analyze must run the exact same version
+      codeql-action:
+        patterns:
+          - "github/codeql-action*"
 
   # Container images declared in compose.yml. `docker-compose` is a separate
   # ecosystem from `docker`, generally available since February 2025. Its file
