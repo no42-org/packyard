@@ -1,6 +1,6 @@
 # Debian-based nginx rather than Alpine: createrepo_c is only packaged in
 # Alpine edge/testing, while Debian ships createrepo-c as a regular package.
-FROM nginx:1.31-trixie@sha256:abe47724e466aeab9a345d8e46a221c2fa8953c7848bb4a3bd9976a7199f8cf2
+FROM nginx:1.31-trixie@sha256:f9ea18bfa4fad859e1ed38259d711da7ccad2c3516e875cec3351a57c859f571
 # createrepo-c lets promotion workflows publish RPMs inside this container
 # (`docker compose exec --user 0 rpm /scripts/add-package.sh ...`) instead of
 # needing the tooling and write access to the volume on the host.
