@@ -189,7 +189,7 @@ services:
       - backend  # promotion-only; not Traefik-proxied for subscribers
 
   rustfs-init:
-    image: amazon/aws-cli:2.37.3@sha256:83f8ffe939569070c5b66d22231862ab78718766d9d8e4c44ca84dd0be5569a5
+    image: amazon/aws-cli:2.37.10@sha256:3dacc5db57c923c4223e949795f538ecf1f2212b2b7d5a028b47b97f91564c0d
     depends_on:
       rustfs:
         condition: service_healthy
