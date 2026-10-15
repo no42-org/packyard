@@ -1,0 +1,9 @@
+# SPDX-License-Identifier: GPL-3.0-or-later
+#
+# Known vulnerabilities accepted for the docs site's package-lock.json.
+# OpenSSF Scorecard reads this file; Dependabot dismissals do not reach it.
+
+[[IgnoredVulns]]
+id = "GHSA-vfj7-8cjw-p6xm"
+ignoreUntil = 2027-04-15
+reason = "braces 3.0.3 has no patched release. Build-time only dependency of the docs site via Docusaurus (chokidar, micromatch). Its inputs are the repo's own glob patterns, not untrusted data. See #330."
