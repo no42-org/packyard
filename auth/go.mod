@@ -3,7 +3,7 @@ module github.com/no42-org/packyard-auth
 go 1.26.2
 
 require (
-	github.com/go-chi/chi/v5 v5.3.2
+	github.com/go-chi/chi/v5 v5.4.0
 	github.com/prometheus/client_golang v1.24.1
 	golang.org/x/sync v0.24.0
 	modernc.org/sqlite v1.60.1
