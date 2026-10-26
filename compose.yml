@@ -1,7 +1,7 @@
 services:
 
   traefik:
-    image: traefik:v3.7.13@sha256:24841fe2de7304c149343d877d2923b4c8800a38ba015dea9174c23b20e344a0
+    image: traefik:v3.7.14@sha256:575fa15b135078fe5e50aa847987d96dbddd7b093c172429618404df73f3fa7c
     restart: unless-stopped
     cap_drop: [ALL]
     cap_add:
@@ -189,7 +189,7 @@ services:
       - backend  # promotion-only; not Traefik-proxied for subscribers
 
   rustfs-init:
-    image: amazon/aws-cli:2.37.10@sha256:3dacc5db57c923c4223e949795f538ecf1f2212b2b7d5a028b47b97f91564c0d
+    image: amazon/aws-cli:2.37.13@sha256:d32864c20087d486f5988c3e70817d67a73f584a47535cada9ad97e0ea1e5196
     depends_on:
       rustfs:
         condition: service_healthy
