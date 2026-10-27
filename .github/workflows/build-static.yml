@@ -30,6 +30,10 @@ jobs:
   build-and-push:
     name: Build multi-arch and push preview to ghcr.io
     needs: gates
+    # The release bump commit carries the release version, which the guard in
+    # "Determine image version" refuses to publish. Skip it instead of failing.
+    # release.yml builds that version from the tag.
+    if: "${{ !startsWith(github.event.head_commit.message, 'chore(release): v') }}"
     runs-on: ubuntu-24.04
     timeout-minutes: 20
     permissions:

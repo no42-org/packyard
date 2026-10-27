@@ -72,6 +72,7 @@ Confirm the landing page at https://no42-org.github.io/packyard/ shows the new v
 Bump `main` to the next patch version with an `-rc` suffix so preview builds are never mistaken for a release.
 Do this immediately after tagging: preview builds publish the version in the tree as a mutable tag, so a push to `main` before the bump would overwrite the release image.
 The preview workflows refuse to publish a version without the `-rc` suffix, so a forgotten bump fails the next preview build instead of clobbering a release.
+The release bump commit itself (`chore(release): vX.Y.Z`) skips the preview build, so merging it leaves no red runs.
 
 ```bash
 NEXT=1.2.4-rc
