@@ -12,3 +12,8 @@ reason = "braces 3.0.3 has no patched release. Build-time only dependency of the
 id = "GHSA-gcqx-w48m-w2h4"
 ignoreUntil = 2027-04-15
 reason = "deepmerge 4.3.1 has no patched release. @svgr/plugin-svgo 8.1.0 declares it but never requires it, so the vulnerable mergeObject() is never loaded. Build-time only dependency of the docs site via Docusaurus. See #366."
+
+[[IgnoredVulns]]
+id = "GHSA-g3hv-75wg-m249"
+ignoreUntil = 2027-04-15
+reason = "minimatch 3.1.5 has no applicable fix. Its only dependent, serve-handler 6.1.7 (latest, via Docusaurus serve), pins it exactly, and minimatch 11 is not a drop-in replacement. The advisory's firstPhasePreProcess()/optimizationLevel code does not exist in 3.1.5, and Docusaurus passes serve-handler no rewrite, header or redirect patterns. Build-time only dependency of the docs site. See #387."
