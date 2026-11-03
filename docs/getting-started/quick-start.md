@@ -25,17 +25,8 @@ EOF
 
 ## 2. Start the stack
 
-**x86-64:**
 ```bash
 docker compose -f compose.yml -f compose.override.ci.yml up -d
-```
-
-**Apple Silicon (arm64):**
-```bash
-docker compose -f compose.yml \
-               -f compose.override.ci.yml \
-               -f compose.override.arm64.yml \
-               up -d
 ```
 
 Wait for services to be ready:
@@ -129,5 +120,5 @@ The local stack runs HTTP only — no TLS, no ACME. Port 80 serves public and au
 :::
 
 :::note[Apple Silicon (arm64)]
-`zot` uses an image with the architecture in its name (`zot-linux-amd64`). Use `compose.override.arm64.yml` to swap it to the `arm64` variant. `aptly` is published as a multi-arch image and selects the correct binary automatically.
+No extra override is needed. `zot` and `aptly` are multi-arch images, so Docker pulls the `arm64` variant automatically.
 :::

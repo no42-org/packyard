@@ -144,7 +144,7 @@ services:
       - proxy
 
   zot:
-    image: ghcr.io/project-zot/zot-linux-amd64:v2.1.23@sha256:b68f727fe35c1eb45b2ae91519dfb0e33192d69b5104882c3e7809b7146c4a02
+    image: ghcr.io/project-zot/zot:v2.1.23@sha256:9d3de83ac2099e6f4843045b4c9b65b7e8baf40f92d28f54906dee9d4d390fd7
     restart: unless-stopped
     cap_drop: [ALL]
     security_opt:

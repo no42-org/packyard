@@ -8,14 +8,7 @@ Run each section in order — later sections depend on state created earlier.
 Stack running with CI override (HTTP only, no TLS):
 
 ```bash
-# x86-64
 docker compose -f compose.yml -f compose.override.ci.yml up -d
-
-# Apple Silicon (arm64)
-docker compose -f compose.yml \
-               -f compose.override.ci.yml \
-               -f compose.override.arm64.yml \
-               up -d
 ```
 
 Tools needed: `docker`, `curl`, `jq`

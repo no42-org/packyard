@@ -96,12 +96,11 @@ image: traefik:3.6.12@sha256:171c9c3565b29f6c133f1c1b43c5d4e5853415198e9e1078c00
 ```
 
 A tag alone is mutable, and the deployment host runs watchtower, which re-pulls a tag that moved.
-`make lint-image-pins` fails the build on an unpinned image and on a Zot version that differs between `compose.yml` and `compose.override.arm64.yml`.
+`make lint-image-pins` fails the build on an unpinned image.
 The `ghcr.io/no42-org/packyard-*` images are the exception: the release process writes their tag, so they carry no digest.
 
 Dependabot maintains the pins weekly: the `docker-compose` ecosystem for `compose.yml` and the `docker` ecosystem for each service `Dockerfile`.
-Its compose matcher does not see `compose.override.<name>.yml`, so a bump there is manual and the lint check is what catches a forgotten one.
-In practice that means one thing: when Dependabot bumps Zot in `compose.yml`, push the matching `zot-linux-arm64` change onto its branch before merging, or the gate stays red.
+Its compose matcher does not see `compose.override.<name>.yml`, so pin multi-arch images in `compose.yml` rather than swapping per-arch images in an override.
 
 ## Releases
 

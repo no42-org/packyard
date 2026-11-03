@@ -32,8 +32,9 @@ updates:
   # Container images declared in compose.yml. `docker-compose` is a separate
   # ecosystem from `docker`, generally available since February 2025. Its file
   # matcher is /(docker-)?compose(-\w+)?(\.[\w-]+)?\.ya?ml/, which covers
-  # compose.yml but not compose.override.<name>.yml; scripts/lint-image-pins.sh
-  # keeps the arm64 override's Zot pin in step and rejects any unpinned image.
+  # compose.yml but not compose.override.<name>.yml, so third-party images are
+  # pinned in compose.yml (multi-arch where needed). scripts/lint-image-pins.sh
+  # rejects any unpinned image.
   - package-ecosystem: docker-compose
     directory: /
     schedule:

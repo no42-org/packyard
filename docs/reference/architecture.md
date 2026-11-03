@@ -121,7 +121,7 @@ investigation.
 | `auth` | built from `./auth` | Subscription key validation, admin API, admin SPA (embedded), Prometheus metrics |
 | `rpm` | built from `./rpm` | nginx serving signed RPM repos |
 | `deb` | `nginx:alpine` | nginx serving Aptly-published DEB repos |
-| `zot` | `ghcr.io/project-zot/zot-linux-amd64:v2.1.2` | OCI registry with cosign signatures |
+| `zot` | `ghcr.io/project-zot/zot:v2.1.23` | OCI registry with cosign signatures (multi-arch: amd64 + arm64) |
 | `aptly` | `ghcr.io/no42-org/packyard-aptly:1.6.2` | DEB repo management and signing (multi-arch: amd64 + arm64) |
 | `rustfs` | `rustfs/rustfs:latest` | S3-compatible staging storage for promotion pipeline |
 | `static` | `nginx:alpine` | Public GPG/cosign key hosting |
