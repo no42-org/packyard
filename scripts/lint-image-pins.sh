@@ -12,10 +12,6 @@
 #     by the release process (RELEASING.md § 1), not by a bot, and pinning a
 #     digest there would mean a compose change for every rebuild.
 #   - `*:local` — images built by a test stack, never pulled.
-#
-# It also asserts the Zot version matches between compose.yml and the arm64
-# override. Dependabot's docker-compose matcher only sees `compose.yml`, so
-# without this the override silently keeps an older Zot.
 set -euo pipefail
 
 cd "$(dirname "${BASH_SOURCE[0]}")/.."
@@ -39,15 +35,6 @@ for f in compose.yml compose.override.*.yml tests/publish/compose.yml; do
     esac
   done < <(grep -n '^[[:space:]]*image:' "$f")
 done
-
-zot_version() { sed -n "s|.*zot-linux-$1:\([^@]*\)@.*|\1|p" "$2" | head -1; }
-amd64=$(zot_version amd64 compose.yml)
-arm64=$(zot_version arm64 compose.override.arm64.yml)
-if [ -z "${amd64}" ] || [ -z "${arm64}" ]; then
-  note "could not read the Zot version from compose.yml (${amd64:-unset}) or compose.override.arm64.yml (${arm64:-unset})"
-elif [ "${amd64}" != "${arm64}" ]; then
-  note "Zot version differs: compose.yml has ${amd64}, compose.override.arm64.yml has ${arm64}"
-fi
 
 if [ "${FAILED}" -ne 0 ]; then
   exit 1

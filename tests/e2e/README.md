@@ -201,7 +201,7 @@ It also asserts every built service runs an image whose revision label is the co
 `make ci-publish-fixtures` builds a fixture RPM and DEB with nfpm, signs the RPM, and publishes both plus a digest-pinned multi-arch `busybox` image (`lts-core/fixture:2025`) through `scripts/publish/rpm.sh`, `deb.sh` and `oci.sh`, the same scripts production promotions run on the host.
 On push and schedule runs the image is signed keylessly with the `integration.yml` identity; pull requests publish it unsigned and run the OCI test with `COSIGN_SKIP=1`.
 `make e2e-observability`, `make e2e-rpm`, `make e2e-deb` and `make e2e-oci` then run the four suites; the RPM and DEB ones under `sudo -E`, because `dnf` and `apt-get` install into a private root.
-To reproduce locally: export `COMPOSE_PROJECT_NAME=packyard-ci` and `COMPOSE_FILE=compose.yml:compose.override.ci.yml` (add `:compose.override.arm64.yml` on Apple silicon), point `COMPOSE_ENV_FILES` at a copy of the workflow's `.env`, and run the same targets.
+To reproduce locally: export `COMPOSE_PROJECT_NAME=packyard-ci` and `COMPOSE_FILE=compose.yml:compose.override.ci.yml`, point `COMPOSE_ENV_FILES` at a copy of the workflow's `.env`, and run the same targets.
 The `ci-*` targets refuse to run without those two exports, so they cannot touch a developer's real stack.
 Built images are tagged with the names from `compose.yml`, so on a shared daemon a CI run temporarily replaces the published tags; `make ci-stack-down` removes them again.
 

@@ -45,7 +45,7 @@ Versions are deliberately left out of this table so it cannot drift from those p
 | `auth` | `ghcr.io/no42-org/packyard-auth`, built from `./auth` | Subscription key validation, admin API, Prometheus metrics |
 | `rpm` | `ghcr.io/no42-org/packyard-rpm`, built from `./rpm` | nginx serving signed RPM repos |
 | `deb` | upstream `nginx` | nginx serving Aptly-published DEB repos |
-| `zot` | upstream `ghcr.io/project-zot/zot-linux-amd64` | OCI registry with keyless cosign signatures |
+| `zot` | upstream `ghcr.io/project-zot/zot` | OCI registry with keyless cosign signatures |
 | `aptly` | `ghcr.io/no42-org/packyard-aptly`, built from `./aptly` | DEB repo management and signing (multi-arch) |
 | `rustfs` | upstream `rustfs/rustfs` | S3-compatible staging storage for promotion pipeline |
 | `rustfs-init` | upstream `amazon/aws-cli` | One-shot bucket provisioning for RustFS |
