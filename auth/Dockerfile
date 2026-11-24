@@ -7,7 +7,7 @@
 # golang@sha256:…, distroless@sha256:…) before tagging a production release.
 # Mutable tags would otherwise let a compromised upstream image silently land
 # in the next build.
-FROM node:26-alpine@sha256:0b36e8c136b94cd4fcf02188228e76c31ad5872eef3fec8cbd2eee500cfd9e80 AS spa-builder
+FROM node:26-alpine@sha256:6bd9ab43c0ec0190ca7b2d193906cb8b7edf6e7f4afa43ddeccd6452710bffb5 AS spa-builder
 WORKDIR /spa
 # Lockfile is committed and authoritative — `npm ci` fails closed when it
 # disagrees with package.json, so the container build can't silently drift.
